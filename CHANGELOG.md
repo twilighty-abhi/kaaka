@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:25:32+05:30 — Gateway: read the dashboard's reply to a post
+
+- Changed: `GatewayStore.postToDashboardForResponse` posts JSON and returns the response body (null without a dashboard, on error or when unreachable; body capped at 64 KB); `postToDashboard` now wraps it, so existing callers are unchanged.
+- Why: The dashboard answers an alert with the responders it dispatched; the app needs that answer.
+- Validation: `./gradlew assembleDebug` builds; existing behaviour of the void variant unchanged by construction.
+- Limitations: None identified.
+
 ## 2026-10-25T03:24:25+05:30 — Gateway: dispatch SMS wording
 
 - Changed: `GatewayText.dispatchMessage` formats the text sent to a dispatched responder ("Kaaka dispatch: you are the nearest responder (1.2 km, ~3 min) to <caller>. Location: <maps> Reply ACK <caller> to confirm."); "Kaaka dispatch:" is added to the app's own-message list so such a text arriving at another gateway is never read as a help request.
