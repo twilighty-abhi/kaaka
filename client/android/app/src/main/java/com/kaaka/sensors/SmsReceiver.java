@@ -96,9 +96,12 @@ public class SmsReceiver extends BroadcastReceiver {
             boolean isAuthorizedSender = !authorizedSuffix.isEmpty() && digitsOnly.endsWith(authorizedSuffix);
 
             if (!isAuthorizedSender) {
-                // Regular contact: post normal notification (NO auto-open, NO alarm vibration)
-                Log.d(TAG, "Regular SMS from " + sender + ": posting standard notification.");
-                postNormalSmsNotification(context, sender, completeMessage, timestamp);
+                // Only the default SMS app (SMS_DELIVER) notifies for ordinary messages; otherwise the
+                // phone's own SMS app already does, and a second notification would be a duplicate.
+                if (Telephony.Sms.Intents.SMS_DELIVER_ACTION.equals(action)) {
+                    Log.d(TAG, "Regular SMS from " + sender + ": posting standard notification.");
+                    postNormalSmsNotification(context, sender, completeMessage, timestamp);
+                }
                 return;
             }
 

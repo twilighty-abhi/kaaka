@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T01:05:08+05:30 — Let Kaaka Sensors start the beacon from the Kaaka reply without being the default SMS app
+
+- Changed: `DefaultSmsPlugin` declares the RECEIVE_SMS permission and adds `checkReceiveSms` / `requestReceiveSms`; the Settings card shows "Start beacon when the Kaaka number replies" with an Allow button and MIUI guidance (Autostart, show on lock screen, background pop-ups). `SmsReceiver` no longer posts its own notification for ordinary SMS when it is not the default SMS app (the phone's SMS app already does). Rebuilt `client/KaakaSensors.apk`.
+- Why: Device test: the S23 rejected the Xiaomi's calls and its reply reached the Xiaomi, but Kaaka Sensors never reacted — RECEIVE_SMS was not granted (only SEND_SMS), because the app only obtained SMS access as the default SMS app. MIUI also denied "show when locked".
+- Validation: `svelte-check` 0 errors; `assembleDebug`; installed on the Xiaomi; no role-request loop.
+- Limitations: Automatic trigger to be re-tested after granting the permission on the device.
+
 ## 2026-10-25T00:51:15+05:30 — Do not ignore a second call from the same number
 
 - Changed: `GatewayStore.CALL_DEDUPE_MS` 60 s → 10 s. Rebuilt `gateway/Kaaka.apk`.
