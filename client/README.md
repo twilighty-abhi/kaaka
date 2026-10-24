@@ -1,54 +1,37 @@
-# sv
+# Kaaka Sensors (client app)
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Android app (Capacitor + SvelteKit) for the phone of the person who may need help. It reads five sensors (accelerometer, gyroscope, magnetometer, ambient light, pedometer) plus GPS, and sends emergency reports to the Kaaka gateway phone.
 
-## Creating a project
+## Role in the Kaaka flow
 
-If you're seeing this, you've probably already done this step. Congrats!
+1. The person calls the Kaaka gateway number.
+2. The gateway phone rejects the call and sends an auto-reply SMS.
+3. This app receives that SMS. **Only an SMS from the configured gateway number** starts the emergency flow: the app comes to the front, vibrates, shows an urgent notification and starts the telemetry beacon.
+4. The beacon sends a "Kaaka Alert: …" SMS report (sensors and GPS) **to the gateway number** immediately and then every 60 seconds. Reports never go to any other number.
 
-```sh
-# create a new project
-npx sv create my-app
-```
+SMS from any other sender is treated as a normal message, whatever it says. With no gateway number set, the beacon never starts.
 
-To recreate this project with the same configuration:
+## Which phone
 
-```sh
-# recreate this project
-npx sv@1.1.1 create --template minimal --types ts --add tailwindcss="plugins:none" sveltekit-adapter="adapter:static" --no-download-check --install npm frontend
-```
+Install this app on the **caller's phone**, not on the gateway phone. It asks to become the **default SMS app** (needed to receive the trigger SMS reliably and to show the full-screen alert), so it takes over SMS handling on the phone it runs on.
 
-## Adding features
+## Settings (Settings card on the main screen)
 
-Add features to your project with `sv add`:
+| Setting | Required | Purpose |
+|---|---|---|
+| Gateway phone number | Yes | The only number allowed to trigger the beacon, and the recipient of all alert SMS |
+| Computer dashboard WebSocket | No | `ws://<mac-ip>:8765`: also copies each alert to the Kaaka server dashboard |
+| Live sensor stream URL | No | `http://<mac-ip>:8080`: streams readings about once a second to the dashboard |
 
-```sh
-npx sv add
-```
+Kaaka works phone-to-phone with only the gateway number; the computer settings are extras.
 
-For example, to add Tailwind CSS:
-
-```sh
-npx sv add tailwindcss
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Build
 
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
+npm install
 npm run build
+npx cap sync android
+cd android && ./gradlew assembleDebug    # needs JDK 21 and the Android SDK
 ```
 
-You can preview the production build with `npm run preview`.
+A prebuilt debug APK is kept at `client/KaakaSensors.apk`.

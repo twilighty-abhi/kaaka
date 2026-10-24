@@ -21,6 +21,13 @@ export interface DefaultSmsPluginInterface {
 
 const DefaultSms = registerPlugin<DefaultSmsPluginInterface>("DefaultSms");
 
+/** True if sender matches the configured gateway number (last 10 digits). False when none is set. */
+export function isGatewaySender(sender: string): boolean {
+	const gateway = appSettings.gatewayNumber.replace(/[^0-9]/g, "").slice(-10);
+	const digits = (sender || "").replace(/[^0-9]/g, "");
+	return gateway.length > 0 && digits.endsWith(gateway);
+}
+
 class DefaultSmsManager {
 	isDefault = $state(false);
 	statusChecked = $state(false);
@@ -120,11 +127,10 @@ class DefaultSmsManager {
 		this.lastTrigger = formatted;
 		this.triggerHistory = [formatted, ...this.triggerHistory.slice(0, 9)];
 
-		// Automatically initiate 60s emergency telemetry beacon
-		const digits = (event.sender || "").replace(/[^0-9]/g, "");
-		const authorized = appSettings.gatewayNumber.replace(/[^0-9]/g, "").slice(-10);
-		if ((authorized && digits.endsWith(authorized)) || (event.message && (event.message.includes("call") || event.message.includes("emergency") || event.message.includes("alert")))) {
-			telemetryBeacon.startBeacon(event.sender);
+		// Start the emergency telemetry beacon ONLY for SMS from the configured gateway number,
+		// and always send reports to that gateway number (never to the SMS sender).
+		if (isGatewaySender(event.sender)) {
+			telemetryBeacon.startBeacon(appSettings.gatewayNumber);
 		}
 	}
 

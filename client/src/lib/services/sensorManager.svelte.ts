@@ -473,8 +473,9 @@ export class SensorManager {
 		this.syncInterval = setInterval(async () => {
 			if (!this.backendSyncEnabled || !this.isListening) return;
 			if (!appSettings.backendUrl) {
-				this.syncStatus = "error";
-				this.syncMessage = "Backend URL not set (Settings)";
+				// Optional: without a stream URL the app simply works phone-to-phone.
+				this.syncStatus = "idle";
+				this.syncMessage = "Live stream off (no stream URL in Settings)";
 				return;
 			}
 
