@@ -16,6 +16,7 @@ Kaaka Bluetooth Call & Telemetry WebSocket + Dashboard Server
 
 import argparse
 import asyncio
+import hmac
 import http.server
 import json
 import os
@@ -27,6 +28,8 @@ import tempfile
 import threading
 import time
 from datetime import datetime
+from http.cookies import SimpleCookie
+from urllib.parse import parse_qs, quote, unquote, urlparse
 import subprocess
 import websockets
 
@@ -42,6 +45,11 @@ try:
     from server.audio_bridge import AudioConversationBridge, ensure_audio_sinks
 except ImportError:
     from audio_bridge import AudioConversationBridge, ensure_audio_sinks
+
+try:
+    from server.incidents import IncidentStore, TOKEN_RE
+except ImportError:
+    from incidents import IncidentStore, TOKEN_RE
 
 if IS_MAC:
     try:
@@ -102,6 +110,23 @@ def format_sensor_report(sensors: dict) -> str:
         f"• Magnetometer: {round(num('magnetometer', 'heading'))}° {mag.get('cardinal', '')}".rstrip(),
     ])
 
+def cookie_token(cookie_header):
+    """Admin token from the dashboard's kaaka_token cookie ("" if absent)."""
+    if not cookie_header:
+        return ""
+    jar = SimpleCookie()
+    try:
+        jar.load(cookie_header)
+    except Exception:
+        return ""
+    morsel = jar.get("kaaka_token")
+    return unquote(morsel.value) if morsel else ""
+
+NOT_FOUND_LOCATE_PAGE = (b"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width, initial-scale=1'>"
+                         b"<title>Link not found</title><body style='font:17px system-ui;margin:1.5rem'>"
+                         b"<h1>Link not found</h1><p>This location link is unknown or has expired (links last 24 hours).</p>"
+                         b"<p>If you are in immediate danger, call 112.</p></body>")
+
 class DashboardHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, server_instance=None, **kwargs):
         self.server_instance = server_instance
@@ -111,11 +136,86 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         # Suppress routine HTTP request logging to keep console clean
         pass
 
+    def send_json(self, status, obj):
+        body = json.dumps(obj).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_html(self, status, content):
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
+    def read_json_body(self, max_bytes=65536):
+        length = int(self.headers.get("Content-Length", 0))
+        if length > max_bytes:
+            raise ValueError("request body too large")
+        return json.loads(self.rfile.read(length).decode("utf-8") or "null")
+
+    def authorized(self, query):
+        """Admin token check (only when KAAKA_ADMIN_TOKEN is set): header, ?token= or dashboard cookie."""
+        token = (self.headers.get("X-Kaaka-Token") or (query.get("token") or [""])[0]
+                 or cookie_token(self.headers.get("Cookie")))
+        return self.server_instance.check_admin_token(token)
+
+    def serve_locate_page(self, token):
+        """Public page behind the SMS location link: asks the caller's browser for its location."""
+        if not TOKEN_RE.match(token) or self.server_instance.incidents.token_number(token) is None:
+            self.send_html(404, NOT_FOUND_LOCATE_PAGE)
+            return
+        with open(os.path.join(os.path.dirname(__file__), "locate.html"), "r", encoding="utf-8") as f:
+            page = f.read().replace("{{TOKEN}}", token)  # token matched TOKEN_RE, safe to embed
+        self.send_html(200, page.encode("utf-8"))
+
+    def handle_location(self):
+        """POST /api/location (public): a caller shares their location through the SMS link."""
+        try:
+            data = self.read_json_body(max_bytes=4096)
+            if not isinstance(data, dict):
+                raise ValueError("body must be a JSON object")
+            token = data.get("token")
+            if not isinstance(token, str) or not TOKEN_RE.match(token):
+                raise ValueError('"token" is missing or malformed')
+            lat, lon, accuracy = data.get("lat"), data.get("lon"), data.get("accuracy")
+            for name, value, low, high in (("lat", lat, -90, 90), ("lon", lon, -180, 180)):
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+                    raise ValueError(f'"{name}" must be a number between {low} and {high}')
+            if accuracy is not None and (isinstance(accuracy, bool) or not isinstance(accuracy, (int, float))
+                                         or not 0 <= accuracy < 1e7):
+                raise ValueError('"accuracy" must be a non-negative number of metres')
+        except (ValueError, UnicodeDecodeError) as e:
+            self.send_json(400, {"success": False, "error": str(e)})
+            return
+        if self.server_instance.incidents.token_number(token) is None:
+            self.send_json(404, {"success": False, "error": "unknown or expired location link"})
+            return
+        self.server_instance.on_location(token, float(lat), float(lon), None if accuracy is None else float(accuracy))
+        self.send_json(200, {"success": True})
+
     def do_HEAD(self):
         self.do_GET()
 
     def do_GET(self):
-        if self.path in ["/", "/index.html"]:
+        parsed = urlparse(self.path)
+        path, query = parsed.path, parse_qs(parsed.query)
+        if path.startswith("/l/"):
+            self.serve_locate_page(path[3:])
+            return
+        if not self.authorized(query):
+            if path in ("/", "/index.html"):
+                self.send_html(401, b"<!doctype html><meta charset=utf-8><title>Kaaka</title>"
+                                    b"<p>Admin token required: open the dashboard as /?token=...</p>")
+            else:
+                self.send_json(401, {"success": False, "error": "admin token required"})
+            return
+        if path in ["/", "/index.html"]:
             dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
             if not os.path.exists(dashboard_path):
                 self.send_error(404, "dashboard.html not found")
@@ -125,12 +225,17 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     content = f.read()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+                if self.server_instance.admin_token and query.get("token"):
+                    # Remember the token so later page loads, API calls and the WebSocket need no ?token=
+                    self.send_header("Set-Cookie", f"kaaka_token={quote(self.server_instance.admin_token)}; Path=/; HttpOnly; SameSite=Strict")
                 self.send_header("Content-Length", str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)
             except Exception as e:
                 self.send_error(500, f"Error loading dashboard: {e}")
-        elif self.path == "/api/status":
+        elif path == "/api/incidents":
+            self.send_json(200, {"incidents": self.server_instance.incidents.incidents()})
+        elif path == "/api/status":
             phone_clients = self.server_instance.phone_client_ips()
             bt_connected = self.server_instance.check_bluetooth_connected()
             telephony_ag_online = self.server_instance.check_telephony_ag_online()
@@ -153,6 +258,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 "bluetooth_enabled": self.server_instance.bt_enabled,
                 "last_gateway_event": self.server_instance.last_gateway_event,
                 "last_heartbeat": self.server_instance.last_heartbeat,
+                "public_url": self.server_instance.public_url,
+                "admin_token_enabled": bool(self.server_instance.admin_token),
                 "gateway_stale": self.server_instance.gateway_stale(),
                 "phone_app_connected": len(phone_clients) > 0,
                 "gateway_ips": phone_clients,
@@ -185,11 +292,19 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Kaaka-Token")
         self.end_headers()
 
     def do_POST(self):
-        if self.path == "/api/trigger-call":
+        parsed = urlparse(self.path)
+        path, query = parsed.path, parse_qs(parsed.query)
+        if path == "/api/location":
+            self.handle_location()
+            return
+        if not self.authorized(query):
+            self.send_json(401, {"success": False, "error": "admin token required"})
+            return
+        if path == "/api/trigger-call":
             # Optional JSON body {"number": "..."}; without it the simulated call has no caller number.
             number = ""
             length = int(self.headers.get("Content-Length", 0))
@@ -206,7 +321,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
-        elif self.path == "/api/audio-bridge/toggle":
+        elif path == "/api/audio-bridge/toggle":
             if self.server_instance.audio_bridge.is_running:
                 self.server_instance.audio_bridge.stop()
             else:
@@ -219,7 +334,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
-        elif self.path == "/api/audio-bridge/mode":
+        elif path == "/api/audio-bridge/mode":
             self.server_instance.auto_answer_mode = not self.server_instance.auto_answer_mode
             status = {"auto_answer_mode": self.server_instance.auto_answer_mode}
             body = json.dumps(status).encode("utf-8")
@@ -229,7 +344,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
-        elif self.path == "/api/trigger-telemetry":
+        elif path == "/api/trigger-telemetry":
             sample_alert = (
                 "Kaaka Alert: Emergency assistance requested\n\n"
                 "Live Sensors (5/5):\n"
@@ -249,7 +364,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
-        elif self.path == "/api/call-event":
+        elif path == "/api/call-event":
             status, result = 200, {"success": True}
             try:
                 length = int(self.headers.get("Content-Length", 0))
@@ -268,7 +383,10 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     raise ValueError('"sms" must be "sent", "failed" or "skipped"')
                 if not isinstance(timestamp, str):
                     raise ValueError('"timestamp" must be an ISO-8601 string')
-                self.server_instance.on_call_event(number.strip(), state, sms, timestamp)
+                token = event.get("token")
+                if token is not None and (not isinstance(token, str) or not TOKEN_RE.match(token)):
+                    raise ValueError('"token" must be 6-32 letters, digits, "_" or "-"')
+                self.server_instance.on_call_event(number.strip(), state, sms, timestamp, token or None)
             except (ValueError, UnicodeDecodeError) as e:  # json.JSONDecodeError is a ValueError
                 status, result = 400, {"success": False, "error": str(e)}
             body = json.dumps(result).encode("utf-8")
@@ -278,7 +396,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
-        elif self.path == "/api/heartbeat":
+        elif path == "/api/heartbeat":
             status, result = 200, {"success": True}
             try:
                 length = int(self.headers.get("Content-Length", 0))
@@ -307,7 +425,24 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
-        elif self.path == "/api/telemetry":
+        elif path == "/api/ack":
+            # A responder acknowledged a caller's incident (gateway app: responder replied "ACK" by SMS).
+            try:
+                ack = self.read_json_body()
+                if not isinstance(ack, dict):
+                    raise ValueError("body must be a JSON object")
+                number, responder, timestamp = ack.get("number"), ack.get("responder", ""), ack.get("timestamp", "")
+                if not isinstance(number, str) or not number.strip():
+                    raise ValueError('"number" (the caller being acknowledged) is required')
+                if not isinstance(responder, str):
+                    raise ValueError('"responder" must be a string')
+                if not isinstance(timestamp, str):
+                    raise ValueError('"timestamp" must be an ISO-8601 string')
+                self.server_instance.on_ack(number.strip(), responder.strip(), timestamp)
+                self.send_json(200, {"success": True})
+            except (ValueError, UnicodeDecodeError) as e:
+                self.send_json(400, {"success": False, "error": str(e)})
+        elif path == "/api/telemetry":
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 post_data = self.rfile.read(length).decode("utf-8")
@@ -337,8 +472,13 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404, "Not Found")
 
 class TelemetryServer:
-    def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="", client_number="", adb_serial=""):
+    def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="", client_number="", adb_serial="",
+                 admin_token="", public_url=""):
         self.host = host
+        # Optional KAAKA_ADMIN_TOKEN protects the dashboard and gateway endpoints (location links stay public).
+        self.admin_token = admin_token
+        self.public_url = public_url.rstrip("/")
+        self.incidents = IncidentStore(os.path.join(os.path.dirname(os.path.abspath(__file__)), "events.jsonl"))
         self.port = port
         self.http_port = http_port
         self.bt_mac = bt_mac
@@ -480,6 +620,8 @@ class TelemetryServer:
         print(f"\033[1;32m{clean_text}\033[0m", flush=True)
         print("=" * 65 + "\n", flush=True)
 
+        self.incidents.add_alert(sender, clean_text, source)
+
         # Store latest telemetry in memory and persist to disk
         self.latest_telemetry = {
             "content": clean_text,
@@ -529,9 +671,15 @@ class TelemetryServer:
         except Exception:
             pass
 
-    def on_call_event(self, number, state, sms, timestamp):
+    def check_admin_token(self, token) -> bool:
+        if not self.admin_token:
+            return True
+        return hmac.compare_digest(str(token or "").encode("utf-8"), self.admin_token.encode("utf-8"))
+
+    def on_call_event(self, number, state, sms, timestamp, token=None):
         """A call the gateway app already handled (POST /api/call-event). Never hangs up or sends SMS here."""
         self.last_gateway_event = format_timestamp()
+        self.incidents.add_call(number, state, sms, timestamp, token)
         if number:
             self.save_last_caller(number)
         sms_text = {"sent": "auto-reply sent", "failed": "auto-reply FAILED", "skipped": "no auto-reply"}[sms]
@@ -540,6 +688,25 @@ class TelemetryServer:
             # Separate type from CALL_DETECTED so gateway apps don't treat it as a request to send another SMS.
             payload = {"type": "CALL_EVENT", "number": number, "name": "", "state": state, "sms": sms,
                        "source": "gateway_app", "timestamp": timestamp or format_timestamp()}
+            asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+
+    def on_location(self, token, lat, lon, accuracy):
+        """A caller shared their location through the SMS link (POST /api/location)."""
+        event = self.incidents.add_location(token, lat, lon, accuracy)
+        number = event["number"] or "unknown caller"
+        acc_text = f" ±{round(accuracy)} m" if accuracy is not None else ""
+        print(f"[{format_timestamp()}] 📍 Location shared by {number}: {lat:.6f}, {lon:.6f}{acc_text} {event['maps_url']}", flush=True)
+        if self.loop:
+            payload = {"type": "LOCATION_SHARED", "number": event["number"], "lat": lat, "lon": lon,
+                       "accuracy": accuracy, "maps_url": event["maps_url"], "timestamp": event["received"]}
+            asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+
+    def on_ack(self, number, responder, timestamp):
+        """A responder acknowledged a caller's incident (POST /api/ack)."""
+        event = self.incidents.add_ack(number, responder, timestamp)
+        print(f"[{format_timestamp()}] ✅ Incident for {number} acknowledged by {responder or 'a responder'}", flush=True)
+        if self.loop:
+            payload = {"type": "INCIDENT_ACK", "number": number, "responder": responder, "timestamp": event["received"]}
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
 
     HEARTBEAT_STALE_SECONDS = 20 * 60
@@ -838,6 +1005,17 @@ class TelemetryServer:
                     os.remove(tmp_path)
         except Exception as e:
             print(f"[{format_timestamp()}] ⚠️ Bluetooth MAP PushMessage fallback note: {e}")
+
+    def ws_process_request(self, connection, request):
+        """WebSocket handshake check when KAAKA_ADMIN_TOKEN is set (header, ?token= or dashboard cookie)."""
+        if not self.admin_token:
+            return None
+        query = parse_qs(urlparse(request.path).query)
+        token = (request.headers.get("X-Kaaka-Token") or (query.get("token") or [""])[0]
+                 or cookie_token(request.headers.get("Cookie")))
+        if self.check_admin_token(token):
+            return None
+        return connection.respond(401, "admin token required\n")
 
     async def handle_client(self, websocket):
         """Handle incoming WebSocket connection from phone apps & browser dashboard."""
@@ -1276,13 +1454,15 @@ class TelemetryServer:
         print(f"  🔌 WebSocket Port  : \033[1;36m{self.port}\033[0m  (\033[1;32mws://{self.local_ip}:{self.port}\033[0m)")
         print(f"  🖥️ Web Dashboard UI: \033[1;36m{self.http_port}\033[0m  (\033[1;32mhttp://{self.local_ip}:{self.http_port}\033[0m)")
         print(f"  📶 Gateway BLE MAC : \033[1;36m{self.bt_mac or 'off (gateway app mode)'}\033[0m")
+        print(f"  🔗 Public URL      : \033[1;36m{self.public_url or 'not set (location links off)'}\033[0m")
+        print(f"  🔒 Admin token     : \033[1;36m{'on' if self.admin_token else 'off'}\033[0m")
         print("=" * 65)
         print("  💡 Tip: Open the dashboard in browser to view live visual sensors.")
         print("  💡 Tip: Press [Enter] to simulate a call test.")
         print("  💡 Tip: Type 't' + [Enter] to simulate sensor telemetry display.")
         print("=" * 65 + "\n", flush=True)
 
-        async with websockets.serve(self.handle_client, self.host, self.port):
+        async with websockets.serve(self.handle_client, self.host, self.port, process_request=self.ws_process_request):
             asyncio.create_task(self.console_trigger_loop())
             await asyncio.Future()  # run forever
 
@@ -1294,10 +1474,12 @@ def main():
     parser.add_argument("--bt-mac", default=os.environ.get("KAAKA_BT_MAC", ""), help="Gateway phone Bluetooth address (or KAAKA_BT_MAC); optional — without it the gateway app reports calls")
     parser.add_argument("--client-number", default=os.environ.get("KAAKA_CLIENT_NUMBER", ""), help="Client (sensor) phone number whose SMS are telemetry (or KAAKA_CLIENT_NUMBER); optional")
     parser.add_argument("--adb-serial", default=os.environ.get("KAAKA_ADB_SERIAL", ""), help="adb serial of the phone to read SMS from (or KAAKA_ADB_SERIAL); optional")
+    parser.add_argument("--public-url", default=os.environ.get("KAAKA_PUBLIC_URL", ""), help="Public https URL of this server (or KAAKA_PUBLIC_URL); shown for reference, the gateway app builds the links")
     args = parser.parse_args()
 
     server = TelemetryServer(host=args.host, port=args.port, http_port=args.http_port, bt_mac=args.bt_mac,
-                             client_number=args.client_number, adb_serial=args.adb_serial)
+                             client_number=args.client_number, adb_serial=args.adb_serial,
+                             admin_token=os.environ.get("KAAKA_ADMIN_TOKEN", ""), public_url=args.public_url)
     try:
         asyncio.run(server.start())
     except KeyboardInterrupt:

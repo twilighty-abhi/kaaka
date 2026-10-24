@@ -33,6 +33,36 @@ Then, in the gateway app on the S23, set **Dashboard server** to `http://<mac-ip
 
 **Kaaka Sensors (`client/`) is optional.** It is only for callers who choose to install it on their own phones; the S23 gateway does not need it.
 
+### Incidents, location links and acknowledgements
+
+- **Incidents:** the dashboard groups calls, alert reports, shared locations and acknowledgements by caller number (last 10 digits) and highlights incidents still awaiting acknowledgement. A new call or alert after an acknowledgement needs a fresh one. History is appended to `server/events.jsonl` (runtime data, not committed) and reloaded on start.
+- **Location link for callers without the app:** when the gateway app includes a link in its auto-reply SMS, the caller opens `https://<public-url>/l/<token>` in any phone browser, taps **Share my location**, and the location appears on the incident with a Google Maps link. Links expire after 24 hours. Browsers only share location over **https**, so the Mac must be reachable at a public https URL, for example through a tunnel such as `cloudflared tunnel --url http://localhost:8080`. A tunnel publishes the server on the internet: set `KAAKA_ADMIN_TOKEN` first. Only `/l/<token>` and `POST /api/location` are public then.
+- **Acknowledgement:** when a responder replies "ACK" to the S23, the gateway app reports it (`POST /api/ack`) and the incident shows "acknowledged by …".
+
+### Server settings
+
+| Setting | Purpose |
+|---|---|
+| `KAAKA_ADMIN_TOKEN` (env) | Optional. When set, the dashboard, `/api/status`, `/api/incidents`, the WebSocket and all gateway `POST` endpoints require the token as header `X-Kaaka-Token`, query `?token=`, or the dashboard cookie (open the dashboard once as `/?token=…`). Use letters and digits. Location links stay public. |
+| `--public-url` / `KAAKA_PUBLIC_URL` | Optional public https URL of this server, shown in the startup banner and `/api/status`. The gateway app builds the location links from its own setting. |
+
+With `KAAKA_ADMIN_TOKEN` set, the client app's live sensor stream and its WebSocket copy (which send no token) are refused; the SMS alert path through the S23 is unaffected. The dashboard's WebSocket uses port 8765 on the same host, so through a tunnel the dashboard falls back to status/incident polling.
+
+### Gateway → server API
+
+All bodies are JSON. Errors return `{"success": false, "error": "…"}`.
+
+| Endpoint | Body | Responses |
+|---|---|---|
+| `POST /api/call-event` | `number` (string, `""` if hidden), `state` (`rejected`\|`allowed`), `sms` (`sent`\|`failed`\|`skipped`), `timestamp` (ISO-8601 string), optional `token` (6–32 of `A-Z a-z 0-9 _ -`, the location-link token sent to this caller) | 200, 400, 401 |
+| `POST /api/telemetry` | `report` (alert text, e.g. a forwarded "Kaaka Alert" SMS) and `sender`; or the client app's live stream `{deviceId, sensors: {...}}` | 200, 401 |
+| `POST /api/heartbeat` | `timestamp`, `battery` (int −1…100), `charging`, `screeningRole`, `smsGranted`, `contactCalls` (booleans; all optional) | 200, 400, 401 |
+| `POST /api/ack` | `number` (caller being acknowledged, required), `responder` (string), `timestamp` (ISO-8601 string) | 200, 400, 401 |
+| `POST /api/location` (public) | `token`, `lat` (−90…90), `lon` (−180…180), optional `accuracy` (metres) | 200, 400 (malformed), 404 (unknown or expired token) |
+| `GET /l/<token>` (public) | — | 200 location page, 404 unknown or expired |
+| `GET /api/incidents` | — | 200 `{"incidents": [...]}` (newest first, max 50), 401 |
+| `GET /api/status` | — | 200 status incl. `last_heartbeat`, `gateway_stale`, `public_url`, `admin_token_enabled`; 401 |
+
 ---
 
 ## Project Description

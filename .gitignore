@@ -42,3 +42,6 @@ sample_app.apk
 
 # Last detected caller (runtime data)
 server/last_call.json
+
+# Incident/event history (runtime data: caller numbers and locations)
+server/events.jsonl

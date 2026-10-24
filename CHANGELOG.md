@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:25:00+05:30 — Incidents, location sharing page, ACK and admin token on the server
+
+- Changed: `server/incidents.py` keeps incidents grouped by caller (last 10 digits) with calls, alerts (Coords/Maps parsed), shared locations, acknowledgement and latest location, persisted in `server/events.jsonl` (ignored by Git) and reloaded on start. `server/server.py`: `/api/call-event` accepts an optional `token` (24 h); public `GET /l/<token>` serves `server/locate.html` and `POST /api/location` records a caller's browser GPS; `POST /api/ack` marks an incident acknowledged; `GET /api/incidents`; WebSocket broadcasts `LOCATION_SHARED` and `INCIDENT_ACK`. Optional `KAAKA_ADMIN_TOKEN` protects the dashboard, status, incidents, WebSocket and gateway POSTs (header `X-Kaaka-Token`, `?token=` or cookie; constant-time compare), leaving the location page public. `--public-url`/`KAAKA_PUBLIC_URL` for display. Dashboard: incidents panel with Maps links and "awaiting acknowledgement"; feed text inserted with `textContent`. README documents the full API.
+- Why: Turn individual events into incidents a responder can act on, get location from callers without the app, close the loop with acknowledgements, and allow safe public exposure.
+- Validation: `py_compile`; spare-port server: 17/17 HTTP checks (tokens, location ranges, 404/400 paths, alert coords, dedupe, ack), WebSocket messages received, incidents persisted across restart, admin token enforced (401 without, 200 with header/query/cookie; location page stays public); store unit checks (expiry, ack matching/reset, grouping, damaged lines).
+- Limitations: Not checked in a real browser or over an https tunnel; with an admin token set the client app's live stream is refused (it sends no token).
+
 ## 2026-10-25T00:15:00+05:30 — Location links, responder ACK and dashboard token in the gateway app
 
 - Changed: Gateway app (`gateway/`): new settings "public link URL" and "dashboard token" (warns when the URL is not https). Every call with a caller number gets a random 12-character token sent in `/api/call-event`; with a public URL set, the reply SMS adds "Share your location: <url>/l/<token>". With a dashboard token set, all dashboard POSTs send `X-Kaaka-Token`. A responder SMS starting with "ACK" (optionally "ACK <number>") acknowledges the latest or named incident: the caller is texted that a responder has seen the call, `/api/ack` is posted, the responder gets a confirmation; ACK messages are never treated as alerts. Responder notifications end with "Reply ACK <number> to confirm." Pure-Java helpers in `GatewayText.java` with unit tests. Rebuilt `gateway/Kaaka.apk`.

@@ -351,6 +351,53 @@
       font-size: 0.68rem;
     }
 
+    /* Incidents */
+    .incident-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      max-height: 340px;
+      overflow-y: auto;
+    }
+
+    .incident-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      font-size: 0.74rem;
+      padding: 0.5rem 0.6rem;
+      background: var(--bg-box);
+      border: 1px solid var(--border-dim);
+    }
+
+    .incident-item.awaiting {
+      border-color: var(--border-active);
+    }
+
+    .incident-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      color: var(--text-bright);
+    }
+
+    .incident-meta {
+      color: var(--text-mid);
+    }
+
+    .incident-ack {
+      font-weight: 600;
+    }
+
+    .incident-item.awaiting .incident-ack {
+      color: var(--text-bright);
+    }
+
+    .incident-item a {
+      color: var(--text-bright);
+    }
+
     /* Footer */
     footer {
       max-width: 1200px;
@@ -384,6 +431,17 @@
       </button>
     </div>
   </header>
+
+  <!-- Incidents: calls, alerts, shared locations and acknowledgements grouped by caller -->
+  <section class="panel" id="incidents-panel">
+    <div class="panel-label-row">
+      <span class="panel-label">// incidents</span>
+      <span class="panel-meta" id="incidents-meta">loading…</span>
+    </div>
+    <div class="incident-list" id="incident-list">
+      <div class="stream-item"><span>no incidents yet</span></div>
+    </div>
+  </section>
 
   <!-- Emergency Alert Priority Section -->
   <section class="panel" id="alert-panel">
@@ -582,6 +640,14 @@ awaiting emergency trigger from client or gateway...</div>
 
 <script>
   let ws = null;
+  let wsPort = 8765;
+  // Optional admin token (KAAKA_ADMIN_TOKEN): open the dashboard once as /?token=...
+  const adminToken = new URLSearchParams(window.location.search).get('token') || '';
+
+  function api(path, options = {}) {
+    const headers = Object.assign({}, options.headers || {}, adminToken ? { 'X-Kaaka-Token': adminToken } : {});
+    return fetch(path, Object.assign({}, options, { headers }));
+  }
   let audioAlarmEnabled = true;
   let audioCtx = null;
   let telemetryUpdateCount = 0;
@@ -618,7 +684,7 @@ awaiting emergency trigger from client or gateway...</div>
 
   function connectWebSocket() {
     const loc = window.location;
-    const wsUrl = 'ws://' + loc.hostname + ':8765';
+    const wsUrl = 'ws://' + loc.hostname + ':' + wsPort + (adminToken ? '?token=' + encodeURIComponent(adminToken) : '');
     const wsTag = document.getElementById('ws-tag');
 
     wsTag.textContent = 'ws: [connecting...]';
@@ -629,7 +695,7 @@ awaiting emergency trigger from client or gateway...</div>
 
       ws.onopen = () => {
         wsTag.className = 'status-tag active';
-        wsTag.textContent = 'ws: [' + loc.hostname + ':8765]';
+        wsTag.textContent = 'ws: [' + loc.hostname + ':' + wsPort + ']';
         addFeedItem('websocket client connected to server');
       };
 
@@ -665,6 +731,7 @@ awaiting emergency trigger from client or gateway...</div>
       const sender = msg.sender || '';
       updateTelemetryDisplay(content, sender ? `${sender} via ${source}` : source, msg.update_count);
       playBeep(920, 0.25);
+      if (source !== 'Live sensor stream') refreshIncidents();
     } else if (msg.type === 'CALL_DETECTED') {
       document.getElementById('last-call-num').textContent = msg.number || 'unknown (no caller ID)';
       addFeedItem(`call detected from ${msg.number} (${msg.state || 'active'})`, true);
@@ -676,6 +743,14 @@ awaiting emergency trigger from client or gateway...</div>
       if (msg.number) document.getElementById('last-call-num').textContent = msg.number;
       addFeedItem(`call from ${who} — ${msg.state}, ${smsText}`, true);
       playBeep(640, 0.2);
+      refreshIncidents();
+    } else if (msg.type === 'LOCATION_SHARED') {
+      addFeedItem(`location shared by ${msg.number || 'a caller'}: ${Number(msg.lat).toFixed(5)}, ${Number(msg.lon).toFixed(5)}`, true);
+      playBeep(760, 0.2);
+      refreshIncidents();
+    } else if (msg.type === 'INCIDENT_ACK') {
+      addFeedItem(`incident for ${msg.number} acknowledged by ${msg.responder || 'a responder'}`);
+      refreshIncidents();
     } else if (msg.type === 'GATEWAY_HEARTBEAT') {
       lastHeartbeat = msg;
       renderHeartbeat(false);
@@ -795,7 +870,12 @@ awaiting emergency trigger from client or gateway...</div>
     const item = document.createElement('div');
     item.className = 'stream-item' + (isAlert ? ' alert-item' : '');
     const timeStr = new Date().toLocaleTimeString();
-    item.innerHTML = `<span>${text}</span><span class="stream-time">${timeStr}</span>`;
+    const textSpan = document.createElement('span');
+    textSpan.textContent = text;
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'stream-time';
+    timeSpan.textContent = timeStr;
+    item.append(textSpan, timeSpan);
     feed.insertBefore(item, feed.firstChild);
     while (feed.children.length > 25) {
       feed.removeChild(feed.lastChild);
@@ -816,7 +896,7 @@ awaiting emergency trigger from client or gateway...</div>
 
   async function toggleAudioBridge() {
     try {
-      const res = await fetch('/api/audio-bridge/toggle', { method: 'POST' });
+      const res = await api('/api/audio-bridge/toggle', { method: 'POST' });
       const data = await res.json();
       updateAudioBridgeUI({ running: data.running });
     } catch (e) {
@@ -826,7 +906,7 @@ awaiting emergency trigger from client or gateway...</div>
 
   async function toggleCallMode() {
     try {
-      const res = await fetch('/api/audio-bridge/mode', { method: 'POST' });
+      const res = await api('/api/audio-bridge/mode', { method: 'POST' });
       const data = await res.json();
       updateCallModeUI(data.auto_answer_mode);
     } catch (e) {
@@ -893,7 +973,7 @@ awaiting emergency trigger from client or gateway...</div>
   }
 
   function triggerSimulatedCall() {
-    fetch('/api/trigger-call', { method: 'POST' }).catch(() => {});
+    api('/api/trigger-call', { method: 'POST' }).catch(() => {});
     addFeedItem('simulated call trigger dispatched', true);
   }
 
@@ -932,9 +1012,10 @@ awaiting emergency trigger from client or gateway...</div>
 
   async function updateServerStatus() {
     try {
-      const res = await fetch('/api/status');
+      const res = await api('/api/status');
       if (res.ok) {
         const data = await res.json();
+        if (data.ws_port) wsPort = data.ws_port;
 
         // 1. Live Bluetooth Status Tag
         const bleTag = document.getElementById('ble-tag');
@@ -1000,11 +1081,72 @@ awaiting emergency trigger from client or gateway...</div>
     } catch (e) {}
   }
 
-  window.addEventListener('load', () => {
+  // Incidents (GET /api/incidents): built with textContent because callers control parts of this data.
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function renderIncident(inc) {
+    const awaiting = !inc.acknowledged;
+    const item = el('div', 'incident-item' + (awaiting ? ' awaiting' : ''));
+
+    const head = el('div', 'incident-head');
+    head.append(el('span', '', inc.number || 'hidden number'), el('span', 'incident-meta', 'last activity ' + inc.last_seen));
+    item.append(head);
+
+    const lastCall = inc.calls[inc.calls.length - 1];
+    const replyText = { sent: 'reply sent', failed: 'reply FAILED', skipped: 'no reply' };
+    const parts = [];
+    parts.push(inc.calls.length + (inc.calls.length === 1 ? ' call' : ' calls') +
+               (lastCall ? ' (last ' + lastCall.state + ', ' + (replyText[lastCall.sms] || lastCall.sms) + ')' : ''));
+    parts.push(inc.alerts.length + (inc.alerts.length === 1 ? ' alert' : ' alerts'));
+    if (inc.locations.length) parts.push(inc.locations.length + ' location share' + (inc.locations.length === 1 ? '' : 's'));
+    item.append(el('div', 'incident-meta', parts.join(' · ') + ' · first seen ' + inc.first_seen));
+
+    const loc = inc.latest_location;
+    const locRow = el('div', 'incident-meta');
+    if (loc) {
+      locRow.append('location (' + loc.source + ', ' + loc.timestamp + '): ');
+      const link = el('a', '', Number(loc.lat).toFixed(5) + ', ' + Number(loc.lon).toFixed(5));
+      link.href = 'https://maps.google.com/?q=' + Number(loc.lat).toFixed(6) + ',' + Number(loc.lon).toFixed(6);
+      link.target = '_blank';
+      link.rel = 'noopener';
+      locRow.append(link);
+    } else {
+      locRow.textContent = 'location: not shared yet';
+    }
+    item.append(locRow);
+
+    item.append(el('div', 'incident-ack', awaiting
+      ? 'awaiting acknowledgement'
+      : 'acknowledged by ' + (inc.acknowledged.responder || 'a responder') + ' at ' + inc.acknowledged.timestamp));
+    return item;
+  }
+
+  async function refreshIncidents() {
+    try {
+      const res = await api('/api/incidents');
+      if (!res.ok) return;
+      const incidents = (await res.json()).incidents || [];
+      const list = document.getElementById('incident-list');
+      list.replaceChildren();
+      if (!incidents.length) list.append(el('div', 'stream-item', 'no incidents yet'));
+      incidents.forEach((inc) => list.append(renderIncident(inc)));
+      const open = incidents.filter((inc) => !inc.acknowledged).length;
+      document.getElementById('incidents-meta').textContent = incidents.length + ' shown · ' + open + ' awaiting acknowledgement';
+    } catch (e) {}
+  }
+
+  window.addEventListener('load', async () => {
+    await updateServerStatus();  // learns the WebSocket port first
     connectWebSocket();
+    refreshIncidents();
     setInterval(updateServerStatus, 2000);
+    setInterval(refreshIncidents, 10000);
     setInterval(tickTelemetryTimer, 1000);
-    updateServerStatus();
   });
 </script>
 </body>
