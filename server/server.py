@@ -152,6 +152,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 "gateway_mode": gateway_mode,
                 "bluetooth_enabled": self.server_instance.bt_enabled,
                 "last_gateway_event": self.server_instance.last_gateway_event,
+                "last_heartbeat": self.server_instance.last_heartbeat,
+                "gateway_stale": self.server_instance.gateway_stale(),
                 "phone_app_connected": len(phone_clients) > 0,
                 "gateway_ips": phone_clients,
                 "clients_count": len(self.server_instance.connected_clients),
@@ -276,6 +278,35 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path == "/api/heartbeat":
+            status, result = 200, {"success": True}
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                beat = json.loads(self.rfile.read(length).decode("utf-8") or "null")
+                if not isinstance(beat, dict):
+                    raise ValueError("body must be a JSON object")
+                timestamp = beat.get("timestamp", "")
+                battery = beat.get("battery", -1)
+                if not isinstance(timestamp, str):
+                    raise ValueError('"timestamp" must be an ISO-8601 string')
+                if isinstance(battery, bool) or not isinstance(battery, int) or not -1 <= battery <= 100:
+                    raise ValueError('"battery" must be an integer 0-100 (-1 if unknown)')
+                flags = {}
+                for key in ("charging", "screeningRole", "smsGranted", "contactCalls"):
+                    value = beat.get(key)
+                    if value is not None and not isinstance(value, bool):
+                        raise ValueError(f'"{key}" must be true or false')
+                    flags[key] = value
+                self.server_instance.on_heartbeat(timestamp, battery, flags)
+            except (ValueError, UnicodeDecodeError) as e:  # json.JSONDecodeError is a ValueError
+                status, result = 400, {"success": False, "error": str(e)}
+            body = json.dumps(result).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         elif self.path == "/api/telemetry":
             try:
                 length = int(self.headers.get("Content-Length", 0))
@@ -354,6 +385,7 @@ class TelemetryServer:
         # Without --bt-mac the phone's gateway app handles calls and reports them via /api/call-event.
         self.bt_enabled = bool(bt_mac)
         self.last_gateway_event = None
+        self.last_heartbeat = None  # latest POST /api/heartbeat from the gateway phone
         self.hfp = None
         if IS_MAC and self.bt_enabled:
             self.hfp = HfpBridgeClient(
@@ -509,6 +541,36 @@ class TelemetryServer:
             payload = {"type": "CALL_EVENT", "number": number, "name": "", "state": state, "sms": sms,
                        "source": "gateway_app", "timestamp": timestamp or format_timestamp()}
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+
+    HEARTBEAT_STALE_SECONDS = 20 * 60
+
+    def gateway_stale(self) -> bool:
+        """True when the gateway phone has not sent a heartbeat in the last 20 minutes (or none since start)."""
+        if not self.last_heartbeat:
+            return True
+        return time.time() - self.last_heartbeat["received_epoch"] > self.HEARTBEAT_STALE_SECONDS
+
+    def on_heartbeat(self, timestamp, battery, flags):
+        """Periodic status from the gateway phone (POST /api/heartbeat)."""
+        self.last_heartbeat = {
+            "timestamp": timestamp,
+            "received": format_timestamp(),
+            "received_epoch": time.time(),
+            "battery": battery,
+            **flags,
+        }
+        battery_text = f"{battery}%" if battery >= 0 else "battery unknown"
+        if flags.get("charging"):
+            battery_text += " charging"
+        print(f"[{format_timestamp()}] 💓 Gateway heartbeat: {battery_text}", flush=True)
+        problems = [label for key, label in (("screeningRole", "call screening role"), ("smsGranted", "SMS permission"),
+                                             ("contactCalls", "contact-call permissions")) if flags.get(key) is False]
+        if 0 <= battery < 20 and not flags.get("charging"):
+            problems.append(f"battery low ({battery}%)")
+        if problems:
+            print(f"[{format_timestamp()}] ⚠️ Gateway phone needs attention: {', '.join(problems)}", flush=True)
+        if self.loop:
+            asyncio.run_coroutine_threadsafe(self.broadcast({"type": "GATEWAY_HEARTBEAT", **self.last_heartbeat}), self.loop)
 
     def is_local_ip(self, ip) -> bool:
         """Connections from this machine (e.g. the dashboard in a local browser) are not phones."""

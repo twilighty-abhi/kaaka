@@ -27,22 +27,30 @@ The Mac's Bluetooth hands-free mode (`--bt-mac`, `mac/hfp-bridge`) is a separate
 
 | Item | State |
 |---|---|
-| Mac Bluetooth hands-free: call detection, caller ID, hang-up | Built and tested with real calls |
+| Mac Bluetooth hands-free: call detection, caller ID, hang-up | Built and tested with real calls (alternative mode) |
 | Auto-reply SMS via the gateway app (Bluetooth mode) | Tested with a real call |
 | No hardcoded numbers, addresses or device IDs | Done |
+| Dashboard as server for the S23 (`gateway_app` mode) | Built; received a real call event from the S23 |
+| **S23 call from a saved contact** | **Verified 23:16 IST:** call ended, caller received the auto-reply SMS, app logged it (`via phone_state`, `rejected`, `sms sent`), Mac dashboard received the event |
+| S23 call from an unknown number (call-screening path) | Built; real call test pending |
+| S23 locked / app closed | Pending test |
+| Alert SMS receiving and forwarding on the S23 | Built; not yet tested with a real alert |
 | Live sensor stream to the dashboard | Built; server path tested; on-device stream not yet confirmed |
 | Client beacon only for the configured gateway number | Built; not yet tested on a device |
-| S23 call screening, auto-reply, alert receiving, dashboard forwarding | Built and installed; real call test pending |
-| Dashboard as server for the S23 (`gateway_app` mode) | Built and tested with sample events |
+
+Android does not pass calls from saved contacts to call-screening apps (Telecom only asks the built-in dialer). Kaaka Call handles those through its phone-state fallback (`IncomingCallReceiver`), which needs the "calls from contacts" permissions in the app.
 
 ## Next steps
 
-1. **Call test on the S23.** In Kaaka Call: enable call screening, allow SMS, set the dashboard server. Call from another phone, including a number not in the S23's contacts (Android may not screen calls from contacts).
-2. **Telemetry test.** Install Kaaka Sensors on a second Android phone with the S23 as gateway number; start the beacon manually, then test the automatic trigger.
-3. **Responder alerts.** Forward each call and alert by SMS to a list of responder numbers, so nothing depends on someone watching the dashboard.
+1. **Remaining S23 tests.** Call from a number not in the S23's contacts (call-screening path), and call with the S23 locked and Kaaka Call closed.
+2. **Dependability (in progress, branch `feat/dependability`):**
+   - Responder alerts: each call and alert is also sent by SMS to a list of responder numbers set in Kaaka Call.
+   - Reply wording: default reply "Kaaka received your call. Help is being arranged. If in immediate danger, call 112."
+   - Heartbeat: the S23 reports battery and setup state to `POST /api/heartbeat`; the dashboard shows "S23 last seen" and warns when it is stale (no heartbeat for 20 minutes) or setup is incomplete.
+   - Battery: Kaaka Call asks to be exempted from battery optimisation.
+3. **Telemetry test.** Install Kaaka Sensors on a second Android phone with the S23 as gateway number; start the beacon manually, then test the automatic trigger.
 4. **Location for callers without the app.** Add a "share my location" link to the reply SMS (needs the dashboard reachable from the internet).
-5. **Reply wording.** Say what happens next and point to 112, e.g. "Kaaka received your call. Help is being arranged. If in immediate danger, call 112."
-6. **Reliability.** Keep the S23 charged and exempt from battery optimisation; show a "last event / heartbeat from S23" on the dashboard; consider a backup phone.
+5. **Backup.** Consider a second gateway phone and power backup.
 
 ## Out of scope on this hardware
 

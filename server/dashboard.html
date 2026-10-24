@@ -378,6 +378,7 @@
       <span class="status-tag active" id="ws-tag">ws: [127.0.0.1:8765]</span>
       <span class="status-tag active" id="ble-tag">ble: [not set]</span>
       <span class="status-tag warn" id="gateway-tag">gateway: [checking...]</span>
+      <span class="status-tag warn" id="heartbeat-tag">s23: [no heartbeat yet]</span>
       <button type="button" class="action-btn" id="sound-btn" onclick="toggleAudioAlarm()">
         [sound: on]
       </button>
@@ -535,6 +536,10 @@ awaiting emergency trigger from client or gateway...</div>
           <span class="kv-val" id="gateway-device">gateway phone (not set)</span>
         </div>
         <div class="kv-item">
+          <span class="kv-key">gateway phone health</span>
+          <span class="kv-val" id="heartbeat-detail">no heartbeat yet</span>
+        </div>
+        <div class="kv-item">
           <span class="kv-key">last caller extracted</span>
           <span class="kv-val" id="last-call-num">none</span>
         </div>
@@ -671,6 +676,9 @@ awaiting emergency trigger from client or gateway...</div>
       if (msg.number) document.getElementById('last-call-num').textContent = msg.number;
       addFeedItem(`call from ${who} — ${msg.state}, ${smsText}`, true);
       playBeep(640, 0.2);
+    } else if (msg.type === 'GATEWAY_HEARTBEAT') {
+      lastHeartbeat = msg;
+      renderHeartbeat(false);
     } else if (msg.type === 'SERVER_READY') {
       if (msg.last_number) {
         document.getElementById('last-call-num').textContent = msg.last_number;
@@ -889,6 +897,39 @@ awaiting emergency trigger from client or gateway...</div>
     addFeedItem('simulated call trigger dispatched', true);
   }
 
+  // Gateway phone heartbeat (POST /api/heartbeat): last seen, battery and setup flags.
+  let lastHeartbeat = null;
+
+  function timeAgo(epochSeconds) {
+    const s = Math.max(0, Math.round(Date.now() / 1000 - epochSeconds));
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.round(s / 60) + ' min ago';
+    return Math.round(s / 3600) + ' h ago';
+  }
+
+  function renderHeartbeat(stale) {
+    const tag = document.getElementById('heartbeat-tag');
+    const detail = document.getElementById('heartbeat-detail');
+    if (!tag || !detail) return;
+    const hb = lastHeartbeat;
+    if (!hb) {
+      tag.className = 'status-tag warn';
+      tag.textContent = 's23: [no heartbeat yet]';
+      detail.textContent = 'no heartbeat yet';
+      return;
+    }
+    const problems = [];
+    if (hb.screeningRole === false) problems.push('call screening off');
+    if (hb.smsGranted === false) problems.push('sms not allowed');
+    if (hb.contactCalls === false) problems.push('contact calls not allowed');
+    if (hb.battery >= 0 && hb.battery < 20 && !hb.charging) problems.push('battery low');
+    const battery = hb.battery >= 0 ? hb.battery + '%' + (hb.charging ? ' charging' : '') : 'battery unknown';
+    const seen = 'last seen ' + timeAgo(hb.received_epoch);
+    tag.className = stale || problems.length ? 'status-tag warn' : 'status-tag active';
+    tag.textContent = 's23: [' + (stale ? 'STALE, ' : '') + seen + ']';
+    detail.textContent = seen + ' · ' + battery + ' · ' + (problems.length ? 'needs attention: ' + problems.join(', ') : 'setup ok');
+  }
+
   async function updateServerStatus() {
     try {
       const res = await fetch('/api/status');
@@ -928,6 +969,8 @@ awaiting emergency trigger from client or gateway...</div>
             tag.textContent = 'gateway: [disconnected]';
           }
         }
+        if (data.last_heartbeat) lastHeartbeat = data.last_heartbeat;
+        renderHeartbeat(!!data.gateway_stale && !!data.last_heartbeat);
         if (data.audio_bridge) {
           updateAudioBridgeUI(data.audio_bridge);
           if (data.audio_bridge.auto_answer_mode !== undefined) {

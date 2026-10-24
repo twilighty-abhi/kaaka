@@ -19,6 +19,7 @@ Flow:
 2. The gateway app on the S23 screens the call, rejects it and sends an auto-reply SMS (no SMS when the caller ID is hidden).
 3. The S23 reports the call to the Mac: `POST http://<mac-ip>:8080/api/call-event` with `{"number", "state": "rejected"|"allowed", "sms": "sent"|"failed"|"skipped", "timestamp"}`. The dashboard feed shows e.g. "call from … — rejected, auto-reply sent".
 4. If a caller uses the optional **Kaaka Sensors** app, it sends "Kaaka Alert" SMS reports to the S23; the gateway app logs them and forwards them to the Mac (`POST /api/telemetry`).
+5. The S23 also sends a periodic heartbeat (`POST /api/heartbeat` with battery and setup state). The dashboard shows "s23: last seen …" and turns it into a warning when no heartbeat arrived for 20 minutes or call screening, SMS or contact-call permissions are missing.
 
 Start the dashboard server on the Mac (no Bluetooth):
 

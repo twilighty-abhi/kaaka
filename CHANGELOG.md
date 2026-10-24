@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-24T23:40:00+05:30 — Gateway heartbeat and "last seen" on the dashboard
+
+- Changed: `server/server.py` adds `POST /api/heartbeat` (`timestamp`, `battery`, `charging`, `screeningRole`, `smsGranted`, `contactCalls`; 400 on bad input), stores the last heartbeat, reports `last_heartbeat` and `gateway_stale` (no heartbeat for 20 minutes) in `/api/status`, broadcasts `GATEWAY_HEARTBEAT`, and warns in the console when a permission is missing or the battery is low. The dashboard shows "s23: last seen …" with battery and setup state, highlighted when stale or degraded. `docs/PLAN.md` records the verified contact-call test; README mentions the heartbeat.
+- Why: An emergency line that silently stops working is worse than none; the operator must see when the S23 is offline or misconfigured.
+- Validation: `py_compile`; server on spare ports: heartbeat 200 and broadcast received, bad JSON/types 400, stale logic (none / 19 min / 21 min), call-event and telemetry still 200.
+- Limitations: Dashboard rendering not checked in a browser; real heartbeats from the S23 pending (gateway part in the next commit).
+
 ## 2026-10-24T23:17:00+05:30 — Handle calls from saved contacts on the S23 gateway
 
 - Changed: New `IncomingCallReceiver` in the gateway app listens for the phone-state broadcast (READ_PHONE_STATE, READ_CALL_LOG for the number) and, for calls Android does not send to call screening, sends the auto-reply SMS, logs the event and reports it to the dashboard; with "reject calls" on and ANSWER_PHONE_CALLS granted it ends the ringing call (`TelecomManager.endCall`). Shared call handling moved to `CallHandler`; `GatewayStore.claimCall` prevents a call seen by both paths from being handled twice (60 s per number). New "calls from contacts" permission row in the UI; events from this path are labelled "(contact)".
