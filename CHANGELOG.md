@@ -4,6 +4,130 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:32:47+05:30 — Rebuild both apps with SAFE, location links and nearest-responder dispatch
+
+- Changed: `gateway/Kaaka.apk` and `client/KaakaSensors.apk` rebuilt from the integrated branch (feat/im-safe + feat/location-link + feat/nearest-responder on top of the beacon-interval/trail work). Merge conflicts were all additive and resolved by keeping both sides.
+- Why: One APK rebuild for the three feature PRs, so the binaries do not conflict between them.
+- Validation: Gateway `svelte-check` 0 errors, `GatewayTextTest` 18/18, `assembleDebug`; client `svelte-check` 0 errors, `assembleDebug`; server `py_compile`; combined spare-port smoke test: responder registered → call with token → alert dispatches the nearest responder (3.15 km, ~8 min) → location share 200 then 429 within 10 s → caller SAFE resolves with `closed_by_caller: true`.
+- Limitations: Not yet installed or tested on the phones.
+
+## 2026-10-25T03:29:08+05:30 — Nearest-responder routing: validation summary
+
+- Changed: `AI_USAGE.md` row for this feature.
+- Why: Record the assistance and the checks run.
+- Validation: With `KAAKA_ADMIN_TOKEN` set: `GET/POST/PATCH/DELETE /api/responders` and `POST /api/telemetry` return 401 without the token and 200 with header or `?token=`. All server, gateway and dashboard checks listed in the entries above.
+- Limitations: The dispatch SMS has not been sent from a real phone yet; the rebuilt gateway APK is not committed in this change.
+
+## 2026-10-25T03:28:25+05:30 — Document nearest-responder routing
+
+- Changed: README (Mac + S23 section): how responders are registered, how distance/ETA are computed (straight line, 25 km/h assumption), the dispatch rule and the dispatch SMS; API table gains the four `/api/responders` endpoints and the `dispatch` field in the `/api/telemetry` response. `docs/PLAN.md`: status row for the feature and a next step for responder accept/decline.
+- Why: Keep the setup and API documentation complete.
+- Validation: Re-read the rendered Markdown table rows for alignment.
+- Limitations: None identified.
+
+## 2026-10-25T03:27:35+05:30 — Dashboard: responders panel, nearest-responder lines and dispatch status
+
+- Changed: `server/dashboard.html` gets a Responders panel (list with available/unavailable toggle and remove; add form with name, number and "lat, lon" or a click on the map via "pick on map"). The map shows responders as blue dots (dimmed when unavailable) and, for each open incident with a location, a dashed line to its nearest responder labelled "1.2 km · ~3 min". Incident cards show "Nearest: <name> (km, ETA) · dispatched: <names>" (or "not dispatched yet" / "no available responder registered"). `RESPONDER_DISPATCHED` appears in the activity feed with a beep. Responder names and numbers are inserted with `textContent`.
+- Why: Let the operator see who is closest and who was asked to go, and keep the responder list up to date without editing files.
+- Validation: Script parses; spare-port server seeded with three responders and two located incidents, rendered with headless Chrome: panel, dots, dashed lines with ETA labels and the "nearest … dispatched" card lines all visible.
+- Limitations: Lines use straight-line distance; the map fits incidents and their nearest responders, so far-away responders may be off-screen until zoomed out.
+
+## 2026-10-25T03:25:32+05:30 — Gateway: text the dispatched responders
+
+- Changed: After forwarding a Kaaka Alert to the dashboard, `AlertSmsReceiver` reads the `dispatch` list in the reply and texts each responder with `GatewayText.dispatchMessage` (distance, ETA, Maps link, "Reply ACK <caller>"), then logs a local `dispatch` event (names texted, failures). The event list shows "dispatch for <caller>: <names>". Later reports of an already-dispatched incident get an empty list from the dashboard, so nobody is texted twice.
+- Why: Close the loop from "nearest responder known" to "nearest responder told".
+- Validation: `svelte-check` 0 errors; web build, `cap sync`, `./gradlew testDebugUnitTest assembleDebug` (GatewayTextTest 12/12).
+- Limitations: Not run on a device; the dashboard must be reachable at alert time, otherwise no dispatch SMS goes out (the alert itself still reaches responders through the normal notification).
+
+## 2026-10-25T03:25:32+05:30 — Gateway: read the dashboard's reply to a post
+
+- Changed: `GatewayStore.postToDashboardForResponse` posts JSON and returns the response body (null without a dashboard, on error or when unreachable; body capped at 64 KB); `postToDashboard` now wraps it, so existing callers are unchanged.
+- Why: The dashboard answers an alert with the responders it dispatched; the app needs that answer.
+- Validation: `./gradlew assembleDebug` builds; existing behaviour of the void variant unchanged by construction.
+- Limitations: None identified.
+
+## 2026-10-25T03:24:25+05:30 — Gateway: dispatch SMS wording
+
+- Changed: `GatewayText.dispatchMessage` formats the text sent to a dispatched responder ("Kaaka dispatch: you are the nearest responder (1.2 km, ~3 min) to <caller>. Location: <maps> Reply ACK <caller> to confirm."); "Kaaka dispatch:" is added to the app's own-message list so such a text arriving at another gateway is never read as a help request.
+- Why: Responders picked by the dashboard must be told clearly and consistently.
+- Validation: `./gradlew testDebugUnitTest`: GatewayTextTest 12/12 (new test covers the format, empty caller/maps fallbacks and the own-message exclusion).
+- Limitations: Wording is English only.
+
+## 2026-10-25T03:22:52+05:30 — Dispatch the nearest responders when an incident gets a location
+
+- Changed: The first time an open incident has a location (an alert with coordinates via `/api/telemetry`, or a share via `/api/location`), the server picks the 1–2 nearest available responders, records a `dispatch` event in `events.jsonl` (`dispatched` on the incident), broadcasts `RESPONDER_DISPATCHED`, notifies, and returns `dispatch: [{name, number, distance_km, eta_min, maps_url}]` in the `/api/telemetry` response so the gateway app can text them. Later reports of the same open incident do not dispatch again; resolving clears the dispatch so a reopened incident gets a fresh one.
+- Why: Turn alerts into dispatch: the people closest to the caller are asked to go.
+- Validation: Spare-port run with three responders: first alert dispatched Near (0.11 km, ~1 min) and Mid (2.24 km, ~5 min), `RESPONDER_DISPATCHED` received over WebSocket, second alert returned no dispatch, resolve cleared it, third alert re-dispatched; a location share for another caller dispatched Mid then Near; both incidents and all responders persisted across a restart.
+- Limitations: Dispatch is advisory (SMS), there is no accept/decline step yet.
+
+## 2026-10-25T03:21:22+05:30 — Distance and ETA to the nearest responders
+
+- Changed: `server/responders.py` adds `haversine_km`, `eta_minutes` (assumes 25 km/h average city travel; a planning estimate, not a promise) and `ResponderRegistry.nearest`. `GET /api/incidents` adds `nearest_responders` per incident: the 3 nearest available responders to its latest location with `distance_km` and `eta_min`.
+- Why: Show who can reach a caller soonest.
+- Validation: Pure-function checks: Jain University Kochi → Bharata Mata College straight-line 4.14 km; zero distance for the same point; ETA 1 min minimum, 25 km → 60 min; ordering Near/Mid/Far with an unavailable responder excluded; registry reloads from disk. `py_compile`.
+- Limitations: Straight-line distance, not road distance.
+
+## 2026-10-25T03:20:45+05:30 — Responder registry on the server
+
+- Changed: New `server/responders.py` (`ResponderRegistry`, persisted in `server/responders.json`, ignored by Git) and endpoints `GET/POST /api/responders`, `PATCH/DELETE /api/responders/<id>` with fields name, number, lat, lon, available; values are validated (name ≤ 80 chars, number ≥ 6 digits, lat/lon ranges, available boolean) and the same admin-token rule applies as to other APIs. CORS preflight now lists PATCH and DELETE.
+- Why: Nearest-responder routing needs to know who the responders are and where they usually are.
+- Validation: `py_compile`; spare-port run: add 200, invalid number 400, patch available 200, patch bad lat 400, delete 200, delete again 404, list empty.
+- Limitations: Positions are static home locations, not live responder GPS.
+## 2026-10-25T03:24:22+05:30 — Document location links for callers without the app
+
+- Changed: README: new "Location links for callers without the app" section (flow, https requirement, `scripts/public-url.sh`, admin-token requirement, automatic URL from the heartbeat); settings and API tables updated (heartbeat reply, 429 on location updates). `docs/PLAN.md` status and next steps updated.
+- Why: Setup has several moving parts and a safety rule; they need to be written down.
+- Validation: Links and anchors checked by reading; no code change.
+- Limitations: None identified.
+
+## 2026-10-25T03:23:44+05:30 — Helper to give the dashboard a public https URL
+
+- Changed: `scripts/public-url.sh` checks for cloudflared (prints the brew install command if missing) and for a running dashboard, opens a Cloudflare quick tunnel to the dashboard port, extracts the `https://*.trycloudflare.com` URL and prints the exact next steps (restart with `KAAKA_PUBLIC_URL` and `KAAKA_ADMIN_TOKEN`, set the token in Kaaka Call; the phone learns the URL from the heartbeat).
+- Why: The location link needs an https address reachable from callers' phones; this is the quickest way to get one for a demo or pilot.
+- Validation: `bash -n`; missing-cloudflared and no-dashboard paths exit with clear messages. No tunnel was opened.
+- Limitations: Quick-tunnel URLs change on every run; for a permanent address use a named tunnel or a hosted server.
+
+## 2026-10-25T03:23:02+05:30 — Show the automatic public URL in the gateway settings
+
+- Changed: `getSettings` returns `autoPublicUrl`; under the public link field the UI shows "auto: <url> (from the dashboard)" when the field is empty and a URL was reported (flagged when not https), or a hint to leave the field empty.
+- Why: The operator should see which URL callers will get without digging into logs.
+- Validation: `npx svelte-check` 0 errors; `npm run build`; `npx cap sync android`; `assembleDebug`.
+- Limitations: Not checked on a device.
+
+## 2026-10-25T03:23:02+05:30 — Gateway learns the public URL from the dashboard heartbeat
+
+- Changed: `GatewayStore.postToDashboardForReply` returns the JSON reply (the existing `postToDashboard` wraps it). `Heartbeat` stores the reply's `public_url` as the automatic URL (`autoPublicUrl`), logging changes. `CallHandler` builds the reply's location link from `effectivePublicUrl` (manual setting, else automatic).
+- Why: No one should have to copy a tunnel URL into the phone: the dashboard already knows it.
+- Validation: `./gradlew assembleDebug` builds; unit tests 15/15. Not yet exercised against a running dashboard from the app.
+- Limitations: The automatic URL only updates when a heartbeat gets through (every 15 min or on settings save).
+
+## 2026-10-25T03:23:02+05:30 — Decide the location-link URL in pure code, with tests
+
+- Changed: `GatewayText.effectivePublicUrl(manual, auto)` (manual setting wins, else the dashboard-reported URL, else none; trailing slashes dropped) and `isInsecurePublicUrl`. Four new unit tests in `GatewayTextTest`.
+- Why: The gateway will soon learn the public URL from the dashboard; the choice between manual and automatic URL must be simple and tested.
+- Validation: `./gradlew testDebugUnitTest`: GatewayTextTest 15/15 (manual wins, auto when manual empty, none when both empty, non-https auto used but flagged).
+- Limitations: None identified.
+
+## 2026-10-25T03:20:28+05:30 — Location page keeps sharing while open
+
+- Changed: `server/locate.html`: after the first successful share it watches the position and sends an update at most every 15 s, shows "Sharing live location · N updates" and a "Stop sharing" button; 429 replies (sent too soon) are skipped silently. The https warning stays. Plain HTML/JS, no external scripts.
+- Why: A moving caller's position should keep flowing without them pressing the button again.
+- Validation: Script syntax parsed with Node; page still served (200) in the earlier spare-port test. Not opened in a real phone browser.
+- Limitations: Browser geolocation needs an https origin; the page says so when it is not.
+
+## 2026-10-25T03:19:48+05:30 — Heartbeat returns the public URL; location updates rate-limited
+
+- Changed: `POST /api/heartbeat` now replies `{"success": true, "public_url": "..."}` (empty when no public URL is configured). `POST /api/location` accepts at most one update per link token every 10 s and answers 429 otherwise.
+- Why: Lets the gateway app learn the public URL automatically, and keeps live location sharing from flooding the server.
+- Validation: `py_compile`; spare-port run with `KAAKA_ADMIN_TOKEN` and a public URL: heartbeat reply carries the URL, call-event with token 200, `/l/<token>` 200, first location 200 and a second within 10 s 429, incident lists one location.
+- Limitations: The rate limit is in memory and resets when the server restarts.
+
+## 2026-10-25T03:13:45+05:30 — Require an admin token for a public dashboard URL
+
+- Changed: `server/server.py` exits with a clear error when a public URL (`--public-url` / `KAAKA_PUBLIC_URL`) is set without `KAAKA_ADMIN_TOKEN`, unless `--allow-unprotected-public` is given.
+- Why: A public URL exposes the dashboard and gateway endpoints to the internet; without the token anyone could read callers' numbers and locations.
+- Validation: `py_compile`; starting with `KAAKA_PUBLIC_URL` and no token prints the error and exits.
+- Limitations: None identified.
 ## 2026-10-25T03:24:45+05:30 — Document "I'm safe" / SAFE
 
 - Changed: README (Mac + S23 section), `gateway/README.md`, `client/README.md` and `docs/TESTING.md` describe the SAFE text, the "I'm safe" button, the dashboard badge and two device checks.

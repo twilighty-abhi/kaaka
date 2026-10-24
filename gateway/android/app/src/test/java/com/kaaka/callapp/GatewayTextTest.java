@@ -38,6 +38,34 @@ public class GatewayTextTest {
     }
 
     @Test
+    public void manualPublicUrlWinsOverAuto() {
+        assertEquals("https://manual.example",
+            GatewayText.effectivePublicUrl("https://manual.example/", "https://auto.example"));
+    }
+
+    @Test
+    public void autoPublicUrlUsedWhenManualEmpty() {
+        assertEquals("https://auto.example", GatewayText.effectivePublicUrl("", "https://auto.example/"));
+        assertEquals("https://auto.example", GatewayText.effectivePublicUrl(null, "  https://auto.example "));
+    }
+
+    @Test
+    public void noPublicUrlWhenBothEmpty() {
+        assertEquals("", GatewayText.effectivePublicUrl("", ""));
+        assertEquals("", GatewayText.effectivePublicUrl(null, null));
+        assertEquals("", GatewayText.locationLine(GatewayText.effectivePublicUrl("", ""), "abc123def456"));
+    }
+
+    @Test
+    public void insecureAutoUrlIsStillUsedButFlagged() {
+        String url = GatewayText.effectivePublicUrl("", "http://10.0.2.2:8080");
+        assertEquals("http://10.0.2.2:8080", url);
+        assertTrue(GatewayText.isInsecurePublicUrl(url));
+        assertFalse(GatewayText.isInsecurePublicUrl("https://auto.example"));
+        assertFalse(GatewayText.isInsecurePublicUrl(""));
+    }
+
+    @Test
     public void locationLineOnlyWithPublicUrl() {
         assertEquals("", GatewayText.locationLine("", "abc123def456"));
         assertEquals("\nShare your location: https://x.example/l/abc123def456",
@@ -171,5 +199,16 @@ public class GatewayTextTest {
         // Old contact (over 24 h) is not open.
         GatewayText.Ev old = new GatewayText.Ev("call", "+919000000002", "rejected", now - 25L * 3600_000, false);
         assertFalse(GatewayText.hasOpenIncident(Arrays.asList(old), "+919000000002", now));
+    }
+
+    @Test
+    public void dispatchMessageFormat() {
+        String m = GatewayText.dispatchMessage("+919061553544", 1.234, 3, "https://maps.google.com/?q=10.007041,76.365607");
+        assertEquals("Kaaka dispatch: you are the nearest responder (1.2 km, ~3 min) to +919061553544."
+            + " Location: https://maps.google.com/?q=10.007041,76.365607 Reply ACK +919061553544 to confirm.", m);
+        assertEquals("Kaaka dispatch: you are the nearest responder (0.1 km, ~1 min) to a caller. Reply ACK a caller to confirm.",
+            GatewayText.dispatchMessage("", 0.11, 0, null));
+        // A dispatch SMS arriving at another gateway must never be read as a help request.
+        assertFalse(GatewayText.isHelpRequest(m));
     }
 }

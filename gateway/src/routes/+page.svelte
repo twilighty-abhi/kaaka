@@ -21,6 +21,7 @@
     dashboardUrl: string;
     responderNumbers: string;
     publicUrl: string;
+    autoPublicUrl?: string;
     dashboardToken: string;
     escalateMinutes: number;
     maxRepliesPerHour: number;
@@ -30,7 +31,7 @@
   type ReplyLanguage = 'en' | 'ml' | 'both';
 
   interface GatewayEvent {
-    type: 'call' | 'alert' | 'ack' | 'escalation' | 'resolve' | 'safe';
+    type: 'call' | 'alert' | 'ack' | 'escalation' | 'resolve' | 'safe' | 'dispatch';
     timestamp: string;
     number?: string;
     state?: string;
@@ -38,6 +39,7 @@
     via?: string;
     token?: string;
     locationLink?: boolean;
+    responderNames?: string[];
     responder?: string;
     smsToCaller?: string;
     responders?: number;
@@ -93,8 +95,10 @@
   let dashboardUrl = $state('');
   let responderNumbers = $state('');
   let publicUrl = $state('');
+  let autoPublicUrl = $state(''); // reported by the dashboard in its heartbeat reply; used when the field is empty
   let dashboardToken = $state('');
   // Browsers only allow location sharing on https pages, so the link needs an https public URL.
+  const autoPublicUrlSecure = $derived(/^https:\/\//.test(autoPublicUrl));
   const publicUrlInsecure = $derived(publicUrl.trim() !== '' && !/^https:\/\//.test(publicUrl.trim()));
   let showSettings = $state(false);
 
@@ -186,6 +190,7 @@
     dashboardUrl = saved.dashboardUrl ?? '';
     responderNumbers = saved.responderNumbers ?? '';
     publicUrl = saved.publicUrl ?? '';
+    autoPublicUrl = saved.autoPublicUrl ?? '';
     dashboardToken = saved.dashboardToken ?? '';
   }
 
@@ -419,6 +424,10 @@
         />
         {#if publicUrlInsecure}
           <p class="setup-state bad">not https: callers' browsers will block location sharing</p>
+        {:else if publicUrl.trim() === '' && autoPublicUrl}
+          <p class="setup-state {autoPublicUrlSecure ? 'ok' : 'bad'}">auto: {autoPublicUrl} (from the dashboard){autoPublicUrlSecure ? '' : ' · not https'}</p>
+        {:else if publicUrl.trim() === ''}
+          <p class="setup-state">leave empty to use the URL the dashboard reports</p>
         {/if}
         <label class="field-label" for="token-input">dashboard token</label>
         <div class="config-input-group">
@@ -463,6 +472,8 @@
                 <span>safe {ev.number} · incident closed · caller sms {ev.smsToCaller ?? '?'}{respondersText(ev)}</span>
               {:else if ev.type === 'resolve'}
                 <span>resolved {ev.number} by {ev.responder}{ev.note ? ` · ${ev.note}` : ''}</span>
+              {:else if ev.type === 'dispatch'}
+                <span>dispatch for {ev.number}: {(ev.responderNames ?? []).join(', ') || 'nobody reached'}{ev.respondersFailed ? ` (${ev.respondersFailed} failed)` : ''}</span>
               {:else}
                 <span>alert from {ev.sender || 'unknown'}{respondersText(ev)}</span>
                 <span class="event-text">{ev.text}</span>

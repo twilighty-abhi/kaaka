@@ -97,11 +97,22 @@ final class GatewayText {
 
     /** Exact starts of the texts this app sends (replies, responder notifications, command answers). */
     private static final Pattern OWN_MESSAGE = Pattern.compile(
-        "^(Kaaka received|Kaaka UNACKNOWLEDGED|A Kaaka responder|Kaaka alert from|Kaaka: glad you are safe|Kaaka: [+0-9][0-9 ()-]* reported safe|കാക്ക നിങ്ങളുടെ"
+        "^(Kaaka received|Kaaka UNACKNOWLEDGED|Kaaka dispatch:|A Kaaka responder|Kaaka alert from|Kaaka: glad you are safe|Kaaka: [+0-9][0-9 ()-]* reported safe|കാക്ക നിങ്ങളുടെ"
             + "|Kaaka: (call from|help SMS from|ACK recorded|resolved|no recent incident|no open incidents|\\d+ open))");
 
     private static boolean isOwnMessage(String text) {
         return OWN_MESSAGE.matcher(text).find();
+    }
+
+    /**
+     * SMS to a responder the dashboard picked as nearest to a caller.
+     * Distance is shown with one decimal; the ETA is the dashboard's 25 km/h city estimate.
+     */
+    static String dispatchMessage(String caller, double distanceKm, int etaMin, String mapsUrl) {
+        String who = caller == null || caller.trim().isEmpty() ? "a caller" : caller.trim();
+        String location = mapsUrl == null || mapsUrl.trim().isEmpty() ? "" : " Location: " + mapsUrl.trim();
+        return String.format(Locale.US, "Kaaka dispatch: you are the nearest responder (%.1f km, ~%d min) to %s.%s Reply ACK %s to confirm.",
+            distanceKm, Math.max(1, etaMin), who, location, who);
     }
 
     /** Default reply for a language setting: "en" (default), "ml" or "both". */
@@ -109,6 +120,22 @@ final class GatewayText {
         if ("ml".equals(language)) return REPLY_ML;
         if ("both".equals(language)) return REPLY_EN + "\n" + REPLY_ML;
         return REPLY_EN;
+    }
+
+    /**
+     * URL used for location links: the manually configured one wins; otherwise the URL the dashboard
+     * reported in its heartbeat reply; "" when neither is set. Trailing slashes are dropped.
+     */
+    static String effectivePublicUrl(String manual, String auto) {
+        String m = manual == null ? "" : manual.trim().replaceAll("/+$", "");
+        if (!m.isEmpty()) return m;
+        return auto == null ? "" : auto.trim().replaceAll("/+$", "");
+    }
+
+    /** True when a URL is set but not https: callers' browsers will refuse to share location on it. */
+    static boolean isInsecurePublicUrl(String url) {
+        String u = url == null ? "" : url.trim();
+        return !u.isEmpty() && !u.toLowerCase().startsWith("https://");
     }
 
     /** Location link appended to the caller's reply, or "" when no public URL is set. */

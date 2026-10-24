@@ -23,15 +23,22 @@
 <main>
   <h1>Share your location with Kaaka</h1>
   <p>You called the Kaaka help line. Sharing your location helps a responder find you.</p>
-  <p class="note">Your location is sent once, only to the Kaaka responders. If you are in immediate danger, call 112.</p>
+  <p class="note">Your location is shared only with the Kaaka responders, and keeps updating while this page stays open. If you are in immediate danger, call 112.</p>
   <button type="button" id="share">Share my location</button>
+  <button type="button" id="stop" hidden>Stop sharing</button>
   <div id="status" role="status" aria-live="polite"></div>
   <p class="note" id="insecure" hidden>This page is not on a secure (https) link, so your browser may block location access.</p>
 </main>
 <script>
   const TOKEN = "{{TOKEN}}";
+  const SEND_EVERY_MS = 15000; // the server accepts one update per 10 s; stay well under that
   const button = document.getElementById("share");
+  const stopButton = document.getElementById("stop");
   const status = document.getElementById("status");
+  let watchId = null;
+  let updates = 0;
+  let lastSent = 0;
+  let sending = false;
 
   function show(text, kind) {
     status.textContent = text;
@@ -39,6 +46,54 @@
   }
 
   if (!window.isSecureContext) document.getElementById("insecure").hidden = false;
+
+  async function send(pos) {
+    const res = await fetch("/api/location", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: TOKEN, lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy })
+    });
+    if (res.status === 429) return; // sent too soon; the next position will go through
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "HTTP " + res.status);
+    }
+    updates += 1;
+    lastSent = Date.now();
+  }
+
+  function locationError(err) {
+    const reasons = { 1: "Location permission was denied.", 2: "Your location is not available.", 3: "Finding your location took too long." };
+    show((reasons[err.code] || "Location error.") + " Try again, or describe where you are by SMS.", "error");
+    stopSharing(true);
+  }
+
+  function startLive() {
+    if (watchId !== null) return;
+    watchId = navigator.geolocation.watchPosition(async (pos) => {
+      if (sending || Date.now() - lastSent < SEND_EVERY_MS) return;
+      sending = true;
+      try {
+        await send(pos);
+        show("Sharing live location · " + updates + " update" + (updates === 1 ? "" : "s") + ". Keep this page open.", "ok");
+      } catch (e) {
+        show("Could not send an update: " + e.message, "error");
+      }
+      sending = false;
+    }, locationError, { enableHighAccuracy: true, maximumAge: 5000 });
+    stopButton.hidden = false;
+    button.hidden = true;
+  }
+
+  function stopSharing(keepStatus) {
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    stopButton.hidden = true;
+    button.hidden = false;
+    button.disabled = false;
+    button.textContent = updates ? "Share my location again" : "Share my location";
+    if (!keepStatus) show("Sharing stopped after " + updates + " update" + (updates === 1 ? "" : "s") + ".");
+  }
 
   button.addEventListener("click", () => {
     if (!navigator.geolocation) {
@@ -49,28 +104,17 @@
     show("Finding your location…");
     navigator.geolocation.getCurrentPosition(async (pos) => {
       try {
-        const res = await fetch("/api/location", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: TOKEN, lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy })
-        });
-        if (res.ok) {
-          show("Location sent. A responder can see where you are.", "ok");
-          button.textContent = "Send location again";
-        } else {
-          const data = await res.json().catch(() => ({}));
-          show("Could not send location: " + (data.error || "HTTP " + res.status), "error");
-        }
+        await send(pos);
+        show("Location sent. A responder can see where you are. Keep this page open to keep sharing.", "ok");
+        startLive();
       } catch (e) {
-        show("Could not reach Kaaka. Check your internet connection and try again.", "error");
+        show("Could not send location: " + (e.message || "check your internet connection") + ". Try again.", "error");
+        button.disabled = false;
       }
-      button.disabled = false;
-    }, (err) => {
-      const reasons = { 1: "Location permission was denied.", 2: "Your location is not available.", 3: "Finding your location took too long." };
-      show((reasons[err.code] || "Location error.") + " Try again, or describe where you are by SMS.", "error");
-      button.disabled = false;
-    }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    }, locationError, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
   });
+
+  stopButton.addEventListener("click", () => stopSharing(false));
 </script>
 </body>
 </html>

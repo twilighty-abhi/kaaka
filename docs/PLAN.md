@@ -36,11 +36,13 @@ The Mac's Bluetooth hands-free mode (`--bt-mac`, `mac/hfp-bridge`) is a separate
 | S23 locked / app closed | Built; test pending |
 | Responder SMS alerts and ACK by SMS | Built; gateway unit tests pass; device test pending |
 | 112 reply text, location link in reply | Built; device test pending (link needs an https public URL) |
+| Location link: live sharing page, URL learned from the dashboard, `scripts/public-url.sh`, admin token enforced for public URLs | Built; server and unit tests pass; not yet run through a real tunnel |
 | Heartbeat and "S23 last seen" | Built; server tested; first real heartbeat pending (installed on the S23) |
 | Battery-optimisation exemption | Built; device test pending |
 | Incidents, location page, ACK endpoint, persistence, admin token | Built; full simulated incident passed end to end on the Mac |
 | Kaaka Sensors SOS, fall detection, beacon duration, report format | Built; device test pending (needs a second Android phone) |
 | Alert SMS receiving and forwarding on the S23 | Built; real alert pending |
+| Nearest-responder routing: responder registry, distance/ETA, dispatch of the 1–2 nearest, gateway dispatch SMS, dashboard panel and map lines | Built; server tests and gateway unit tests pass; dispatch SMS on a device pending |
 | Mac Bluetooth hands-free (alternative mode) | Tested with real calls earlier |
 
 Android does not pass calls from saved contacts to call-screening apps (Telecom only asks the built-in dialer). Kaaka Call handles those through its phone-state fallback (`IncomingCallReceiver`), which needs the "calls from contacts" permissions in the app.
@@ -48,10 +50,11 @@ Android does not pass calls from saved contacts to call-screening apps (Telecom 
 ## Next steps
 
 1. **Device test pass** using [TESTING.md](TESTING.md).
-2. **Public https URL** (only if location links are wanted): a tunnel or small server in front of the dashboard, with `KAAKA_ADMIN_TOKEN` set before exposing it.
+2. **Public https URL** (only if location links are wanted): run `scripts/public-url.sh`, restart the server with `KAAKA_PUBLIC_URL` and `KAAKA_ADMIN_TOKEN`, set the token in Kaaka Call; test a link from a real phone browser.
 3. **Second Android phone** with Kaaka Sensors for the SOS/fall/beacon tests.
 4. **Tune fall detection** thresholds from real tests.
 5. **Backup:** a second gateway phone and power backup.
+6. **Responder accept/decline** by SMS, so a dispatched responder who cannot go is replaced by the next nearest.
 
 ## Round 3 features (branch `feat/round3`)
 
