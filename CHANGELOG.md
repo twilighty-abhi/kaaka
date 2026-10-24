@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:43:59+05:30 — Reduce Kaaka Sensors rendering load
+
+- Changed: Removed `backdrop-blur` from all client cards, sticky header and fixed footer, the always-pulsing blurred glow, and the per-update bar transitions; location state is now updated with the other on-screen values (at most every 200 ms) instead of on every sample. Rebuilt `client/KaakaSensors.apk`.
+- Why: Scrolling stuttered on the Xiaomi: backdrop blur is redrawn on every scroll frame and content change in Android WebView, and reactive location updates re-rendered components ~16 times per second.
+- Validation: `svelte-check` 0 errors; on the Xiaomi (idle main screen, 5 s windows): app CPU 53% → 34–38%, WebView renderer 18% → 7%, janky frames 49% → 32–39%.
+- Limitations: The WebView still renders ~36 frames/s while idle; feel to be confirmed by hand.
+
 ## 2026-10-25T00:39:05+05:30 — Fix Kaaka Sensors freezing on the second phone
 
 - Changed: `client/capacitor.config.ts` sets `loggingBehavior: 'none'`; `sensorManager.svelte.ts` passes every native sample to fall detection but updates the on-screen state at most every 200 ms. Rebuilt `client/KaakaSensors.apk`.

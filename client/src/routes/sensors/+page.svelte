@@ -32,7 +32,7 @@
 
 <div class="min-h-screen bg-background text-foreground flex flex-col pb-8">
 	<!-- Enlarged Top Menu Bar with Back Button -->
-	<header class="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur-xl px-4 sm:px-6 pt-safe pb-4 sm:pb-5 shadow-md">
+	<header class="sticky top-0 z-40 border-b border-border/70 bg-background/95 px-4 sm:px-6 pt-safe pb-4 sm:pb-5 shadow-md">
 		<div class="mx-auto flex max-w-5xl items-center justify-between gap-3">
 			<div class="flex items-center gap-3 sm:gap-4">
 				<a
@@ -118,7 +118,7 @@
 			</div>
 
 			<!-- Hardware Diagnostic Card with Lucide Icons (No Nested Tiles) -->
-			<div class="col-span-1 flex flex-col justify-between rounded-2xl border border-border/70 bg-card/90 p-4 sm:p-5 shadow-md backdrop-blur-xl">
+			<div class="col-span-1 flex flex-col justify-between rounded-2xl border border-border/70 bg-card/90 p-4 sm:p-5 shadow-md">
 				<div>
 					<div class="flex items-center justify-between pb-2">
 						<div class="flex items-center gap-2">
@@ -167,7 +167,7 @@
 	</main>
 
 	<!-- Stagnant Fixed Bottom Bar -->
-	<div class="fixed bottom-0 left-0 right-0 z-40 px-4 py-2.5 pb-safe bg-background/90 backdrop-blur-2xl border-t border-border/80 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
+	<div class="fixed bottom-0 left-0 right-0 z-40 px-4 py-2.5 pb-safe bg-background/90 border-t border-border/80 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
 		<div class="mx-auto max-w-md">
 			{#if sensorManager.isListening}
 				<button

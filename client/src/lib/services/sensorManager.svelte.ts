@@ -336,15 +336,16 @@ export class SensorManager {
 		// Fall detection sees every native sample (~16/s) so short impact spikes are not missed.
 		this.onSample?.(data.accelerometer.magnitude, data.gyroscope.rate, Date.now());
 		this.updateCount++;
-		if (data.location && data.location.hasCoords) {
-			this.location = data.location;
-		}
 
 		// The screen only needs ~5 updates per second; re-rendering every card and sparkline
 		// on every sample made the UI unresponsive on some phones.
 		const now = Date.now();
 		if (now - this.lastUiUpdate < UI_UPDATE_MS) return;
 		this.lastUiUpdate = now;
+
+		if (data.location && data.location.hasCoords) {
+			this.location = data.location;
+		}
 
 		this.accelerometer = data.accelerometer;
 		this.gyroscope = data.gyroscope;

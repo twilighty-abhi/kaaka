@@ -43,7 +43,7 @@
 
 <div class="min-h-screen bg-background text-foreground flex flex-col pb-8">
 	<!-- Enlarged Top Menu Bar with safe-area padding -->
-	<header class="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur-xl px-4 sm:px-6 pt-safe pb-4 sm:pb-5 shadow-md">
+	<header class="sticky top-0 z-40 border-b border-border/70 bg-background/95 px-4 sm:px-6 pt-safe pb-4 sm:pb-5 shadow-md">
 		<div class="mx-auto flex max-w-5xl items-center justify-between gap-3">
 			<div class="flex items-center gap-3.5 sm:gap-4">
 				<div class="flex h-13 w-13 sm:h-15 sm:w-15 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg ring-1 ring-primary/30 overflow-hidden p-1.5">
@@ -189,7 +189,7 @@
 			class="group block transition-all duration-200 active:scale-[0.99] focus:outline-none"
 			title="SMS Receiver & Emergency Alert Trigger Monitor"
 		>
-			<Card.Root class="overflow-hidden border border-border/80 bg-card/60 backdrop-blur-sm rounded-2xl p-4 sm:p-5 shadow-md transition-all group-hover:border-primary/60 group-hover:shadow-primary/10">
+			<Card.Root class="overflow-hidden border border-border/80 bg-card/60 rounded-2xl p-4 sm:p-5 shadow-md transition-all group-hover:border-primary/60 group-hover:shadow-primary/10">
 				<div class="flex items-center justify-between">
 					<div class="flex items-center gap-3">
 						<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
@@ -218,7 +218,7 @@
 	</main>
 
 	<!-- Stagnant Fixed Bottom Bar -->
-	<div class="fixed bottom-0 left-0 right-0 z-40 px-4 py-2.5 pb-safe bg-background/90 backdrop-blur-2xl border-t border-border/80 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
+	<div class="fixed bottom-0 left-0 right-0 z-40 px-4 py-2.5 pb-safe bg-background/90 border-t border-border/80 shadow-[0_-8px_30px_rgba(0,0,0,0.6)]">
 		<div class="mx-auto max-w-md">
 			{#if sensorManager.isListening}
 				<button

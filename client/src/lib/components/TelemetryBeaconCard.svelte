@@ -41,7 +41,7 @@
 	<!-- ACTIVE TELEMETRY BEACON (Pulsing Red Emergency Mode) -->
 	<div class="relative overflow-hidden rounded-2xl border-2 border-red-500/80 bg-gradient-to-b from-red-950/60 via-card to-card p-4 sm:p-5 shadow-2xl shadow-red-950/60 ring-2 ring-red-500/30 transition-all">
 		<!-- Pulsing background glow -->
-		<div class="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-red-600/20 blur-3xl animate-pulse"></div>
+		<div class="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-red-600/20"></div>
 
 		<!-- Header -->
 		<div class="flex items-center justify-between pb-3 border-b border-red-900/50">
@@ -165,7 +165,7 @@
 	</div>
 {:else}
 	<!-- INACTIVE / STANDBY TELEMETRY BEACON -->
-	<div class="relative overflow-hidden rounded-2xl border border-border/80 bg-card/80 backdrop-blur-xl p-4 sm:p-5 shadow-lg transition-all hover:border-primary/40">
+	<div class="relative overflow-hidden rounded-2xl border border-border/80 bg-card/80 p-4 sm:p-5 shadow-lg transition-all hover:border-primary/40">
 		<div class="flex items-center justify-between pb-3 border-b border-border/60">
 			<div class="flex items-center gap-3">
 				<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">

@@ -39,7 +39,7 @@
 
 <div class="min-h-screen bg-background text-foreground flex flex-col pb-12">
 	<!-- Top App Header -->
-	<header class="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur-xl px-4 sm:px-6 pt-safe pb-4 sm:pb-5 shadow-md">
+	<header class="sticky top-0 z-40 border-b border-border/70 bg-background/95 px-4 sm:px-6 pt-safe pb-4 sm:pb-5 shadow-md">
 		<div class="mx-auto flex max-w-5xl items-center justify-between gap-3">
 			<div class="flex items-center gap-3 sm:gap-4">
 				<a
@@ -79,7 +79,7 @@
 
 		<!-- Default Role Warning / Confirmation Banner -->
 		{#if !defaultSmsManager.isDefault}
-			<div class="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg backdrop-blur-sm">
+			<div class="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
 				<div class="flex items-start gap-3.5">
 					<div class="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
 						<AlertTriangle class="h-6 w-6" />
@@ -119,7 +119,7 @@
 		{/if}
 
 		<!-- Filter & Protocol Info Card -->
-		<div class="rounded-2xl border border-border/70 bg-card/60 backdrop-blur-sm p-5 flex flex-col gap-3">
+		<div class="rounded-2xl border border-border/70 bg-card/60 p-5 flex flex-col gap-3">
 			<div class="flex items-center justify-between border-b border-border/50 pb-3">
 				<span class="text-xs font-mono font-bold text-muted-foreground uppercase tracking-wider">
 					Authorized Trigger Target
@@ -144,7 +144,7 @@
 		</div>
 
 		<!-- Live Trigger Log Section -->
-		<div class="rounded-2xl border border-border/70 bg-card/60 backdrop-blur-sm p-5 flex flex-col gap-4">
+		<div class="rounded-2xl border border-border/70 bg-card/60 p-5 flex flex-col gap-4">
 			<div class="flex items-center justify-between border-b border-border/50 pb-3">
 				<div class="flex items-center gap-2">
 					<Bell class="h-4 w-4 text-primary" />
@@ -221,7 +221,7 @@
 		</div>
 
 		<!-- Testing / Simulation Panel -->
-		<div class="rounded-2xl border border-border/70 bg-card/60 backdrop-blur-sm p-5 flex flex-col gap-4">
+		<div class="rounded-2xl border border-border/70 bg-card/60 p-5 flex flex-col gap-4">
 			<div class="flex items-center justify-between border-b border-border/50 pb-3">
 				<div class="flex items-center gap-2">
 					<Sliders class="h-4 w-4 text-primary" />

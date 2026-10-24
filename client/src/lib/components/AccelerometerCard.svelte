@@ -8,7 +8,7 @@
 	let gForce = $derived((sensorManager.accelerometer.magnitude / 9.80665).toFixed(2));
 </script>
 
-<Card.Root class="relative overflow-hidden border-border/70 bg-card/90 shadow-md backdrop-blur-xl transition-all hover:border-emerald-500/40 rounded-2xl">
+<Card.Root class="relative overflow-hidden border-border/70 bg-card/90 shadow-md transition-all hover:border-emerald-500/40 rounded-2xl">
 	<!-- Ambient glow -->
 	<div class="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-emerald-500/10 blur-2xl"></div>
 
@@ -72,7 +72,7 @@
 				<div class="relative h-2 w-full bg-secondary/80 rounded-full overflow-hidden flex items-center">
 					<div class="absolute left-1/2 h-full w-0.5 bg-border z-10"></div>
 					<div
-						class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-75 rounded-full"
+						class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full"
 						style:width={`${Math.min(100, Math.abs(sensorManager.accelerometer.x) * 8)}%`}
 					></div>
 				</div>
@@ -93,7 +93,7 @@
 				<div class="relative h-2 w-full bg-secondary/80 rounded-full overflow-hidden flex items-center">
 					<div class="absolute left-1/2 h-full w-0.5 bg-border z-10"></div>
 					<div
-						class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-75 rounded-full"
+						class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full"
 						style:width={`${Math.min(100, Math.abs(sensorManager.accelerometer.y) * 8)}%`}
 					></div>
 				</div>
@@ -114,7 +114,7 @@
 				<div class="relative h-2 w-full bg-secondary/80 rounded-full overflow-hidden flex items-center">
 					<div class="absolute left-1/2 h-full w-0.5 bg-border z-10"></div>
 					<div
-						class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-75 rounded-full"
+						class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full"
 						style:width={`${Math.min(100, Math.abs(sensorManager.accelerometer.z) * 8)}%`}
 					></div>
 				</div>
