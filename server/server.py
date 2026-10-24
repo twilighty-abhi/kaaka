@@ -83,6 +83,25 @@ def extract_body_from_bmsg(raw_text: str) -> str:
         return '\n'.join(body_lines).strip()
     return raw_text.strip()
 
+def format_sensor_report(sensors: dict) -> str:
+    """Turn the client app's sensor JSON into the report text the dashboard parses."""
+    def num(group, key, default=0.0):
+        try:
+            return float((sensors.get(group) or {}).get(key, default))
+        except (TypeError, ValueError):
+            return default
+    mag = sensors.get("magnetometer") or {}
+    return "\n".join([
+        "Kaaka Live: sensor stream",
+        "",
+        "Live Sensors (5/5):",
+        f"• Pedometer: {int(num('pedometer', 'steps'))} steps ({num('pedometer', 'distanceKm'):.2f} km)",
+        f"• Light: {round(num('ambientLight', 'lux'))} lx",
+        f"• Accelerometer: {num('accelerometer', 'magnitude'):.1f} m/s²",
+        f"• Gyroscope: {num('gyroscope', 'rate'):.1f} rad/s",
+        f"• Magnetometer: {round(num('magnetometer', 'heading'))}° {mag.get('cardinal', '')}".rstrip(),
+    ])
+
 class DashboardHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, server_instance=None, **kwargs):
         self.server_instance = server_instance
@@ -154,6 +173,14 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         else:
             self.send_error(404, "Not Found")
 
+    def do_OPTIONS(self):
+        # CORS preflight: the client app's WebView posts JSON from another origin.
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
     def do_POST(self):
         if self.path == "/api/trigger-call":
             # Optional JSON body {"number": "..."}; without it the simulated call has no caller number.
@@ -221,12 +248,17 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 post_data = self.rfile.read(length).decode("utf-8")
                 try:
                     payload = json.loads(post_data)
-                    report = payload.get("report") or payload.get("content") or post_data
-                    sender = payload.get("sender", "")
                 except Exception:
-                    report = post_data
-                    sender = ""
-                self.server_instance.display_telemetry(report, sender=sender, source="HTTP REST /api/telemetry")
+                    payload = None
+                if isinstance(payload, dict) and isinstance(payload.get("sensors"), dict):
+                    # Live stream from the client app's backend sync (Settings → Telemetry backend).
+                    self.server_instance.display_telemetry(format_sensor_report(payload["sensors"]),
+                                                           sender=str(payload.get("deviceId", "")),
+                                                           source="Live sensor stream", live=True)
+                else:
+                    report = (payload.get("report") or payload.get("content")) if isinstance(payload, dict) else None
+                    sender = payload.get("sender", "") if isinstance(payload, dict) else ""
+                    self.server_instance.display_telemetry(report or post_data, sender=sender, source="HTTP REST /api/telemetry")
                 body = b'{"success":true}'
             except Exception as e:
                 body = json.dumps({"error": str(e)}).encode("utf-8")
@@ -330,7 +362,7 @@ class TelemetryServer:
         except Exception:
             return False
 
-    def display_telemetry(self, raw_content: str, sender: str = "", source: str = "BLE / Bluetooth MAP"):
+    def display_telemetry(self, raw_content: str, sender: str = "", source: str = "BLE / Bluetooth MAP", live: bool = False):
         """
         Displays live sensor readings in the exact requested visual format:
         
@@ -359,6 +391,14 @@ class TelemetryServer:
         self.telemetry_count += 1
         ts = format_timestamp()
         source_label = f"{sender} ({source})" if sender else source
+
+        if live:
+            # Continuous stream (about once a second): no console banner, no disk write.
+            self.latest_telemetry = {"content": clean_text, "sender": sender, "source": source,
+                                     "timestamp": ts, "update_count": self.telemetry_count}
+            if self.loop and self.connected_clients:
+                asyncio.run_coroutine_threadsafe(self.broadcast({"type": "TELEMETRY_RECEIVED", **self.latest_telemetry}), self.loop)
+            return
 
         print("\n" + "=" * 65, flush=True)
         print(f"\033[1;31m[{ts}] 🚨 KAAKA SENSOR TELEMETRY RECEIVED (Update #{self.telemetry_count})\033[0m", flush=True)

@@ -11,6 +11,13 @@ Record each meaningful project change during the event, newest first. Update thi
 - Validation: Python compile check. Not yet verified against the running server, which must be restarted to pick this up.
 - Limitations: SMS-delivered telemetry can take up to 30 s to reach the dashboard; the client app's direct WebSocket copy is unaffected. If the client app runs on the same phone the server reads, a report can appear twice (WebSocket, then the SMS copy).
 
+## 2026-10-24T22:05:00+05:30 — Stream live sensor readings to the dashboard
+
+- Changed: `server/server.py` accepts the client app's sensor JSON on `POST /api/telemetry` (port 8080), formats it as a "Kaaka Live" report and broadcasts it to the dashboard without a console banner or disk write per reading; added a CORS preflight (`OPTIONS`) handler. Client app: backend sync is on by default and runs whenever Settings → Telemetry backend is set (the UI had no switch for it, so it never ran); placeholder now `http://<mac-ip>:8080`. Rebuilt `client/KaakaSensors.apk`.
+- Why: The dashboard's live telemetry never updated: the client only sent readings to an unset backend URL (pointing at the separate Node service on :3001), sync could not be switched on, and the server had no preflight handler.
+- Validation: Preflight returns 204; a sample sensor POST returned success and a WebSocket client received the formatted "Live sensor stream" report; client rebuilt with Gradle and installed on the Galaxy S23 (`adb install -r` Success).
+- Limitations: Live stream readings carry no GPS coordinates (the full alert report still does). On-device streaming not yet confirmed at the time of this entry.
+
 ## 2026-10-24T21:47:00+05:30 — Count only phones as gateway connections
 
 - Changed: `server/server.py` treats WebSocket clients from this machine (loopback or the server's own IP, e.g. the dashboard in a local browser) as non-phones in the call log, `/api/status` and pending-call replay, and warns on macOS when a call arrives with no gateway app connected.

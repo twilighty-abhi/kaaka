@@ -43,7 +43,8 @@ export class SensorManager {
 	isNative = $state(Capacitor.isNativePlatform());
 	isListening = $state(false);
 	isSimulated = $state(false);
-	backendSyncEnabled = $state(false);
+	// Stream readings whenever a telemetry backend URL is set in Settings (there is no separate switch).
+	backendSyncEnabled = $state(true);
 		syncStatus = $state<"idle" | "syncing" | "error" | "connected">("idle");
 	syncMessage = $state("");
 

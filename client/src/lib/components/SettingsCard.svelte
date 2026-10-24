@@ -52,7 +52,7 @@
 			</label>
 			<label class="block space-y-1 text-xs font-semibold">
 				<span>Telemetry backend</span>
-				<Input type="url" bind:value={backendUrl} placeholder="http://<mac-ip>:3001" />
+				<Input type="url" bind:value={backendUrl} placeholder="http://<mac-ip>:8080" />
 			</label>
 			<div class="flex items-center gap-3">
 				<Button type="submit">Save</Button>
