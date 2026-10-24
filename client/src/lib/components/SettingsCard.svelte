@@ -4,24 +4,6 @@
 	import { Button } from "#lib/components/ui/button/index.js";
 	import { Settings, AlertCircle, CheckCircle2 } from "lucide-svelte";
 	import { appSettings } from "#lib/services/appSettings.svelte.js";
-	import { Capacitor, registerPlugin } from "@capacitor/core";
-	import { onMount } from "svelte";
-
-	interface ReceiveSmsPlugin {
-		checkReceiveSms(): Promise<{ granted: boolean }>;
-		requestReceiveSms(): Promise<{ granted: boolean }>;
-	}
-	const DefaultSms = registerPlugin<ReceiveSmsPlugin>("DefaultSms");
-	const isNative = Capacitor.isNativePlatform();
-
-	// Lets the app see the Kaaka number's reply SMS (and start the beacon) without being the default SMS app.
-	let receiveSms = $state<boolean | null>(null);
-	onMount(async () => {
-		if (isNative) receiveSms = (await DefaultSms.checkReceiveSms()).granted;
-	});
-	async function allowReceiveSms() {
-		receiveSms = (await DefaultSms.requestReceiveSms()).granted;
-	}
 
 	let gatewayNumber = $state(appSettings.gatewayNumber);
 	let serverUrl = $state(appSettings.serverUrl);
@@ -53,22 +35,6 @@
 		{/if}
 	</Card.Header>
 	<Card.Content>
-		{#if isNative && receiveSms !== null}
-			<div class="mb-3 rounded-xl border border-border/70 px-3 py-2 text-xs">
-				<div class="flex items-center justify-between gap-2">
-					<span class="font-semibold">Start beacon when the Kaaka number replies</span>
-					{#if receiveSms}
-						<span class="text-emerald-400 font-semibold">on</span>
-					{:else}
-						<Button type="button" size="sm" onclick={allowReceiveSms}>Allow</Button>
-					{/if}
-				</div>
-				{#if !receiveSms}
-					<p class="mt-1 text-muted-foreground">Needs the "receive SMS" permission. Without it, the reply from the Kaaka number cannot start the beacon (SOS still works).</p>
-				{/if}
-				<p class="mt-1 text-muted-foreground">On Xiaomi/MIUI also enable: Autostart, "Show on lock screen" and "Display pop-up windows while running in the background" for Kaaka Sensors.</p>
-			</div>
-		{/if}
 		<form onsubmit={handleSave} class="space-y-3">
 			<label class="block space-y-1 text-xs font-semibold">
 				<span>Gateway phone number (alert recipient and authorized trigger sender)</span>

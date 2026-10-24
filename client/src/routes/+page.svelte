@@ -10,6 +10,7 @@
 	import SmsSenderCard from "#lib/components/SmsSenderCard.svelte";
 	import SettingsCard from "#lib/components/SettingsCard.svelte";
 	import SosCard from "#lib/components/SosCard.svelte";
+	import SetupCard from "#lib/components/SetupCard.svelte";
 	import SafetyTimerCard from "#lib/components/SafetyTimerCard.svelte";
 	import logo from "#lib/assets/logo.png";
 
@@ -77,6 +78,8 @@
 	<!-- Main Body Content (Scrollable) -->
 	<main class="mx-auto w-full max-w-5xl flex-1 px-3.5 sm:px-4 pt-4 sm:pt-6 space-y-5 pb-20 sm:pb-24">
 		<!-- SOS first, then settings and the beacon -->
+		<SetupCard />
+
 		<SosCard />
 
 		<SafetyTimerCard />

@@ -24,6 +24,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(KaakaSensorsPlugin.class);
         registerPlugin(DirectSmsPlugin.class);
         registerPlugin(DefaultSmsPlugin.class);
+        registerPlugin(KaakaSetupPlugin.class);
         super.onCreate(savedInstanceState);
 
         hideStatusBar();

@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T01:09:31+05:30 — Setup checklist in Kaaka Sensors (all permissions in one place)
+
+- Changed: New `KaakaSetupPlugin` (status of SMS send/receive, location, notifications, physical activity, battery exemption; `requestAll`; battery-exemption request; opens the MIUI permission editor or the app settings page) and a "Finish setup" card at the top of the main screen with "Allow all", "Exempt" and "Open phone settings". Missing permissions are requested once per app start, never in a loop. Added `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. The separate receive-SMS row in Settings is replaced by this card. Rebuilt `client/KaakaSensors.apk`.
+- Why: Device test on the Xiaomi: RECEIVE_SMS, POST_NOTIFICATIONS (never requested at runtime on Android 13+) and ACTIVITY_RECOGNITION were missing and MIUI blocked lock-screen display and background starts, so the Kaaka reply could not start the beacon and no alarm could show. MIUI also blocks `pm grant` over adb, so the app must ask itself.
+- Validation: `svelte-check` 0 errors; `assembleDebug`; installed on the Xiaomi; one permission request on start, no repeat.
+- Limitations: The user must accept the prompts and enable MIUI's Autostart / lock screen / background pop-ups on the device.
+
 ## 2026-10-25T01:05:08+05:30 — Let Kaaka Sensors start the beacon from the Kaaka reply without being the default SMS app
 
 - Changed: `DefaultSmsPlugin` declares the RECEIVE_SMS permission and adds `checkReceiveSms` / `requestReceiveSms`; the Settings card shows "Start beacon when the Kaaka number replies" with an Allow button and MIUI guidance (Autostart, show on lock screen, background pop-ups). `SmsReceiver` no longer posts its own notification for ordinary SMS when it is not the default SMS app (the phone's SMS app already does). Rebuilt `client/KaakaSensors.apk`.
