@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:49:36+05:30 — Document analytics
+
+- Changed: README (Mac + S23 section): an "Analytics" bullet covering the range filter, KPI definitions, charts, table toggles, refresh triggers, the map's hotspots toggle and how incidents are counted; the API table gains `GET /api/analytics` with its full response shape.
+- Why: Keep the dashboard and API documentation complete.
+- Validation: Re-read the README bullet and table row; the escaped `|` in the range list keeps the table to four columns.
+- Limitations: None identified.
+
 ## 2026-10-25T03:49:17+05:30 — Map: hotspots toggle
 
 - Changed: The incident map gets a [hotspots: off/on] toggle (off by default) that draws the analytics hotspot cells (about 500 m) as circles sized by incident count (10–26 px radius, area grows with count) and shaded on a four-step sequential blue ramp, with a 2 px white ring and a "N incidents" tooltip. The hotspots follow the analytics range filter, and the meta line says "N hotspot cells (7d, darker = more)".
