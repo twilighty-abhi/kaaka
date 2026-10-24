@@ -4,6 +4,68 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:29:08+05:30 — Nearest-responder routing: validation summary
+
+- Changed: `AI_USAGE.md` row for this feature.
+- Why: Record the assistance and the checks run.
+- Validation: With `KAAKA_ADMIN_TOKEN` set: `GET/POST/PATCH/DELETE /api/responders` and `POST /api/telemetry` return 401 without the token and 200 with header or `?token=`. All server, gateway and dashboard checks listed in the entries above.
+- Limitations: The dispatch SMS has not been sent from a real phone yet; the rebuilt gateway APK is not committed in this change.
+
+## 2026-10-25T03:28:25+05:30 — Document nearest-responder routing
+
+- Changed: README (Mac + S23 section): how responders are registered, how distance/ETA are computed (straight line, 25 km/h assumption), the dispatch rule and the dispatch SMS; API table gains the four `/api/responders` endpoints and the `dispatch` field in the `/api/telemetry` response. `docs/PLAN.md`: status row for the feature and a next step for responder accept/decline.
+- Why: Keep the setup and API documentation complete.
+- Validation: Re-read the rendered Markdown table rows for alignment.
+- Limitations: None identified.
+
+## 2026-10-25T03:27:35+05:30 — Dashboard: responders panel, nearest-responder lines and dispatch status
+
+- Changed: `server/dashboard.html` gets a Responders panel (list with available/unavailable toggle and remove; add form with name, number and "lat, lon" or a click on the map via "pick on map"). The map shows responders as blue dots (dimmed when unavailable) and, for each open incident with a location, a dashed line to its nearest responder labelled "1.2 km · ~3 min". Incident cards show "Nearest: <name> (km, ETA) · dispatched: <names>" (or "not dispatched yet" / "no available responder registered"). `RESPONDER_DISPATCHED` appears in the activity feed with a beep. Responder names and numbers are inserted with `textContent`.
+- Why: Let the operator see who is closest and who was asked to go, and keep the responder list up to date without editing files.
+- Validation: Script parses; spare-port server seeded with three responders and two located incidents, rendered with headless Chrome: panel, dots, dashed lines with ETA labels and the "nearest … dispatched" card lines all visible.
+- Limitations: Lines use straight-line distance; the map fits incidents and their nearest responders, so far-away responders may be off-screen until zoomed out.
+
+## 2026-10-25T03:25:32+05:30 — Gateway: text the dispatched responders
+
+- Changed: After forwarding a Kaaka Alert to the dashboard, `AlertSmsReceiver` reads the `dispatch` list in the reply and texts each responder with `GatewayText.dispatchMessage` (distance, ETA, Maps link, "Reply ACK <caller>"), then logs a local `dispatch` event (names texted, failures). The event list shows "dispatch for <caller>: <names>". Later reports of an already-dispatched incident get an empty list from the dashboard, so nobody is texted twice.
+- Why: Close the loop from "nearest responder known" to "nearest responder told".
+- Validation: `svelte-check` 0 errors; web build, `cap sync`, `./gradlew testDebugUnitTest assembleDebug` (GatewayTextTest 12/12).
+- Limitations: Not run on a device; the dashboard must be reachable at alert time, otherwise no dispatch SMS goes out (the alert itself still reaches responders through the normal notification).
+
+## 2026-10-25T03:25:32+05:30 — Gateway: read the dashboard's reply to a post
+
+- Changed: `GatewayStore.postToDashboardForResponse` posts JSON and returns the response body (null without a dashboard, on error or when unreachable; body capped at 64 KB); `postToDashboard` now wraps it, so existing callers are unchanged.
+- Why: The dashboard answers an alert with the responders it dispatched; the app needs that answer.
+- Validation: `./gradlew assembleDebug` builds; existing behaviour of the void variant unchanged by construction.
+- Limitations: None identified.
+
+## 2026-10-25T03:24:25+05:30 — Gateway: dispatch SMS wording
+
+- Changed: `GatewayText.dispatchMessage` formats the text sent to a dispatched responder ("Kaaka dispatch: you are the nearest responder (1.2 km, ~3 min) to <caller>. Location: <maps> Reply ACK <caller> to confirm."); "Kaaka dispatch:" is added to the app's own-message list so such a text arriving at another gateway is never read as a help request.
+- Why: Responders picked by the dashboard must be told clearly and consistently.
+- Validation: `./gradlew testDebugUnitTest`: GatewayTextTest 12/12 (new test covers the format, empty caller/maps fallbacks and the own-message exclusion).
+- Limitations: Wording is English only.
+
+## 2026-10-25T03:22:52+05:30 — Dispatch the nearest responders when an incident gets a location
+
+- Changed: The first time an open incident has a location (an alert with coordinates via `/api/telemetry`, or a share via `/api/location`), the server picks the 1–2 nearest available responders, records a `dispatch` event in `events.jsonl` (`dispatched` on the incident), broadcasts `RESPONDER_DISPATCHED`, notifies, and returns `dispatch: [{name, number, distance_km, eta_min, maps_url}]` in the `/api/telemetry` response so the gateway app can text them. Later reports of the same open incident do not dispatch again; resolving clears the dispatch so a reopened incident gets a fresh one.
+- Why: Turn alerts into dispatch: the people closest to the caller are asked to go.
+- Validation: Spare-port run with three responders: first alert dispatched Near (0.11 km, ~1 min) and Mid (2.24 km, ~5 min), `RESPONDER_DISPATCHED` received over WebSocket, second alert returned no dispatch, resolve cleared it, third alert re-dispatched; a location share for another caller dispatched Mid then Near; both incidents and all responders persisted across a restart.
+- Limitations: Dispatch is advisory (SMS), there is no accept/decline step yet.
+
+## 2026-10-25T03:21:22+05:30 — Distance and ETA to the nearest responders
+
+- Changed: `server/responders.py` adds `haversine_km`, `eta_minutes` (assumes 25 km/h average city travel; a planning estimate, not a promise) and `ResponderRegistry.nearest`. `GET /api/incidents` adds `nearest_responders` per incident: the 3 nearest available responders to its latest location with `distance_km` and `eta_min`.
+- Why: Show who can reach a caller soonest.
+- Validation: Pure-function checks: Jain University Kochi → Bharata Mata College straight-line 4.14 km; zero distance for the same point; ETA 1 min minimum, 25 km → 60 min; ordering Near/Mid/Far with an unavailable responder excluded; registry reloads from disk. `py_compile`.
+- Limitations: Straight-line distance, not road distance.
+
+## 2026-10-25T03:20:45+05:30 — Responder registry on the server
+
+- Changed: New `server/responders.py` (`ResponderRegistry`, persisted in `server/responders.json`, ignored by Git) and endpoints `GET/POST /api/responders`, `PATCH/DELETE /api/responders/<id>` with fields name, number, lat, lon, available; values are validated (name ≤ 80 chars, number ≥ 6 digits, lat/lon ranges, available boolean) and the same admin-token rule applies as to other APIs. CORS preflight now lists PATCH and DELETE.
+- Why: Nearest-responder routing needs to know who the responders are and where they usually are.
+- Validation: `py_compile`; spare-port run: add 200, invalid number 400, patch available 200, patch bad lat 400, delete 200, delete again 404, list empty.
+- Limitations: Positions are static home locations, not live responder GPS.
 ## 2026-10-25T03:24:22+05:30 — Document location links for callers without the app
 
 - Changed: README: new "Location links for callers without the app" section (flow, https requirement, `scripts/public-url.sh`, admin-token requirement, automatic URL from the heartbeat); settings and API tables updated (heartbeat reply, 429 on location updates). `docs/PLAN.md` status and next steps updated.

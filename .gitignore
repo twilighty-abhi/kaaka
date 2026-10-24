@@ -48,3 +48,6 @@ server/events.jsonl
 
 # Demo recordings
 demo/
+
+# Responder registry (names and phone numbers)
+server/responders.json

@@ -97,11 +97,22 @@ final class GatewayText {
 
     /** Exact starts of the texts this app sends (replies, responder notifications, command answers). */
     private static final Pattern OWN_MESSAGE = Pattern.compile(
-        "^(Kaaka received|Kaaka UNACKNOWLEDGED|A Kaaka responder|Kaaka alert from|Kaaka: glad you are safe|Kaaka: [+0-9][0-9 ()-]* reported safe|കാക്ക നിങ്ങളുടെ"
+        "^(Kaaka received|Kaaka UNACKNOWLEDGED|Kaaka dispatch:|A Kaaka responder|Kaaka alert from|Kaaka: glad you are safe|Kaaka: [+0-9][0-9 ()-]* reported safe|കാക്ക നിങ്ങളുടെ"
             + "|Kaaka: (call from|help SMS from|ACK recorded|resolved|no recent incident|no open incidents|\\d+ open))");
 
     private static boolean isOwnMessage(String text) {
         return OWN_MESSAGE.matcher(text).find();
+    }
+
+    /**
+     * SMS to a responder the dashboard picked as nearest to a caller.
+     * Distance is shown with one decimal; the ETA is the dashboard's 25 km/h city estimate.
+     */
+    static String dispatchMessage(String caller, double distanceKm, int etaMin, String mapsUrl) {
+        String who = caller == null || caller.trim().isEmpty() ? "a caller" : caller.trim();
+        String location = mapsUrl == null || mapsUrl.trim().isEmpty() ? "" : " Location: " + mapsUrl.trim();
+        return String.format(Locale.US, "Kaaka dispatch: you are the nearest responder (%.1f km, ~%d min) to %s.%s Reply ACK %s to confirm.",
+            distanceKm, Math.max(1, etaMin), who, location, who);
     }
 
     /** Default reply for a language setting: "en" (default), "ml" or "both". */

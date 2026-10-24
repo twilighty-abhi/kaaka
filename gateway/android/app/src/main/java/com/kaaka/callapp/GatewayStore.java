@@ -310,11 +310,14 @@ public final class GatewayStore {
 
     /** POSTs JSON to the optional dashboard server. Call from a background thread; failures are only logged. */
     public static void postToDashboard(Context context, String path, JSONObject body) {
-        postToDashboardForReply(context, path, body);
+        postToDashboardForResponse(context, path, body);
     }
 
-    /** Same as postToDashboard but returns the JSON reply, or null when there was no 2xx reply. */
-    public static JSONObject postToDashboardForReply(Context context, String path, JSONObject body) {
+    /**
+     * POSTs JSON to the optional dashboard server and returns the response body (null when no dashboard is
+     * set, it is unreachable, or it answered with an error). Call from a background thread.
+     */
+    public static String postToDashboardForResponse(Context context, String path, JSONObject body) {
         String base = dashboardUrl(context);
         if (base.isEmpty()) return null;
         HttpURLConnection conn = null;
@@ -336,18 +339,29 @@ public final class GatewayStore {
                 return null;
             }
             try (InputStream in = conn.getInputStream()) {
-                byte[] buf = new byte[4096];
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                byte[] chunk = new byte[4096];
                 int n;
-                while ((n = in.read(buf)) > 0 && out.size() < 64 * 1024) out.write(buf, 0, n);
-                String text = out.toString("UTF-8").trim();
-                return text.isEmpty() ? new JSONObject() : new JSONObject(text);
+                while ((n = in.read(chunk)) > 0 && buffer.size() < 64 * 1024) buffer.write(chunk, 0, n);
+                return buffer.toString(StandardCharsets.UTF_8.name());
             }
         } catch (Exception e) {
             Log.w(TAG, "Dashboard " + path + " unreachable: " + e.getMessage());
             return null;
         } finally {
             if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** Same as postToDashboardForResponse but parses the reply as JSON (null when there was none or it was not JSON). */
+    public static JSONObject postToDashboardForReply(Context context, String path, JSONObject body) {
+        String text = postToDashboardForResponse(context, path, body);
+        if (text == null) return null;
+        try {
+            return text.trim().isEmpty() ? new JSONObject() : new JSONObject(text.trim());
+        } catch (Exception e) {
+            Log.w(TAG, "Dashboard " + path + " reply was not JSON");
+            return null;
         }
     }
 }

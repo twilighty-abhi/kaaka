@@ -200,4 +200,15 @@ public class GatewayTextTest {
         GatewayText.Ev old = new GatewayText.Ev("call", "+919000000002", "rejected", now - 25L * 3600_000, false);
         assertFalse(GatewayText.hasOpenIncident(Arrays.asList(old), "+919000000002", now));
     }
+
+    @Test
+    public void dispatchMessageFormat() {
+        String m = GatewayText.dispatchMessage("+919061553544", 1.234, 3, "https://maps.google.com/?q=10.007041,76.365607");
+        assertEquals("Kaaka dispatch: you are the nearest responder (1.2 km, ~3 min) to +919061553544."
+            + " Location: https://maps.google.com/?q=10.007041,76.365607 Reply ACK +919061553544 to confirm.", m);
+        assertEquals("Kaaka dispatch: you are the nearest responder (0.1 km, ~1 min) to a caller. Reply ACK a caller to confirm.",
+            GatewayText.dispatchMessage("", 0.11, 0, null));
+        // A dispatch SMS arriving at another gateway must never be read as a help request.
+        assertFalse(GatewayText.isHelpRequest(m));
+    }
 }

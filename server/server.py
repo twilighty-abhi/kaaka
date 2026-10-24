@@ -49,9 +49,11 @@ except ImportError:
     from audio_bridge import AudioConversationBridge, ensure_audio_sinks
 
 try:
-    from server.incidents import IncidentStore, TOKEN_RE
+    from server.incidents import IncidentStore, TOKEN_RE, number_key
+    from server.responders import ResponderRegistry
 except ImportError:
-    from incidents import IncidentStore, TOKEN_RE
+    from incidents import IncidentStore, TOKEN_RE, number_key
+    from responders import ResponderRegistry
 
 if IS_MAC:
     try:
@@ -273,7 +275,9 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, f"Error loading dashboard: {e}")
         elif path == "/api/incidents":
-            self.send_json(200, {"incidents": self.server_instance.incidents.incidents()})
+            self.send_json(200, {"incidents": self.server_instance.incidents_with_nearest()})
+        elif path == "/api/responders":
+            self.send_json(200, {"responders": self.server_instance.responders.list()})
         elif path == "/api/incidents.csv":
             body = incidents_csv(self.server_instance.incidents.incidents()).encode("utf-8")
             self.send_response(200)
@@ -338,7 +342,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         # CORS preflight: the client app's WebView posts JSON from another origin.
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Kaaka-Token")
         self.end_headers()
 
@@ -351,7 +355,16 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         if not self.authorized(query):
             self.send_json(401, {"success": False, "error": "admin token required"})
             return
-        if path == "/api/trigger-call":
+        if path == "/api/responders":
+            # Register a responder: {"name", "number", "lat", "lon", "available"?}
+            try:
+                responder = self.server_instance.responders.add(self.read_json_body(max_bytes=4096))
+            except (ValueError, UnicodeDecodeError) as e:
+                self.send_json(400, {"success": False, "error": str(e)})
+                return
+            print(f"[{format_timestamp()}] 🧑‍🚒 Responder added: {responder['name']} ({responder['number']})", flush=True)
+            self.send_json(200, {"success": True, "responder": responder})
+        elif path == "/api/trigger-call":
             # Optional JSON body {"number": "..."}; without it the simulated call has no caller number.
             number = ""
             length = int(self.headers.get("Content-Length", 0))
@@ -530,11 +543,13 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     self.server_instance.display_telemetry(format_sensor_report(payload["sensors"]),
                                                            sender=str(payload.get("deviceId", "")),
                                                            source="Live sensor stream", live=True)
+                    body = b'{"success":true}'
                 else:
                     report = (payload.get("report") or payload.get("content")) if isinstance(payload, dict) else None
                     sender = payload.get("sender", "") if isinstance(payload, dict) else ""
-                    self.server_instance.display_telemetry(report or post_data, sender=sender, source="HTTP REST /api/telemetry")
-                body = b'{"success":true}'
+                    dispatch = self.server_instance.display_telemetry(report or post_data, sender=sender, source="HTTP REST /api/telemetry")
+                    # The gateway app texts these responders ("you are the nearest responder ...").
+                    body = json.dumps({"success": True, "dispatch": dispatch or []}).encode("utf-8")
             except Exception as e:
                 body = json.dumps({"error": str(e)}).encode("utf-8")
             self.send_response(200)
@@ -545,6 +560,48 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(body)
         else:
             self.send_error(404, "Not Found")
+
+    def responder_id_from_path(self, path):
+        """'/api/responders/<id>' → id, else None."""
+        prefix = "/api/responders/"
+        if path.startswith(prefix) and re.fullmatch(r"[0-9a-f]{8}", path[len(prefix):]):
+            return path[len(prefix):]
+        return None
+
+    def do_PATCH(self):
+        parsed = urlparse(self.path)
+        path, query = parsed.path, parse_qs(parsed.query)
+        if not self.authorized(query):
+            self.send_json(401, {"success": False, "error": "admin token required"})
+            return
+        responder_id = self.responder_id_from_path(path)
+        if not responder_id:
+            self.send_error(404, "Not Found")
+            return
+        try:
+            responder = self.server_instance.responders.update(responder_id, self.read_json_body(max_bytes=4096))
+        except (ValueError, UnicodeDecodeError) as e:
+            self.send_json(400, {"success": False, "error": str(e)})
+            return
+        if responder is None:
+            self.send_json(404, {"success": False, "error": "no such responder"})
+            return
+        self.send_json(200, {"success": True, "responder": responder})
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        path, query = parsed.path, parse_qs(parsed.query)
+        if not self.authorized(query):
+            self.send_json(401, {"success": False, "error": "admin token required"})
+            return
+        responder_id = self.responder_id_from_path(path)
+        if not responder_id:
+            self.send_error(404, "Not Found")
+            return
+        if not self.server_instance.responders.delete(responder_id):
+            self.send_json(404, {"success": False, "error": "no such responder"})
+            return
+        self.send_json(200, {"success": True})
 
 class TelemetryServer:
     def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="", client_number="", adb_serial="",
@@ -558,6 +615,8 @@ class TelemetryServer:
         self.admin_token = admin_token
         self.public_url = public_url.rstrip("/")
         self.incidents = IncidentStore(os.path.join(os.path.dirname(os.path.abspath(__file__)), "events.jsonl"))
+        # Responders (volunteers with a home position) for nearest-responder routing; server/responders.json.
+        self.responders = ResponderRegistry(os.path.join(os.path.dirname(os.path.abspath(__file__)), "responders.json"))
         self.port = port
         self.http_port = http_port
         self.bt_mac = bt_mac
@@ -701,8 +760,12 @@ class TelemetryServer:
         print("=" * 65 + "\n", flush=True)
 
         before = self.incidents.status_of(sender)
-        if self.incidents.add_alert(sender, clean_text, source):
+        dispatch = []
+        alert_event = self.incidents.add_alert(sender, clean_text, source)
+        if alert_event:
             self.notify_if_opened(sender, before, f"alert from {sender or 'unknown sender'}")
+            if "lat" in alert_event:
+                dispatch = self.maybe_dispatch(sender)
 
         # Store latest telemetry in memory and persist to disk
         self.latest_telemetry = {
@@ -729,6 +792,42 @@ class TelemetryServer:
                 "update_count": self.telemetry_count
             }
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+        return dispatch
+
+    def maybe_dispatch(self, number):
+        """
+        The first time an open incident has a location, ask the 1-2 nearest available responders to go.
+        Later reports of the same open incident do not dispatch again; a resolved incident that reopens does.
+        Returns the dispatch list (possibly empty).
+        """
+        inc = self.incidents._build().get(number_key(number))
+        if not inc or inc["status"] == "resolved" or inc["dispatched"] or not inc["latest_location"]:
+            return []
+        loc = inc["latest_location"]
+        nearest = self.responders.nearest(loc["lat"], loc["lon"], limit=2)
+        if not nearest:
+            return []
+        dispatch = [{"name": r["name"], "number": r["number"], "distance_km": r["distance_km"],
+                     "eta_min": r["eta_min"], "maps_url": loc["maps_url"]} for r in nearest]
+        self.incidents.add_dispatch(inc["number"], dispatch)
+        who = ", ".join(f"{d['name']} ({d['distance_km']} km, ~{d['eta_min']} min)" for d in dispatch)
+        print(f"[{format_timestamp()}] 🚨 Dispatch for {inc['number']}: {who}", flush=True)
+        self.notify(f"Dispatch for {inc['number']}: {who}")
+        if self.loop:
+            payload = {"type": "RESPONDER_DISPATCHED", "number": inc["number"], "dispatch": dispatch,
+                       "timestamp": format_timestamp()}
+            asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+        return dispatch
+
+    def incidents_with_nearest(self):
+        """Incidents plus, for each one with a location, the 3 nearest available responders (distance, ETA)."""
+        result = self.incidents.incidents()
+        for inc in result:
+            loc = inc.get("latest_location")
+            inc["nearest_responders"] = (
+                self.responders.nearest(loc["lat"], loc["lon"], limit=3) if loc else []
+            )
+        return result
 
     async def broadcast(self, payload):
         """Send JSON message to all connected clients."""
@@ -813,6 +912,8 @@ class TelemetryServer:
             payload = {"type": "LOCATION_SHARED", "number": event["number"], "lat": lat, "lon": lon,
                        "accuracy": accuracy, "maps_url": event["maps_url"], "timestamp": event["received"]}
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+        if event["number"]:
+            self.maybe_dispatch(event["number"])
 
     def on_ack(self, number, responder, timestamp):
         """A responder acknowledged a caller's incident (POST /api/ack)."""
