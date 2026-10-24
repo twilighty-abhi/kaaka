@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:23:44+05:30 — Helper to give the dashboard a public https URL
+
+- Changed: `scripts/public-url.sh` checks for cloudflared (prints the brew install command if missing) and for a running dashboard, opens a Cloudflare quick tunnel to the dashboard port, extracts the `https://*.trycloudflare.com` URL and prints the exact next steps (restart with `KAAKA_PUBLIC_URL` and `KAAKA_ADMIN_TOKEN`, set the token in Kaaka Call; the phone learns the URL from the heartbeat).
+- Why: The location link needs an https address reachable from callers' phones; this is the quickest way to get one for a demo or pilot.
+- Validation: `bash -n`; missing-cloudflared and no-dashboard paths exit with clear messages. No tunnel was opened.
+- Limitations: Quick-tunnel URLs change on every run; for a permanent address use a named tunnel or a hosted server.
+
 ## 2026-10-25T03:23:02+05:30 — Show the automatic public URL in the gateway settings
 
 - Changed: `getSettings` returns `autoPublicUrl`; under the public link field the UI shows "auto: <url> (from the dashboard)" when the field is empty and a URL was reported (flagged when not https), or a hint to leave the field empty.
