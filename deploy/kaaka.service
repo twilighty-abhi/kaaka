@@ -1,0 +1,43 @@
+# Kaaka dashboard server as a systemd service (Linux, gateway-app mode: no --bt-mac).
+#
+# Install:
+#   sudo useradd --system --home /var/lib/kaaka --create-home --shell /usr/sbin/nologin kaaka
+#   sudo git clone <repo> /opt/kaaka && sudo chown -R kaaka:kaaka /opt/kaaka
+#   sudo -u kaaka python3 -m venv /opt/kaaka/.venv && sudo -u kaaka /opt/kaaka/.venv/bin/pip install -r /opt/kaaka/server/requirements.txt
+#   sudo mkdir -p /etc/kaaka && sudo cp deploy/kaaka.env.example /etc/kaaka/kaaka.env && sudo chmod 600 /etc/kaaka/kaaka.env
+#   (edit /etc/kaaka/kaaka.env: KAAKA_ADMIN_TOKEN, KAAKA_PUBLIC_URL)
+#   sudo cp deploy/kaaka.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#   sudo systemctl enable --now kaaka && journalctl -u kaaka -f
+#
+# Events, responders and the other runtime files live in KAAKA_DATA_DIR (/var/lib/kaaka below).
+# The service only needs ports 8080 (HTTP) and 8765 (WebSocket); put a TLS reverse proxy in front for the internet.
+
+[Unit]
+Description=Kaaka help line dashboard server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kaaka
+Group=kaaka
+WorkingDirectory=/opt/kaaka
+EnvironmentFile=/etc/kaaka/kaaka.env
+Environment=KAAKA_DATA_DIR=/var/lib/kaaka
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/kaaka/.venv/bin/python /opt/kaaka/server/server.py --no-notify --no-console
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+# Hardening (the server writes only to KAAKA_DATA_DIR).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/kaaka
+StateDirectory=kaaka
+
+[Install]
+WantedBy=multi-user.target

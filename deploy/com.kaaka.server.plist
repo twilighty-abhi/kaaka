@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Kaaka dashboard server as a macOS launchd agent (gateway-app mode: no bt-mac).
+  Replace /Users/you/kaaka with the repository path (three places) and set the secrets below.
+
+  Install:
+    cp deploy/com.kaaka.server.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kaaka.server.plist
+    tail -f ~/Library/Logs/kaaka/server.log
+  Stop / remove:
+    launchctl bootout gui/$(id -u)/com.kaaka.server
+
+  The agent runs the venv python (.venv-mac, see README), keeps the data in
+  ~/Library/Application Support/kaaka and restarts the server whenever it exits.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.kaaka.server</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/you/kaaka/.venv-mac/bin/python</string>
+    <string>/Users/you/kaaka/server/server.py</string>
+    <string>--no-console</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/you/kaaka</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>KAAKA_ADMIN_TOKEN</key>
+    <string>change-me</string>
+    <key>KAAKA_PUBLIC_URL</key>
+    <string></string>
+    <key>KAAKA_DATA_DIR</key>
+    <string>/Users/you/Library/Application Support/kaaka</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/you/Library/Logs/kaaka/server.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/you/Library/Logs/kaaka/server.err.log</string>
+</dict>
+</plist>
