@@ -4,6 +4,18 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T05:09:56+05:30 — Release 1.0.0: production basics
+
+- Added: `LICENSE` (MIT). `VERSION` file (1.0.0). `.github/workflows/ci.yml` runs the server unit tests and both web builds on every push and pull request.
+- Added: `GET /api/health` (public: `ok`, `version`, `uptime_seconds`, `gateway_online`). Security headers on every server response (`X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`) and `Cache-Control: no-store` on `/admin` and `/api/*`.
+- Changed: the server starts on plain Linux and in containers with only `websockets` installed; the BlueZ/PipeWire D-Bus bindings load only with `--bt-mac`, with an install hint if missing; `requests` is optional (audio-bridge webhook only). The stdin test console is skipped when stdin is not a terminal (or with `--no-console` / `KAAKA_CONSOLE=0`), SIGTERM/SIGINT stop the server cleanly, runtime data moves to `KAAKA_DATA_DIR` / `--data-dir` (default unchanged: `server/`), and `last_call.json` / `latest_telemetry.json` are written atomically.
+- Added: `server/requirements.txt` with pinned versions (`requirements-mac.txt` includes it). `server/test_http_api.py` (HTTP API on a free port with a temporary data dir: landing page, admin token and cookie, health, headers, call-event to incidents, location validation including 429, resolve, CSV) and `server/test_incidents.py` (replay, damaged lines skipped). `deploy/kaaka.service` (systemd), `deploy/com.kaaka.server.plist` (launchd) and `deploy/kaaka.env.example`.
+- Changed: both Android apps are release-signed (certificate CN=Kaaka, APK Signature Scheme v2) at version 1.0.0 (`versionCode` 2) with `allowBackup="false"`. Release signing reads `android/keystore.properties` (gitignored; `keystore.properties.example` committed in each app); without it the release build is debug-signed with a Gradle warning. `gateway/Kaaka.apk` and `client/KaakaSensors.apk` rebuilt.
+- Changed: README abstract describes the real system; new "Running in production" section; settings table lists `--data-dir`, `--no-console` and `/api/health`; the dashboard token hint uses `/admin?token=`.
+- Why: debug-signed APKs are built with a public key and are debuggable; the server could not start on a Linux host without the desktop D-Bus stack, broke without a TTY, and had no liveness check, headers, pinned dependencies, service files, API tests, CI or license.
+- Validation: `cd server && python -m unittest -q` → 20 tests OK. Server started with no terminal and `KAAKA_ADMIN_TOKEN` set: `/` 200, `/admin` 401, `/admin?token=` 200, `/api/health` 200 with headers, SIGTERM → "Server stopped." within 2 s. `apksigner verify --print-certs` on both APKs: Verifies, `CN=Kaaka`; `aapt dump badging`: versionCode 2, versionName 1.0.0, no `application-debuggable`. Gateway unit tests: 19 OK. `npm ci && npm run build` for both apps from a clean checkout succeeds.
+- Limitations: phones with the earlier debug-signed build must uninstall it before installing 1.0.0 (signature mismatch), which clears the app's local settings. The release keystore exists only on this Mac at `~/.kaaka/` and must be backed up. No Content-Security-Policy, no `Secure` cookie flag behind https, no event retention (events.jsonl grows; memory is capped at 5000 events), no log file option, no Docker image; TLS is left to a reverse proxy or tunnel. Service files are not booted on a real host.
+
 ## 2026-10-25T04:49:46+05:30 — README: event credit
 
 - Changed: README states the project was built at Devin Hacks Kochi (https://www.devinhacks.in/), a 12-hour solo hackathon in Kochi on 24 October 2026.
