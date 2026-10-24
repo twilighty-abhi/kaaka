@@ -33,14 +33,17 @@ public final class GatewayStore {
     private static final String KEY_RESPONDERS = "responder_numbers";
     private static final String KEY_PUBLIC_URL = "public_url";
     private static final String KEY_DASHBOARD_TOKEN = "dashboard_token";
+    private static final String KEY_ESCALATE_MINUTES = "escalate_minutes";
+    private static final String KEY_MAX_REPLIES = "max_replies_per_hour";
+    private static final String KEY_REPLY_LANGUAGE = "reply_language";
     private static final String KEY_EVENTS = "events";
     private static final String KEY_LAST_CALL = "last_call_number";
     private static final String KEY_LAST_CALL_AT = "last_call_at";
     private static final long CALL_DEDUPE_MS = 60_000;
-    private static final int MAX_EVENTS = 50;
+    // Enough history for the 24 h STATUS summary, rate limiting and escalation checks.
+    private static final int MAX_EVENTS = 200;
 
-    public static final String DEFAULT_REPLY =
-        "Kaaka received your call. Help is being arranged. If in immediate danger, call 112.";
+    public static final String DEFAULT_REPLY = GatewayText.REPLY_EN;
     /** Earlier default; treated as unset so existing installs pick up the new default. */
     private static final String OLD_DEFAULT_REPLY = "received call. will get back to you shortly.";
 
@@ -54,10 +57,35 @@ public final class GatewayStore {
         return prefs(context).getBoolean(KEY_REJECT, true);
     }
 
+    /** Reply sent to callers: the custom text if one is set, otherwise the default for the reply language. */
     public static String replyMessage(Context context) {
-        String reply = prefs(context).getString(KEY_REPLY, DEFAULT_REPLY);
-        if (reply == null || reply.trim().isEmpty() || reply.trim().equals(OLD_DEFAULT_REPLY)) return DEFAULT_REPLY;
-        return reply;
+        String custom = customReply(context);
+        return custom.isEmpty() ? GatewayText.defaultReply(replyLanguage(context)) : custom;
+    }
+
+    /** The user's own reply text, or "" when the language default applies (built-in defaults count as unset). */
+    public static String customReply(Context context) {
+        String reply = prefs(context).getString(KEY_REPLY, "");
+        String r = reply == null ? "" : reply.trim();
+        if (r.equals(OLD_DEFAULT_REPLY) || r.equals(GatewayText.REPLY_EN) || r.equals(GatewayText.REPLY_ML)
+            || r.equals(GatewayText.defaultReply("both"))) return "";
+        return r;
+    }
+
+    /** "en" (default), "ml" or "both". */
+    public static String replyLanguage(Context context) {
+        String lang = prefs(context).getString(KEY_REPLY_LANGUAGE, "en");
+        return "ml".equals(lang) || "both".equals(lang) ? lang : "en";
+    }
+
+    /** Minutes before unacknowledged incidents are re-sent to responders; 0 = off. */
+    public static int escalateMinutes(Context context) {
+        return Math.max(0, prefs(context).getInt(KEY_ESCALATE_MINUTES, 5));
+    }
+
+    /** Max replies (caller + responder texts) per number per hour; 0 = no limit. */
+    public static int maxRepliesPerHour(Context context) {
+        return Math.max(0, prefs(context).getInt(KEY_MAX_REPLIES, 3));
     }
 
     public static String dashboardUrl(Context context) {
@@ -94,8 +122,12 @@ public final class GatewayStore {
     }
 
     public static void saveSettings(Context context, boolean rejectCalls, String replyMessage, String dashboardUrl, String responders,
-                                    String publicUrl, String dashboardToken) {
+                                    String publicUrl, String dashboardToken, int escalateMinutes, int maxRepliesPerHour,
+                                    String replyLanguage) {
         prefs(context).edit()
+            .putInt(KEY_ESCALATE_MINUTES, Math.max(0, escalateMinutes))
+            .putInt(KEY_MAX_REPLIES, Math.max(0, maxRepliesPerHour))
+            .putString(KEY_REPLY_LANGUAGE, replyLanguage == null ? "en" : replyLanguage)
             .putBoolean(KEY_REJECT, rejectCalls)
             .putString(KEY_REPLY, replyMessage == null ? "" : replyMessage)
             .putString(KEY_DASHBOARD, dashboardUrl == null ? "" : dashboardUrl.trim())
@@ -107,12 +139,7 @@ public final class GatewayStore {
 
     /** True if both numbers end with the same last 10 digits (ignores +91 / 0 prefixes). */
     public static boolean sameNumber(String a, String b) {
-        String da = a == null ? "" : a.replaceAll("\\D", "");
-        String db = b == null ? "" : b.replaceAll("\\D", "");
-        if (da.isEmpty() || db.isEmpty()) return false;
-        String ta = da.length() > 10 ? da.substring(da.length() - 10) : da;
-        String tb = db.length() > 10 ? db.substring(db.length() - 10) : db;
-        return ta.equals(tb);
+        return GatewayText.sameNumber(a, b);
     }
 
     /** True if the number is one of the configured responders. */
@@ -179,7 +206,37 @@ public final class GatewayStore {
     }
 
     public static String timeOfDay() {
-        return new SimpleDateFormat("HH:mm", Locale.US).format(new Date());
+        return GatewayText.timeOfDay(System.currentTimeMillis());
+    }
+
+    /** Epoch millis of an event ("at", or parsed from the older ISO "timestamp"); 0 if unknown. */
+    static long eventMillis(JSONObject event) {
+        long at = event.optLong("at", 0);
+        if (at > 0) return at;
+        try {
+            Date d = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).parse(event.optString("timestamp"));
+            return d == null ? 0 : d.getTime();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** The event log as plain records for the rules in {@link GatewayText}. */
+    public static synchronized List<GatewayText.Ev> eventList(Context context) {
+        JSONArray events = getEvents(context);
+        List<GatewayText.Ev> list = new ArrayList<>();
+        for (int i = 0; i < events.length(); i++) {
+            JSONObject e = events.optJSONObject(i);
+            if (e == null) continue;
+            list.add(new GatewayText.Ev(e.optString("type"), e.optString("number"), e.optString("state"),
+                eventMillis(e), e.optBoolean("rateLimited", false)));
+        }
+        return list;
+    }
+
+    /** True if replies to this number are over the hourly limit. */
+    public static boolean isRateLimited(Context context, String number) {
+        return GatewayText.isRateLimited(eventList(context), number, System.currentTimeMillis(), maxRepliesPerHour(context));
     }
 
     public static String nowIso() {
@@ -202,6 +259,12 @@ public final class GatewayStore {
 
     /** Appends an event (newest first) and keeps at most MAX_EVENTS. */
     public static synchronized void appendEvent(Context context, JSONObject event) {
+        if (!event.has("at")) {
+            try {
+                event.put("at", System.currentTimeMillis());
+            } catch (JSONException ignored) {
+            }
+        }
         JSONArray current = getEvents(context);
         JSONArray updated = new JSONArray();
         updated.put(event);

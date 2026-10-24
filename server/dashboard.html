@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>kaaka / server</title>
+  <!-- Leaflet for the incident map (needs internet; the map panel says so when it cannot load) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
 
@@ -398,6 +400,57 @@
       color: var(--text-bright);
     }
 
+    .incident-item.resolved {
+      opacity: 0.55;
+    }
+
+    .incident-actions {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      font-size: 0.66rem;
+      font-weight: 600;
+      padding: 0.05rem 0.4rem;
+      border: 1px solid var(--border-mid);
+      text-transform: uppercase;
+    }
+
+    .badge.open {
+      background: var(--btn-bg);
+      color: var(--btn-text);
+      border-color: var(--btn-bg);
+    }
+
+    .badge.acknowledged {
+      color: var(--text-bright);
+      border-color: var(--border-strong);
+    }
+
+    .badge.resolved {
+      color: var(--text-dim);
+    }
+
+    .incident-help {
+      color: var(--text-bright);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    #incident-map {
+      height: 320px;
+      background: var(--bg-box);
+      border: 1px solid var(--border-dim);
+    }
+
+    .map-message {
+      font-size: 0.72rem;
+      color: var(--text-mid);
+    }
+
     /* Footer */
     footer {
       max-width: 1200px;
@@ -436,11 +489,24 @@
   <section class="panel" id="incidents-panel">
     <div class="panel-label-row">
       <span class="panel-label">// incidents</span>
-      <span class="panel-meta" id="incidents-meta">loading…</span>
+      <span class="incident-actions">
+        <span class="panel-meta" id="incidents-meta">loading…</span>
+        <button type="button" class="action-btn" id="hide-resolved-btn" onclick="toggleHideResolved()">[hide resolved]</button>
+        <a class="action-btn" id="csv-link" href="/api/incidents.csv" download>[download csv]</a>
+      </span>
     </div>
     <div class="incident-list" id="incident-list">
       <div class="stream-item"><span>no incidents yet</span></div>
     </div>
+  </section>
+
+  <!-- Map of incidents' latest locations (OpenStreetMap tiles; needs internet) -->
+  <section class="panel" id="map-panel">
+    <div class="panel-label-row">
+      <span class="panel-label">// incident map</span>
+      <span class="panel-meta map-message" id="map-message">loading map…</span>
+    </div>
+    <div id="incident-map"></div>
   </section>
 
   <!-- Emergency Alert Priority Section -->
@@ -638,6 +704,7 @@ awaiting emergency trigger from client or gateway...</div>
   </footer>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
   let ws = null;
   let wsPort = 8765;
@@ -741,7 +808,11 @@ awaiting emergency trigger from client or gateway...</div>
       const who = msg.number || 'unknown (no caller ID)';
       const smsText = { sent: 'auto-reply sent', failed: 'auto-reply FAILED', skipped: 'no auto-reply' }[msg.sms] || msg.sms;
       if (msg.number) document.getElementById('last-call-num').textContent = msg.number;
-      addFeedItem(`call from ${who} — ${msg.state}, ${smsText}`, true);
+      if (msg.state === 'sms') {
+        addFeedItem(`help SMS from ${who}` + (msg.message ? `: “${msg.message}”` : '') + ` — ${smsText}`, true);
+      } else {
+        addFeedItem(`call from ${who} — ${msg.state}, ${smsText}`, true);
+      }
       playBeep(640, 0.2);
       refreshIncidents();
     } else if (msg.type === 'LOCATION_SHARED') {
@@ -751,6 +822,12 @@ awaiting emergency trigger from client or gateway...</div>
     } else if (msg.type === 'INCIDENT_ACK') {
       addFeedItem(`incident for ${msg.number} acknowledged by ${msg.responder || 'a responder'}`);
       refreshIncidents();
+    } else if (msg.type === 'INCIDENT_RESOLVED') {
+      addFeedItem(`incident for ${msg.number} resolved by ${msg.by || 'someone'}` + (msg.note ? `: ${msg.note}` : ''));
+      refreshIncidents();
+    } else if (msg.type === 'GATEWAY_STALE') {
+      addFeedItem(msg.stale ? `gateway phone silent (last seen ${msg.last_seen || 'never'})` : 'gateway phone back online', msg.stale);
+      renderHeartbeat(msg.stale);
     } else if (msg.type === 'GATEWAY_HEARTBEAT') {
       lastHeartbeat = msg;
       renderHeartbeat(false);
@@ -1090,21 +1167,28 @@ awaiting emergency trigger from client or gateway...</div>
   }
 
   function renderIncident(inc) {
-    const awaiting = !inc.acknowledged;
-    const item = el('div', 'incident-item' + (awaiting ? ' awaiting' : ''));
+    const status = inc.status || (inc.acknowledged ? 'acknowledged' : 'open');
+    const item = el('div', 'incident-item' + (status === 'open' ? ' awaiting' : '') + (status === 'resolved' ? ' resolved' : ''));
 
     const head = el('div', 'incident-head');
-    head.append(el('span', '', inc.number || 'hidden number'), el('span', 'incident-meta', 'last activity ' + inc.last_seen));
+    const title = el('span', 'incident-actions');
+    title.append(el('span', 'badge ' + status, status), el('span', '', inc.number || 'hidden number'));
+    head.append(title, el('span', 'incident-meta', 'last activity ' + inc.last_seen));
     item.append(head);
 
     const lastCall = inc.calls[inc.calls.length - 1];
     const replyText = { sent: 'reply sent', failed: 'reply FAILED', skipped: 'no reply' };
+    const helpSms = inc.help_sms || [];
     const parts = [];
     parts.push(inc.calls.length + (inc.calls.length === 1 ? ' call' : ' calls') +
                (lastCall ? ' (last ' + lastCall.state + ', ' + (replyText[lastCall.sms] || lastCall.sms) + ')' : ''));
+    if (helpSms.length) parts.push(helpSms.length + ' help sms');
     parts.push(inc.alerts.length + (inc.alerts.length === 1 ? ' alert' : ' alerts'));
     if (inc.locations.length) parts.push(inc.locations.length + ' location share' + (inc.locations.length === 1 ? '' : 's'));
     item.append(el('div', 'incident-meta', parts.join(' · ') + ' · first seen ' + inc.first_seen));
+
+    const lastHelp = helpSms[helpSms.length - 1];
+    if (lastHelp && lastHelp.message) item.append(el('div', 'incident-help', '“' + lastHelp.message + '” (' + lastHelp.timestamp + ')'));
 
     const loc = inc.latest_location;
     const locRow = el('div', 'incident-meta');
@@ -1120,10 +1204,91 @@ awaiting emergency trigger from client or gateway...</div>
     }
     item.append(locRow);
 
-    item.append(el('div', 'incident-ack', awaiting
-      ? 'awaiting acknowledgement'
-      : 'acknowledged by ' + (inc.acknowledged.responder || 'a responder') + ' at ' + inc.acknowledged.timestamp));
+    const footer = el('div', 'incident-actions');
+    let state;
+    if (status === 'resolved') {
+      state = 'resolved by ' + (inc.resolved.by || 'someone') + ' at ' + inc.resolved.timestamp + (inc.resolved.note ? ': ' + inc.resolved.note : '');
+    } else if (status === 'acknowledged') {
+      state = 'acknowledged by ' + (inc.acknowledged.responder || 'a responder') + ' at ' + inc.acknowledged.timestamp;
+    } else {
+      state = 'awaiting acknowledgement';
+    }
+    footer.append(el('span', 'incident-ack', state));
+    if (status !== 'resolved' && inc.number && inc.number !== 'hidden') {
+      const btn = el('button', 'action-btn', '[resolve]');
+      btn.type = 'button';
+      btn.onclick = () => resolveIncident(inc.number);
+      footer.append(btn);
+    }
+    item.append(footer);
     return item;
+  }
+
+  async function resolveIncident(number) {
+    const note = window.prompt('Resolve incident for ' + number + '\nOptional note:', '');
+    if (note === null) return;  // cancelled
+    try {
+      const res = await api('/api/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number, by: 'dashboard', note: note.slice(0, 500), timestamp: new Date().toISOString() }),
+      });
+      if (!res.ok) addFeedItem('could not resolve ' + number + ': HTTP ' + res.status, true);
+    } catch (e) {
+      addFeedItem('could not resolve ' + number + ': ' + e, true);
+    }
+    refreshIncidents();
+  }
+
+  let hideResolved = false;
+  function toggleHideResolved() {
+    hideResolved = !hideResolved;
+    document.getElementById('hide-resolved-btn').textContent = hideResolved ? '[show resolved]' : '[hide resolved]';
+    refreshIncidents();
+  }
+
+  // Incident map (Leaflet + OpenStreetMap); degrades to a message when offline.
+  let incidentMap = null;
+  let incidentMarkers = null;
+  function initMap() {
+    const message = document.getElementById('map-message');
+    if (!window.L) {
+      message.textContent = 'map unavailable: Leaflet could not load (needs internet)';
+      return;
+    }
+    incidentMap = L.map('incident-map').setView([10.0, 76.3], 7);
+    const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(incidentMap);
+    tiles.on('tileerror', () => { message.textContent = 'map tiles unavailable (offline?)'; });
+    incidentMarkers = L.layerGroup().addTo(incidentMap);
+    message.textContent = 'latest location per incident';
+  }
+
+  function updateMap(incidents) {
+    if (!incidentMap) return;
+    incidentMarkers.clearLayers();
+    const points = [];
+    incidents.forEach((inc) => {
+      const loc = inc.latest_location;
+      if (!loc) return;
+      const latlng = [Number(loc.lat), Number(loc.lon)];
+      const popup = document.createElement('div');
+      popup.append(el('div', '', (inc.number || 'hidden number') + ' · ' + (inc.status || 'open')));
+      popup.append(el('div', '', loc.source + ', ' + loc.timestamp));
+      const link = el('a', '', 'open in Google Maps');
+      link.href = 'https://maps.google.com/?q=' + latlng[0].toFixed(6) + ',' + latlng[1].toFixed(6);
+      link.target = '_blank';
+      link.rel = 'noopener';
+      popup.append(link);
+      L.marker(latlng).bindPopup(popup).addTo(incidentMarkers);
+      points.push(latlng);
+    });
+    document.getElementById('map-message').textContent = points.length
+      ? points.length + ' incident location' + (points.length === 1 ? '' : 's')
+      : 'no incident locations yet';
+    if (points.length) incidentMap.fitBounds(points, { maxZoom: 15, padding: [30, 30] });
   }
 
   async function refreshIncidents() {
@@ -1131,16 +1296,20 @@ awaiting emergency trigger from client or gateway...</div>
       const res = await api('/api/incidents');
       if (!res.ok) return;
       const incidents = (await res.json()).incidents || [];
+      const shown = hideResolved ? incidents.filter((inc) => inc.status !== 'resolved') : incidents;
       const list = document.getElementById('incident-list');
       list.replaceChildren();
-      if (!incidents.length) list.append(el('div', 'stream-item', 'no incidents yet'));
-      incidents.forEach((inc) => list.append(renderIncident(inc)));
-      const open = incidents.filter((inc) => !inc.acknowledged).length;
-      document.getElementById('incidents-meta').textContent = incidents.length + ' shown · ' + open + ' awaiting acknowledgement';
+      if (!shown.length) list.append(el('div', 'stream-item', 'no incidents' + (hideResolved ? ' (resolved hidden)' : ' yet')));
+      shown.forEach((inc) => list.append(renderIncident(inc)));
+      const open = incidents.filter((inc) => inc.status === 'open').length;
+      document.getElementById('incidents-meta').textContent = shown.length + ' shown · ' + open + ' open';
+      updateMap(shown);
     } catch (e) {}
   }
 
   window.addEventListener('load', async () => {
+    if (adminToken) document.getElementById('csv-link').href = '/api/incidents.csv?token=' + encodeURIComponent(adminToken);
+    initMap();
     await updateServerStatus();  // learns the WebSocket port first
     connectWebSocket();
     refreshIncidents();

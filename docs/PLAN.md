@@ -53,6 +53,22 @@ Android does not pass calls from saved contacts to call-screening apps (Telecom 
 4. **Tune fall detection** thresholds from real tests.
 5. **Backup:** a second gateway phone and power backup.
 
+## Round 3 features (branch `feat/round3`)
+
+| # | Feature | Where | Why |
+|---|---|---|---|
+| 1 | **Help by SMS**: an SMS to the Kaaka number containing HELP, SOS, KAAKA or "സഹായം" is handled like a call (auto-reply, responders, dashboard incident with the message text) | S23 + server | People who cannot speak or have no call credit can still ask for help |
+| 2 | **Escalation**: if an incident is not acknowledged within N minutes (default 5, 0 = off), responders get one "UNACKNOWLEDGED" reminder | S23 | Nobody answering must not go unnoticed |
+| 3 | **Rate limiting**: at most N auto-replies/responder texts per number per hour (default 3); extra contacts are still logged and shown | S23 | Protects SMS credit and responders from spam or repeated pocket calls |
+| 4 | **Responder SMS commands**: `STATUS` (open incidents summary), `RESOLVE <number> [note]` | S23 + server | Responders can manage incidents from any phone |
+| 5 | **Malayalam / bilingual reply** setting (English, Malayalam, both) | S23 | The help line serves Malayalam speakers (Malayalam text to be reviewed by a native speaker) |
+| 6 | **Incident lifecycle**: open → acknowledged → resolved (with who/note); resolve from the dashboard or by SMS; a new contact reopens it | server + dashboard | Responders need to know what is still open |
+| 7 | **Mac notifications** for new incidents, acknowledgements, help SMS and a silent/stale S23 | server | The operator notices even when the dashboard tab is hidden |
+| 8 | **Map** of incident locations on the dashboard (OpenStreetMap; needs internet) and **CSV export** of incidents | dashboard | Overview and record keeping |
+| 9 | **Safety timer** in Kaaka Sensors: if the user does not check in before the timer ends, a 30-second countdown then SOS | client | Lone travel or walking home at night |
+
+Server contract changes: `/api/call-event` accepts `state: "sms"` with an optional `message`; new `POST /api/resolve {number, by, note, timestamp}`; `/api/incidents` adds `status` and `resolved`.
+
 ## Out of scope on this hardware
 
 - **AI voice conversation with the caller.** Android and macOS do not give apps access to cellular call audio (macOS `connectSCO` returns `kIOReturnUnsupported`). It needs call forwarding to a cloud telephony number or the original Linux PipeWire setup.

@@ -25,19 +25,22 @@ Install this app on the **caller's phone**, not on the gateway phone. It asks to
 
 Kaaka works phone-to-phone with only the gateway number; the computer settings are extras.
 
-## SOS, fall detection and the beacon
+## SOS, fall detection, safety timer and the beacon
 
 - **SOS button** (top of the main screen): immediately sends one "Kaaka Alert" SMS report to the gateway number and starts the beacon. Needs the gateway number set and SMS permission (asked on first send); errors are shown under the button.
 - **Auto SOS on fall** (checkbox, default off): a simple heuristic in `src/lib/services/emergencyService.svelte.ts`. An acceleration spike above ~2.5 g, then about 2 s of near-stillness (|accel − g| < 1.5 m/s², gyro < 0.6 rad/s) within 6 s, starts a **15-second countdown** with an "I'm OK, cancel" button; if not cancelled it does the same as SOS. Untuned: expect false positives/negatives until tested on real phones.
+- **Safety timer** (card below SOS): choose 15 min, 30 min, 1 h, 2 h or a custom length and start it; tap **I'm safe** to check in (or **Extend +15 min**). If it ends without a check-in, a **30-second countdown** starts ("I'm OK, cancel" in the SOS card), then SOS with `• Trigger: safety timer`. The deadline is stored on the phone: if the timer ended while the app was closed, the countdown starts as soon as the app is reopened (and the app says it expired while closed); a timer that ended more than 12 hours earlier only shows a message and sends nothing. Needs the gateway number set.
+- **One countdown at a time**: fall detection and the safety timer share the countdown; a second one never stacks on a running one. Pressing SOS while the beacon runs sends one extra report and never starts a second beacon.
+- **Stopping the beacon** yourself also cancels any running countdown and the safety timer (you are evidently fine); the beacon ending by itself after its duration does not.
 - **Beacon**: sends a report every 60 s and stops by itself after the configured duration (default **30 minutes**, "Beacon duration" field) or when you tap Stop. The SOS card shows the trigger, reports sent, last sent time and minutes left.
-- **Limits**: fall detection and the beacon run in the app's web view. They work while the app is open; with the app in the background or the screen off for long, Android may pause them. Keep the app open during an emergency.
+- **Limits**: fall detection, the safety timer and the beacon run in the app's web view (no local notifications are used). They work while the app is open; with the app in the background or the screen off for long, Android may pause them. Keep the app open during an emergency.
 
 ## Report format
 
 Every report starts with `Kaaka Alert:` (the gateway matches "Kaaka Alert" / "Live Sensors") and lists the five sensors, then:
 
 - `• Coords: <lat>, <lon>` and `• Maps: https://maps.google.com/?q=<lat>,<lon>` when a GPS fix exists, otherwise `• Location: unavailable`. The first report is sent after at most ~5 s even without a fix; later reports include coordinates once GPS locks.
-- `• Trigger: sos | fall | gateway reply | manual`.
+- `• Trigger: sos | fall | safety timer | gateway reply | manual`.
 
 ## Build
 

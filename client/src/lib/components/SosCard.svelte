@@ -35,11 +35,13 @@
 		</div>
 	</Card.Header>
 	<Card.Content class="space-y-3">
-		{#if emergencyService.fallCountdown !== null}
+		{#if emergencyService.countdown}
 			<div class="rounded-xl border-2 border-amber-500 bg-amber-950/70 p-4 text-center space-y-3" role="alert">
-				<p class="text-sm font-bold text-amber-200">Fall detected. Sending SOS in</p>
-				<p class="text-5xl font-black text-amber-300">{emergencyService.fallCountdown}s</p>
-				<Button variant="secondary" class="w-full h-12 text-base font-bold" onclick={() => emergencyService.cancelFall()}>
+				<p class="text-sm font-bold text-amber-200">
+					{emergencyService.countdown.reason === "fall" ? "Fall detected." : "Safety timer ended."} Sending SOS in
+				</p>
+				<p class="text-5xl font-black text-amber-300">{emergencyService.countdown.seconds}s</p>
+				<Button variant="secondary" class="w-full h-12 text-base font-bold" onclick={() => emergencyService.cancelCountdown()}>
 					I'm OK, cancel
 				</Button>
 			</div>

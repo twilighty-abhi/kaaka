@@ -1,10 +1,12 @@
 """
 Kaaka incident log
 ==================
-Every call event, alert report, location share and responder acknowledgement is appended
+Every call event, help SMS, alert report, location share, responder acknowledgement and
+resolution is appended
 as one JSON line to server/events.jsonl (not committed) and replayed on start, so the
 dashboard history survives restarts. Incidents group these events by phone number
-(last 10 digits).
+(last 10 digits). Status: "open" until a responder acknowledges ("acknowledged") or someone
+resolves it ("resolved"); a later call, help SMS or alert reopens it.
 """
 
 import json
@@ -88,10 +90,13 @@ class IncidentStore:
             self._apply(event)
         return event
 
-    def add_call(self, number, state, sms, phone_timestamp, token=None):
+    def add_call(self, number, state, sms, phone_timestamp, token=None, message=None):
+        """A call (state rejected/allowed) or a help SMS (state "sms", with the message text)."""
         event = {"kind": "call", "number": number, "state": state, "sms": sms, "phone_timestamp": phone_timestamp}
         if token:
             event["token"] = token
+        if message:
+            event["message"] = message
         return self._record(event)
 
     def add_alert(self, sender, text, source):
@@ -124,8 +129,21 @@ class IncidentStore:
     def add_ack(self, number, responder, phone_timestamp):
         return self._record({"kind": "ack", "number": number, "responder": responder, "phone_timestamp": phone_timestamp})
 
+    def add_resolve(self, number, by, note, phone_timestamp):
+        return self._record({"kind": "resolve", "number": number, "by": by, "note": note, "phone_timestamp": phone_timestamp})
+
+    def status_of(self, number):
+        """Current status of the incident for this number, or None if there is none."""
+        inc = self._build().get(number_key(number))
+        return inc["status"] if inc else None
+
     def incidents(self):
         """Incidents grouped by number, newest activity first (at most MAX_INCIDENTS)."""
+        result = sorted(self._build().values(), key=lambda i: i.pop("_last_epoch"), reverse=True)
+        return result[:MAX_INCIDENTS]
+
+    def _build(self):
+        """All incidents keyed by number_key."""
         with self.lock:
             events = list(self.events)
         groups = {}
@@ -135,8 +153,8 @@ class IncidentStore:
             if inc is None:
                 inc = groups[key] = {
                     "key": key, "number": e.get("number") or "hidden", "first_seen": e["received"],
-                    "calls": [], "alerts": [], "locations": [], "acknowledged": None,
-                    "latest_location": None, "_last_activity": 0, "_last_epoch": 0,
+                    "calls": [], "help_sms": [], "alerts": [], "locations": [], "acknowledged": None,
+                    "resolved": None, "latest_location": None, "_last_activity": 0, "_last_epoch": 0,
                 }
             inc["last_seen"] = e["received"]
             inc["_last_epoch"] = e["received_epoch"]
@@ -144,9 +162,14 @@ class IncidentStore:
                 inc["number"] = e["number"]
             kind = e["kind"]
             if kind == "call":
-                inc["calls"].append({"state": e.get("state"), "sms": e.get("sms"), "timestamp": e["received"],
-                                     "phone_timestamp": e.get("phone_timestamp", ""),
-                                     "location_link": bool(e.get("token"))})
+                entry = {"sms": e.get("sms"), "timestamp": e["received"],
+                         "phone_timestamp": e.get("phone_timestamp", ""), "location_link": bool(e.get("token"))}
+                if e.get("state") == "sms":
+                    entry["message"] = e.get("message", "")
+                    inc["help_sms"].append(entry)
+                else:
+                    entry["state"] = e.get("state")
+                    inc["calls"].append(entry)
                 inc["_last_activity"] = e["received_epoch"]
             elif kind == "alert":
                 alert = {"text": e.get("text", ""), "source": e.get("source", ""), "timestamp": e["received"]}
@@ -165,15 +188,15 @@ class IncidentStore:
             elif kind == "ack":
                 inc["acknowledged"] = {"responder": e.get("responder", ""), "timestamp": e["received"],
                                        "_epoch": e["received_epoch"]}
-        result = []
+            elif kind == "resolve":
+                inc["resolved"] = {"by": e.get("by", ""), "note": e.get("note", ""), "timestamp": e["received"],
+                                   "_epoch": e["received_epoch"]}
         for inc in groups.values():
-            ack = inc["acknowledged"]
-            # A new call or alert after the acknowledgement needs a fresh acknowledgement.
-            if ack and ack.pop("_epoch") < inc["_last_activity"]:
-                inc["acknowledged"] = None
+            # A new call, help SMS or alert after an acknowledgement/resolution reopens the incident.
+            for field in ("acknowledged", "resolved"):
+                mark = inc[field]
+                if mark and mark.pop("_epoch") < inc["_last_activity"]:
+                    inc[field] = None
             inc.pop("_last_activity")
-            result.append(inc)
-        result.sort(key=lambda i: i["_last_epoch"], reverse=True)
-        for inc in result:
-            inc.pop("_last_epoch")
-        return result[:MAX_INCIDENTS]
+            inc["status"] = "resolved" if inc["resolved"] else "acknowledged" if inc["acknowledged"] else "open"
+        return groups

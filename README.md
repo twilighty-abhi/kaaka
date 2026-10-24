@@ -38,6 +38,11 @@ Then, in the gateway app on the S23, set **Dashboard server** to `http://<mac-ip
 - **Incidents:** the dashboard groups calls, alert reports, shared locations and acknowledgements by caller number (last 10 digits) and highlights incidents still awaiting acknowledgement. A new call or alert after an acknowledgement needs a fresh one. History is appended to `server/events.jsonl` (runtime data, not committed) and reloaded on start.
 - **Location link for callers without the app:** when the gateway app includes a link in its auto-reply SMS, the caller opens `https://<public-url>/l/<token>` in any phone browser, taps **Share my location**, and the location appears on the incident with a Google Maps link. Links expire after 24 hours. Browsers only share location over **https**, so the Mac must be reachable at a public https URL, for example through a tunnel such as `cloudflared tunnel --url http://localhost:8080`. A tunnel publishes the server on the internet: set `KAAKA_ADMIN_TOKEN` first. Only `/l/<token>` and `POST /api/location` are public then.
 - **Acknowledgement:** when a responder replies "ACK" to the S23, the gateway app reports it (`POST /api/ack`) and the incident shows "acknowledged by …".
+- **Help by SMS:** a help SMS handled by the gateway app is reported as `state: "sms"` with the message text; the incident lists it under "help sms" and shows the latest message.
+- **Status:** each incident is `open` (needs attention, highlighted), `acknowledged` (a responder replied ACK) or `resolved` (greyed). Resolve it with the dashboard's **[resolve]** button (optional note) or a responder's `RESOLVE` SMS through the gateway (`POST /api/resolve`). A later call, help SMS or alert reopens it. **[hide resolved]** filters the list.
+- **Mac notifications:** on macOS the server posts a notification for a new or reopened incident, an acknowledgement, a resolution, and when the gateway phone goes silent (no heartbeat for 20 minutes) or comes back. Disable with `--no-notify` or `KAAKA_NOTIFY=0`. The dashboard also receives `GATEWAY_STALE` over the WebSocket.
+- **Map:** the dashboard's incident map shows each incident's latest location on OpenStreetMap (Leaflet 1.9.4 from cdnjs). It needs internet; offline, the panel says the map is unavailable and the rest of the dashboard works.
+- **CSV export:** **[download csv]** or `GET /api/incidents.csv` (same admin-token rule as `/api/incidents`).
 
 ### Server settings
 
@@ -45,6 +50,8 @@ Then, in the gateway app on the S23, set **Dashboard server** to `http://<mac-ip
 |---|---|
 | `KAAKA_ADMIN_TOKEN` (env) | Optional. When set, the dashboard, `/api/status`, `/api/incidents`, the WebSocket and all gateway `POST` endpoints require the token as header `X-Kaaka-Token`, query `?token=`, or the dashboard cookie (open the dashboard once as `/?token=…`). Use letters and digits. Location links stay public. |
 | `--public-url` / `KAAKA_PUBLIC_URL` | Optional public https URL of this server, shown in the startup banner and `/api/status`. The gateway app builds the location links from its own setting. |
+| `--no-notify` / `KAAKA_NOTIFY=0` | Turn off macOS notifications. |
+| `KAAKA_STALE_SECONDS` (env) | Seconds without a heartbeat before the gateway phone counts as silent (default 1200). |
 
 With `KAAKA_ADMIN_TOKEN` set, the client app's live sensor stream and its WebSocket copy (which send no token) are refused; the SMS alert path through the S23 is unaffected. The dashboard's WebSocket uses port 8765 on the same host, so through a tunnel the dashboard falls back to status/incident polling.
 
@@ -54,13 +61,15 @@ All bodies are JSON. Errors return `{"success": false, "error": "…"}`.
 
 | Endpoint | Body | Responses |
 |---|---|---|
-| `POST /api/call-event` | `number` (string, `""` if hidden), `state` (`rejected`\|`allowed`), `sms` (`sent`\|`failed`\|`skipped`), `timestamp` (ISO-8601 string), optional `token` (6–32 of `A-Z a-z 0-9 _ -`, the location-link token sent to this caller) | 200, 400, 401 |
+| `POST /api/call-event` | `number` (string, `""` if hidden), `state` (`rejected`\|`allowed`, or `sms` for a help SMS), `sms` (`sent`\|`failed`\|`skipped`), `timestamp` (ISO-8601 string), optional `token` (6–32 of `A-Z a-z 0-9 _ -`, the location-link token sent to this caller), optional `message` (help SMS text, max 500 characters) | 200, 400, 401 |
 | `POST /api/telemetry` | `report` (alert text, e.g. a forwarded "Kaaka Alert" SMS) and `sender`; or the client app's live stream `{deviceId, sensors: {...}}` | 200, 401 |
 | `POST /api/heartbeat` | `timestamp`, `battery` (int −1…100), `charging`, `screeningRole`, `smsGranted`, `contactCalls` (booleans; all optional) | 200, 400, 401 |
 | `POST /api/ack` | `number` (caller being acknowledged, required), `responder` (string), `timestamp` (ISO-8601 string) | 200, 400, 401 |
+| `POST /api/resolve` | `number` (incident to close, required), `by` (string, default `"dashboard"`, max 100), `note` (max 500), `timestamp` (ISO-8601 string) | 200, 400, 401, 404 (no incident for this number) |
 | `POST /api/location` (public) | `token`, `lat` (−90…90), `lon` (−180…180), optional `accuracy` (metres) | 200, 400 (malformed), 404 (unknown or expired token) |
 | `GET /l/<token>` (public) | — | 200 location page, 404 unknown or expired |
-| `GET /api/incidents` | — | 200 `{"incidents": [...]}` (newest first, max 50), 401 |
+| `GET /api/incidents` | — | 200 `{"incidents": [...]}` (newest first, max 50; each with `status` `open`\|`acknowledged`\|`resolved`, `calls`, `help_sms`, `alerts`, `locations`, `acknowledged`, `resolved`, `latest_location`), 401 |
+| `GET /api/incidents.csv` | — | 200 CSV: `number,status,first_seen,last_seen,calls,help_sms,alerts,latest_lat,latest_lon,acknowledged_by,acknowledged_at,resolved_by,resolved_at,resolved_note`; 401 |
 | `GET /api/status` | — | 200 status incl. `last_heartbeat`, `gateway_stale`, `public_url`, `admin_token_enabled`; 401 |
 
 ---

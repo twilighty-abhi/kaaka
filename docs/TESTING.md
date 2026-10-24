@@ -41,12 +41,26 @@ Use a phone whose number is **not** saved in the S23's contacts (call it **Calle
 - [ ] Dashboard incident shows "acknowledged by <Responder>".
 - [ ] Texting `ACK` from a number that is not a responder does nothing.
 
+## 5b. Round 3 on the S23
+
+- [ ] **Help by SMS:** from Caller, text the S23 "HELP stuck near the bridge". Caller gets the reply; Responder gets "Kaaka: help SMS from …"; dashboard incident shows the message; Mac shows a notification.
+- [ ] An ordinary SMS without HELP/SOS/KAAKA does nothing.
+- [ ] **Escalation:** after a call, do not ACK. After 5 minutes Responder gets "Kaaka UNACKNOWLEDGED: …" once.
+- [ ] **Rate limit:** call 4 times from Caller within an hour; the 4th gets no reply and no responder text (event shows "rate-limited"; dashboard still shows the call).
+- [ ] **STATUS:** Responder texts `STATUS`; gets the list of open incidents.
+- [ ] **RESOLVE:** Responder texts `RESOLVE <Caller number> reached, safe`; gets "Kaaka: resolved …"; dashboard shows resolved (greyed); a new call from Caller reopens it.
+- [ ] **Resolve from dashboard:** press [resolve] on an incident, add a note; status changes; [hide resolved] hides it.
+- [ ] **Reply language:** set Malayalam, call; check the Malayalam reply arrives correctly (and have a native speaker check the wording). Set back to English or Both.
+- [ ] **Silent S23 alert:** turn off the S23's Wi-Fi for 20+ minutes (or stop Kaaka Call); the dashboard and a Mac notification report the S23 as silent; turning Wi-Fi back on clears it.
+- [ ] **Map and CSV:** incidents with locations appear on the dashboard map (needs internet); [download csv] downloads the incident list.
+
 ## 6. Kaaka Sensors on a second Android phone (optional)
 
 Install `client/KaakaSensors.apk` on a phone that is **not** the S23. In its Settings set the gateway number to the S23's number.
 
 - [ ] Press **SOS**: the S23 receives a "Kaaka Alert" SMS; Responder gets "Kaaka alert from …"; dashboard incident shows the alert and a Maps link once GPS is available.
 - [ ] Beacon keeps sending reports and stops after its duration (or Stop).
+- [ ] **Safety timer:** start a 15-minute timer; press "I'm safe" → it stops. Start again and let it run out → 30-second countdown → SOS ("Trigger: safety timer").
 - [ ] Auto SOS on fall (enable in settings): a hard drop onto a bed followed by stillness starts a 15-second countdown; "I'm OK" cancels it.
 - [ ] Automatic trigger (only if Kaaka Sensors is that phone's default SMS app): calling the S23 from that phone makes the reply start the beacon.
 
