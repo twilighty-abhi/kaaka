@@ -282,4 +282,4 @@ For the voice AI loop, keep using the Linux setup (or a Linux machine/VM with it
 
 ---
 
-Hackathon repository docs: [RULES.md](RULES.md) · [AGENTS.md](AGENTS.md) · [SUBMISSION.md](SUBMISSION.md) · [CHANGELOG.md](CHANGELOG.md) · [AI_USAGE.md](AI_USAGE.md)
+Project records: [CHANGELOG.md](CHANGELOG.md) · [AI_USAGE.md](AI_USAGE.md) · [docs/PLAN.md](docs/PLAN.md)
