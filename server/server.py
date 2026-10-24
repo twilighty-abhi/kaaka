@@ -50,8 +50,10 @@ except ImportError:
 
 try:
     from server.incidents import IncidentStore, TOKEN_RE
+    from server.responders import ResponderRegistry
 except ImportError:
     from incidents import IncidentStore, TOKEN_RE
+    from responders import ResponderRegistry
 
 if IS_MAC:
     try:
@@ -271,6 +273,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(500, f"Error loading dashboard: {e}")
         elif path == "/api/incidents":
             self.send_json(200, {"incidents": self.server_instance.incidents.incidents()})
+        elif path == "/api/responders":
+            self.send_json(200, {"responders": self.server_instance.responders.list()})
         elif path == "/api/incidents.csv":
             body = incidents_csv(self.server_instance.incidents.incidents()).encode("utf-8")
             self.send_response(200)
@@ -335,7 +339,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         # CORS preflight: the client app's WebView posts JSON from another origin.
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Kaaka-Token")
         self.end_headers()
 
@@ -348,7 +352,16 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         if not self.authorized(query):
             self.send_json(401, {"success": False, "error": "admin token required"})
             return
-        if path == "/api/trigger-call":
+        if path == "/api/responders":
+            # Register a responder: {"name", "number", "lat", "lon", "available"?}
+            try:
+                responder = self.server_instance.responders.add(self.read_json_body(max_bytes=4096))
+            except (ValueError, UnicodeDecodeError) as e:
+                self.send_json(400, {"success": False, "error": str(e)})
+                return
+            print(f"[{format_timestamp()}] 🧑‍🚒 Responder added: {responder['name']} ({responder['number']})", flush=True)
+            self.send_json(200, {"success": True, "responder": responder})
+        elif path == "/api/trigger-call":
             # Optional JSON body {"number": "..."}; without it the simulated call has no caller number.
             number = ""
             length = int(self.headers.get("Content-Length", 0))
@@ -542,6 +555,48 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         else:
             self.send_error(404, "Not Found")
 
+    def responder_id_from_path(self, path):
+        """'/api/responders/<id>' → id, else None."""
+        prefix = "/api/responders/"
+        if path.startswith(prefix) and re.fullmatch(r"[0-9a-f]{8}", path[len(prefix):]):
+            return path[len(prefix):]
+        return None
+
+    def do_PATCH(self):
+        parsed = urlparse(self.path)
+        path, query = parsed.path, parse_qs(parsed.query)
+        if not self.authorized(query):
+            self.send_json(401, {"success": False, "error": "admin token required"})
+            return
+        responder_id = self.responder_id_from_path(path)
+        if not responder_id:
+            self.send_error(404, "Not Found")
+            return
+        try:
+            responder = self.server_instance.responders.update(responder_id, self.read_json_body(max_bytes=4096))
+        except (ValueError, UnicodeDecodeError) as e:
+            self.send_json(400, {"success": False, "error": str(e)})
+            return
+        if responder is None:
+            self.send_json(404, {"success": False, "error": "no such responder"})
+            return
+        self.send_json(200, {"success": True, "responder": responder})
+
+    def do_DELETE(self):
+        parsed = urlparse(self.path)
+        path, query = parsed.path, parse_qs(parsed.query)
+        if not self.authorized(query):
+            self.send_json(401, {"success": False, "error": "admin token required"})
+            return
+        responder_id = self.responder_id_from_path(path)
+        if not responder_id:
+            self.send_error(404, "Not Found")
+            return
+        if not self.server_instance.responders.delete(responder_id):
+            self.send_json(404, {"success": False, "error": "no such responder"})
+            return
+        self.send_json(200, {"success": True})
+
 class TelemetryServer:
     def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="", client_number="", adb_serial="",
                  admin_token="", public_url="", notify=True):
@@ -554,6 +609,8 @@ class TelemetryServer:
         self.admin_token = admin_token
         self.public_url = public_url.rstrip("/")
         self.incidents = IncidentStore(os.path.join(os.path.dirname(os.path.abspath(__file__)), "events.jsonl"))
+        # Responders (volunteers with a home position) for nearest-responder routing; server/responders.json.
+        self.responders = ResponderRegistry(os.path.join(os.path.dirname(os.path.abspath(__file__)), "responders.json"))
         self.port = port
         self.http_port = http_port
         self.bt_mac = bt_mac

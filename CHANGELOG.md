@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:20:45+05:30 — Responder registry on the server
+
+- Changed: New `server/responders.py` (`ResponderRegistry`, persisted in `server/responders.json`, ignored by Git) and endpoints `GET/POST /api/responders`, `PATCH/DELETE /api/responders/<id>` with fields name, number, lat, lon, available; values are validated (name ≤ 80 chars, number ≥ 6 digits, lat/lon ranges, available boolean) and the same admin-token rule applies as to other APIs. CORS preflight now lists PATCH and DELETE.
+- Why: Nearest-responder routing needs to know who the responders are and where they usually are.
+- Validation: `py_compile`; spare-port run: add 200, invalid number 400, patch available 200, patch bad lat 400, delete 200, delete again 404, list empty.
+- Limitations: Positions are static home locations, not live responder GPS.
+
 ## 2026-10-25T02:13:16+05:30 — Beacon update interval and location trail on the dashboard
 
 - Changed: Kaaka Sensors gets an "Update every 15 / 30 / 60 s" beacon setting (saved; default 60 s) on the SOS card. The dashboard map draws each incident's reported positions as a trail (oldest to newest) and fits the view to it. Rebuilt `client/KaakaSensors.apk`.
