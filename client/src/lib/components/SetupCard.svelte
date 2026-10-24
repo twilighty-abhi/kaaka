@@ -10,12 +10,14 @@
 		location: boolean;
 		notifications: boolean;
 		activity: boolean;
+		backgroundLocation: boolean;
 		batteryExempt: boolean;
 		vendor: string;
 	}
 	interface KaakaSetupPlugin {
 		getStatus(): Promise<SetupStatus>;
 		requestAll(): Promise<SetupStatus>;
+		requestBackgroundLocation(): Promise<SetupStatus>;
 		requestBatteryExemption(): Promise<void>;
 		openPhoneSettings(): Promise<void>;
 	}
@@ -30,6 +32,7 @@
 			? [
 					{ label: "SMS (send SOS, start beacon on Kaaka reply)", ok: status.sms },
 					{ label: "Location (GPS in reports)", ok: status.location },
+					{ label: "Location all the time (alert while the app is closed)", ok: status.backgroundLocation },
 					{ label: "Notifications (emergency alarm)", ok: status.notifications },
 					{ label: "Physical activity (step counter)", ok: status.activity }
 				]
@@ -44,6 +47,8 @@
 
 	async function allowAll() {
 		status = await KaakaSetup.requestAll();
+		// Android only offers "Allow all the time" after foreground location is granted.
+		if (status.location && !status.backgroundLocation) status = await KaakaSetup.requestBackgroundLocation();
 	}
 
 	onMount(() => {

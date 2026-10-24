@@ -29,7 +29,7 @@ import com.getcapacitor.annotation.PermissionCallback;
     name = "DirectSms",
     permissions = {
         @Permission(
-            strings = { Manifest.permission.SEND_SMS },
+            strings = { Manifest.permission.SEND_SMS, Manifest.permission.READ_PHONE_STATE },
             alias = "sms"
         )
     }

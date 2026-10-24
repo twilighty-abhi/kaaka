@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T01:37:01+05:30 — Send the first location report natively when the Kaaka number replies
+
+- Changed: Kaaka Sensors' SMS receiver now sends the first "Kaaka Alert" itself (`NativeAlert.java`): a recent last-known fix or a fresh fix (up to 8 s, via `goAsync`), else "Location: unavailable", in the same report format. Added `READ_PHONE_STATE` (newer Android checks the carrier group ID when apps send SMS: sends failed with `getGroupIdLevel1`) and `ACCESS_BACKGROUND_LOCATION` with a "Location all the time" row in the setup card. Trigger events to the web layer are retained until it subscribes. New `scripts/emulator-network.py` relays SMS between two emulators for demos/tests. Rebuilt `client/KaakaSensors.apk`.
+- Why: The reply-triggered beacon never reported: Android 14+ blocks the receiver from opening the app ("Background activity launch blocked"), the web beacon therefore never ran, SMS sending lacked READ_PHONE_STATE, and location was "while using the app" only, so background location requests were rejected.
+- Validation: Two Android 17 emulators (gateway Kaaka Call, caller Kaaka Sensors) with the Mac dashboard: incoming call → rejected → reply → native alert "with location" → gateway → dashboard incident with latest location 9.931200, 76.267300 and Maps link.
+- Limitations: On real phones the user must grant "Allow all the time" location and READ_PHONE_STATE; not yet re-tested on the Xiaomi.
+
 ## 2026-10-25T01:22:15+05:30 — Demo video recorder
 
 - Changed: New `scripts/record-demo.sh <gateway-serial> <caller-serial> [seconds] [dashboard-url]` records both phones (`adb screenrecord`) and the dashboard (headless Chrome screenshots every 2 s) at the same time, normalizes the clips (a clip with no frames becomes a still), labels them (labels rendered with Chrome because this ffmpeg build has no `drawtext`) and stitches them side by side into `demo/kaaka-demo-<timestamp>.mp4`. Tries to keep screens awake while recording (MIUI blocks this over adb). `demo/` is ignored by Git.

@@ -25,9 +25,11 @@ import java.util.List;
 @CapacitorPlugin(
     name = "KaakaSetup",
     permissions = {
-        @Permission(strings = { Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS }, alias = "sms"),
+        @Permission(strings = { Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_PHONE_STATE }, alias = "sms"),
         @Permission(strings = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION }, alias = "location"),
         @Permission(strings = { Manifest.permission.POST_NOTIFICATIONS }, alias = "notifications"),
+        // Must be requested after foreground location; Android 11+ shows it as "Allow all the time" in settings.
+        @Permission(strings = { Manifest.permission.ACCESS_BACKGROUND_LOCATION }, alias = "backgroundLocation"),
         @Permission(strings = { Manifest.permission.ACTIVITY_RECOGNITION }, alias = "activity")
     }
 )
@@ -45,6 +47,7 @@ public class KaakaSetupPlugin extends Plugin {
         // Runtime notification permission only exists on Android 13+, activity recognition on 10+.
         result.put("notifications", Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || granted("notifications"));
         result.put("activity", Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || granted("activity"));
+        result.put("backgroundLocation", Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || granted("backgroundLocation"));
         PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         result.put("batteryExempt", pm != null && pm.isIgnoringBatteryOptimizations(context.getPackageName()));
         result.put("vendor", Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase());
@@ -75,6 +78,16 @@ public class KaakaSetupPlugin extends Plugin {
     @PermissionCallback
     private void requestAllCallback(PluginCall call) {
         call.resolve(status());
+    }
+
+    /** Background location ("Allow all the time"); only asked once foreground location is granted. */
+    @PluginMethod
+    public void requestBackgroundLocation(PluginCall call) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || granted("backgroundLocation") || !granted("location")) {
+            call.resolve(status());
+            return;
+        }
+        requestPermissionForAlias("backgroundLocation", call, "requestAllCallback");
     }
 
     @PluginMethod

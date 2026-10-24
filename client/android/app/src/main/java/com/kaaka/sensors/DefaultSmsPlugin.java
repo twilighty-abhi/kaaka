@@ -30,7 +30,7 @@ public class DefaultSmsPlugin extends Plugin {
         super.load();
         instance = this;
         if (lastTrigger != null) {
-            notifyListeners("smsReceived", lastTrigger);
+            notifyListeners("smsReceived", lastTrigger, true);
         }
     }
 
@@ -49,7 +49,8 @@ public class DefaultSmsPlugin extends Plugin {
         data.put("timestamp", timestamp);
         lastTrigger = data;
         if (instance != null) {
-            instance.notifyListeners("smsReceived", data);
+            // Retained until the web layer subscribes (the trigger often arrives before the page loads).
+            instance.notifyListeners("smsReceived", data, true);
         }
     }
 
