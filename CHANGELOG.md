@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:15:22+05:30 — Incident lifecycle, help SMS, Mac notifications, map and CSV on the server
+
+- Changed: `/api/call-event` accepts `state: "sms"` with `message` (≤ 500). New `POST /api/resolve {number, by, note, timestamp}` (404 for unknown incident); incidents have `status` open/acknowledged/resolved, `resolved` and `help_sms`; a later call, help SMS or alert reopens them. `GET /api/incidents.csv`. Background stale check broadcasts `GATEWAY_STALE` on transitions (`KAAKA_STALE_SECONDS`, default 1200, start-up grace period). Native macOS notifications via `osascript` (caller text passed as an argument, never as script) for new/reopened incidents, ACK, resolve and S23 silent/recovered; off with `--no-notify`/`KAAKA_NOTIFY=0`. Dashboard: status badges, resolve button with note, hide resolved, CSV download, Leaflet 1.9.4 (cdnjs) + OpenStreetMap map of latest locations with offline fallback. README updated.
+- Why: Responders must see what is still open; the operator must notice new incidents and a silent S23 without watching the tab; overview and records.
+- Validation: `py_compile`; spare-port tests 19/19 (help SMS, validation, ack/resolve/reopen, CSV escaping, broadcasts, stale transitions), persistence across restart, admin token on resolve/CSV/dashboard; `osascript` smoke test including injection-style text shown literally.
+- Limitations: Dashboard map and buttons not yet checked in a browser; Leaflet loaded without integrity hashes; notifications not observed on the live server.
+
 ## 2026-10-25T00:15:22+05:30 — Help by SMS, escalation, rate limiting, responder commands and Malayalam reply on the S23
 
 - Changed: Gateway app: an SMS containing HELP, SOS or KAAKA (whole word) or "സഹായം" is handled like a call (auto-reply, responders, dashboard event `state: "sms"` with the message); Kaaka's own messages never count. Unacknowledged incidents trigger one "Kaaka UNACKNOWLEDGED" reminder to responders after N minutes (default 5, WorkManager `EscalationWorker`). At most N replies per number per hour (default 3); extra contacts are logged and posted with `sms: "skipped"`. Responder commands `STATUS` and `RESOLVE [number] [note]` (posts `/api/resolve`). Reply language English / Malayalam / both (custom text overrides; Malayalam text needs native-speaker review). Event log keeps 200 events. Rebuilt `gateway/Kaaka.apk`.

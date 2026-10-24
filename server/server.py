@@ -16,6 +16,8 @@ Kaaka Bluetooth Call & Telemetry WebSocket + Dashboard Server
 
 import argparse
 import asyncio
+import csv
+import io
 import hmac
 import http.server
 import json
@@ -56,6 +58,40 @@ if IS_MAC:
         from server.mac_telephony import HfpBridgeClient
     except ImportError:
         from mac_telephony import HfpBridgeClient
+
+MAX_TEXT = 500  # help-SMS message and resolution note limit
+
+CSV_COLUMNS = ["number", "status", "first_seen", "last_seen", "calls", "help_sms", "alerts", "latest_lat", "latest_lon",
+               "acknowledged_by", "acknowledged_at", "resolved_by", "resolved_at", "resolved_note"]
+
+
+def incidents_csv(incidents) -> str:
+    """GET /api/incidents.csv: one row per incident."""
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(CSV_COLUMNS)
+    for inc in incidents:
+        loc, ack, res = inc.get("latest_location") or {}, inc.get("acknowledged") or {}, inc.get("resolved") or {}
+        writer.writerow([inc["number"], inc["status"], inc["first_seen"], inc["last_seen"], len(inc["calls"]),
+                         len(inc["help_sms"]), len(inc["alerts"]), loc.get("lat", ""), loc.get("lon", ""),
+                         ack.get("responder", ""), ack.get("timestamp", ""), res.get("by", ""),
+                         res.get("timestamp", ""), res.get("note", "")])
+    return out.getvalue()
+
+
+def notify_mac(text):
+    """Native macOS notification in a background thread. The text is passed as an osascript argument,
+    never pasted into the script, because callers control parts of it. Failures are ignored."""
+    def _run():
+        try:
+            subprocess.run(["osascript", "-e", "on run argv", "-e",
+                            "display notification (item 2 of argv) with title (item 1 of argv)",
+                            "-e", "end run", "Kaaka", text[:200]],
+                           capture_output=True, timeout=10)
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
+
 
 def get_local_ip():
     """Detect the local LAN / Wi-Fi IP address."""
@@ -235,6 +271,14 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(500, f"Error loading dashboard: {e}")
         elif path == "/api/incidents":
             self.send_json(200, {"incidents": self.server_instance.incidents.incidents()})
+        elif path == "/api/incidents.csv":
+            body = incidents_csv(self.server_instance.incidents.incidents()).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition", 'attachment; filename="kaaka-incidents.csv"')
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         elif path == "/api/status":
             phone_clients = self.server_instance.phone_client_ips()
             bt_connected = self.server_instance.check_bluetooth_connected()
@@ -377,8 +421,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 timestamp = event.get("timestamp", "")
                 if not isinstance(number, str):
                     raise ValueError('"number" must be a string ("" if hidden)')
-                if state not in ("rejected", "allowed"):
-                    raise ValueError('"state" must be "rejected" or "allowed"')
+                if state not in ("rejected", "allowed", "sms"):
+                    raise ValueError('"state" must be "rejected", "allowed" or "sms" (help by SMS)')
                 if sms not in ("sent", "failed", "skipped"):
                     raise ValueError('"sms" must be "sent", "failed" or "skipped"')
                 if not isinstance(timestamp, str):
@@ -386,7 +430,11 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 token = event.get("token")
                 if token is not None and (not isinstance(token, str) or not TOKEN_RE.match(token)):
                     raise ValueError('"token" must be 6-32 letters, digits, "_" or "-"')
-                self.server_instance.on_call_event(number.strip(), state, sms, timestamp, token or None)
+                message = event.get("message")
+                if message is not None and (not isinstance(message, str) or len(message) > MAX_TEXT):
+                    raise ValueError(f'"message" must be a string of at most {MAX_TEXT} characters')
+                self.server_instance.on_call_event(number.strip(), state, sms, timestamp, token or None,
+                                                   (message or "").strip() or None)
             except (ValueError, UnicodeDecodeError) as e:  # json.JSONDecodeError is a ValueError
                 status, result = 400, {"success": False, "error": str(e)}
             body = json.dumps(result).encode("utf-8")
@@ -442,6 +490,30 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json(200, {"success": True})
             except (ValueError, UnicodeDecodeError) as e:
                 self.send_json(400, {"success": False, "error": str(e)})
+        elif path == "/api/resolve":
+            # Close an incident (dashboard "resolve" button, or a responder's "RESOLVE <number>" SMS via the gateway).
+            try:
+                data = self.read_json_body()
+                if not isinstance(data, dict):
+                    raise ValueError("body must be a JSON object")
+                number, by = data.get("number"), data.get("by", "dashboard")
+                note, timestamp = data.get("note", ""), data.get("timestamp", "")
+                if not isinstance(number, str) or not number.strip():
+                    raise ValueError('"number" (the incident to resolve) is required')
+                if not isinstance(by, str) or len(by) > 100:
+                    raise ValueError('"by" must be a string of at most 100 characters')
+                if not isinstance(note, str) or len(note) > MAX_TEXT:
+                    raise ValueError(f'"note" must be a string of at most {MAX_TEXT} characters')
+                if not isinstance(timestamp, str):
+                    raise ValueError('"timestamp" must be an ISO-8601 string')
+            except (ValueError, UnicodeDecodeError) as e:
+                self.send_json(400, {"success": False, "error": str(e)})
+                return
+            if self.server_instance.incidents.status_of(number.strip()) is None:
+                self.send_json(404, {"success": False, "error": "no incident for this number"})
+                return
+            self.server_instance.on_resolve(number.strip(), by.strip() or "dashboard", note.strip(), timestamp)
+            self.send_json(200, {"success": True})
         elif path == "/api/telemetry":
             try:
                 length = int(self.headers.get("Content-Length", 0))
@@ -473,8 +545,12 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
 class TelemetryServer:
     def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="", client_number="", adb_serial="",
-                 admin_token="", public_url=""):
+                 admin_token="", public_url="", notify=True):
         self.host = host
+        # macOS notifications for new/reopened incidents, acks, resolutions and a silent gateway phone.
+        self.notify_enabled = notify and IS_MAC
+        self.started_epoch = time.time()
+        self.stale_state = "unknown"  # "unknown" until the first heartbeat or the stale period passes
         # Optional KAAKA_ADMIN_TOKEN protects the dashboard and gateway endpoints (location links stay public).
         self.admin_token = admin_token
         self.public_url = public_url.rstrip("/")
@@ -620,7 +696,9 @@ class TelemetryServer:
         print(f"\033[1;32m{clean_text}\033[0m", flush=True)
         print("=" * 65 + "\n", flush=True)
 
-        self.incidents.add_alert(sender, clean_text, source)
+        before = self.incidents.status_of(sender)
+        if self.incidents.add_alert(sender, clean_text, source):
+            self.notify_if_opened(sender, before, f"alert from {sender or 'unknown sender'}")
 
         # Store latest telemetry in memory and persist to disk
         self.latest_telemetry = {
@@ -676,18 +754,38 @@ class TelemetryServer:
             return True
         return hmac.compare_digest(str(token or "").encode("utf-8"), self.admin_token.encode("utf-8"))
 
-    def on_call_event(self, number, state, sms, timestamp, token=None):
-        """A call the gateway app already handled (POST /api/call-event). Never hangs up or sends SMS here."""
+    def notify(self, text):
+        if self.notify_enabled:
+            notify_mac(text)
+
+    def notify_if_opened(self, number, before, what):
+        """Notify when an incident becomes open: a new one, or a resolved/acknowledged one with new activity."""
+        if before != "open" and self.incidents.status_of(number) == "open":
+            label = "New incident" if before is None else "Incident reopened"
+            self.notify(f"{label}: {what}")
+
+    def on_call_event(self, number, state, sms, timestamp, token=None, message=None):
+        """A call or help SMS the gateway app already handled (POST /api/call-event). Never hangs up or sends SMS here."""
         self.last_gateway_event = format_timestamp()
-        self.incidents.add_call(number, state, sms, timestamp, token)
+        before = self.incidents.status_of(number)
+        self.incidents.add_call(number, state, sms, timestamp, token, message)
         if number:
             self.save_last_caller(number)
         sms_text = {"sent": "auto-reply sent", "failed": "auto-reply FAILED", "skipped": "no auto-reply"}[sms]
-        print(f"[{format_timestamp()}] 📞 Gateway app call: {number or 'unknown (no caller ID)'} — {state}, {sms_text} (phone time {timestamp})", flush=True)
+        who = number or "unknown (no caller ID)"
+        if state == "sms":
+            quoted = f": “{message}”" if message else ""
+            print(f"[{format_timestamp()}] 💬 Help SMS from {who}{quoted} — {sms_text} (phone time {timestamp})", flush=True)
+            self.notify_if_opened(number, before, f"help SMS from {who}{quoted}")
+        else:
+            print(f"[{format_timestamp()}] 📞 Gateway app call: {who} — {state}, {sms_text} (phone time {timestamp})", flush=True)
+            self.notify_if_opened(number, before, f"call from {who} ({state}, {sms_text})")
         if self.loop:
             # Separate type from CALL_DETECTED so gateway apps don't treat it as a request to send another SMS.
             payload = {"type": "CALL_EVENT", "number": number, "name": "", "state": state, "sms": sms,
                        "source": "gateway_app", "timestamp": timestamp or format_timestamp()}
+            if message:
+                payload["message"] = message
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
 
     def on_location(self, token, lat, lon, accuracy):
@@ -705,11 +803,51 @@ class TelemetryServer:
         """A responder acknowledged a caller's incident (POST /api/ack)."""
         event = self.incidents.add_ack(number, responder, timestamp)
         print(f"[{format_timestamp()}] ✅ Incident for {number} acknowledged by {responder or 'a responder'}", flush=True)
+        self.notify(f"Acknowledged: {number} by {responder or 'a responder'}")
         if self.loop:
             payload = {"type": "INCIDENT_ACK", "number": number, "responder": responder, "timestamp": event["received"]}
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
 
-    HEARTBEAT_STALE_SECONDS = 20 * 60
+    def on_resolve(self, number, by, note, timestamp):
+        """An incident was closed (POST /api/resolve)."""
+        event = self.incidents.add_resolve(number, by, note, timestamp)
+        note_text = f": {note}" if note else ""
+        print(f"[{format_timestamp()}] ☑️ Incident for {number} resolved by {by}{note_text}", flush=True)
+        self.notify(f"Resolved: {number} by {by}{note_text}")
+        if self.loop:
+            payload = {"type": "INCIDENT_RESOLVED", "number": number, "by": by, "note": note, "timestamp": event["received"]}
+            asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+
+    # No heartbeat for this long = gateway phone silent (default 20 min; KAAKA_STALE_SECONDS for testing).
+    HEARTBEAT_STALE_SECONDS = int(os.environ.get("KAAKA_STALE_SECONDS", "1200"))
+
+    def check_gateway_stale(self):
+        """Broadcast GATEWAY_STALE (and notify) when the gateway phone goes silent or comes back."""
+        if self.last_heartbeat is None and time.time() - self.started_epoch <= self.HEARTBEAT_STALE_SECONDS:
+            return  # just started: give the phone one heartbeat period before calling it silent
+        state = "stale" if self.gateway_stale() else "fresh"
+        previous, self.stale_state = self.stale_state, state
+        if state == previous or (previous == "unknown" and state == "fresh"):
+            return
+        last_seen = self.last_heartbeat["received"] if self.last_heartbeat else None
+        if state == "stale":
+            print(f"[{format_timestamp()}] ⚠️ Gateway phone silent: no heartbeat since {last_seen or 'server start'}", flush=True)
+            self.notify(f"Gateway phone silent: no heartbeat since {last_seen or 'server start'}")
+        else:
+            print(f"[{format_timestamp()}] 💚 Gateway phone back online", flush=True)
+            self.notify("Gateway phone back online")
+        if self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast({"type": "GATEWAY_STALE", "stale": state == "stale", "last_seen": last_seen}), self.loop)
+
+    async def stale_monitor(self):
+        interval = max(1, min(60, self.HEARTBEAT_STALE_SECONDS // 3))
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                self.check_gateway_stale()
+            except Exception as e:
+                print(f"[{format_timestamp()}] stale check error: {e}", flush=True)
 
     def gateway_stale(self) -> bool:
         """True when the gateway phone has not sent a heartbeat in the last 20 minutes (or none since start)."""
@@ -738,6 +876,7 @@ class TelemetryServer:
             print(f"[{format_timestamp()}] ⚠️ Gateway phone needs attention: {', '.join(problems)}", flush=True)
         if self.loop:
             asyncio.run_coroutine_threadsafe(self.broadcast({"type": "GATEWAY_HEARTBEAT", **self.last_heartbeat}), self.loop)
+        self.check_gateway_stale()
 
     def is_local_ip(self, ip) -> bool:
         """Connections from this machine (e.g. the dashboard in a local browser) are not phones."""
@@ -1456,6 +1595,7 @@ class TelemetryServer:
         print(f"  📶 Gateway BLE MAC : \033[1;36m{self.bt_mac or 'off (gateway app mode)'}\033[0m")
         print(f"  🔗 Public URL      : \033[1;36m{self.public_url or 'not set (location links off)'}\033[0m")
         print(f"  🔒 Admin token     : \033[1;36m{'on' if self.admin_token else 'off'}\033[0m")
+        print(f"  🔔 Notifications   : \033[1;36m{'on (macOS)' if self.notify_enabled else 'off'}\033[0m")
         print("=" * 65)
         print("  💡 Tip: Open the dashboard in browser to view live visual sensors.")
         print("  💡 Tip: Press [Enter] to simulate a call test.")
@@ -1464,6 +1604,7 @@ class TelemetryServer:
 
         async with websockets.serve(self.handle_client, self.host, self.port, process_request=self.ws_process_request):
             asyncio.create_task(self.console_trigger_loop())
+            asyncio.create_task(self.stale_monitor())
             await asyncio.Future()  # run forever
 
 def main():
@@ -1475,11 +1616,13 @@ def main():
     parser.add_argument("--client-number", default=os.environ.get("KAAKA_CLIENT_NUMBER", ""), help="Client (sensor) phone number whose SMS are telemetry (or KAAKA_CLIENT_NUMBER); optional")
     parser.add_argument("--adb-serial", default=os.environ.get("KAAKA_ADB_SERIAL", ""), help="adb serial of the phone to read SMS from (or KAAKA_ADB_SERIAL); optional")
     parser.add_argument("--public-url", default=os.environ.get("KAAKA_PUBLIC_URL", ""), help="Public https URL of this server (or KAAKA_PUBLIC_URL); shown for reference, the gateway app builds the links")
+    parser.add_argument("--no-notify", action="store_true", help="Disable macOS notifications (or KAAKA_NOTIFY=0)")
     args = parser.parse_args()
 
     server = TelemetryServer(host=args.host, port=args.port, http_port=args.http_port, bt_mac=args.bt_mac,
                              client_number=args.client_number, adb_serial=args.adb_serial,
-                             admin_token=os.environ.get("KAAKA_ADMIN_TOKEN", ""), public_url=args.public_url)
+                             admin_token=os.environ.get("KAAKA_ADMIN_TOKEN", ""), public_url=args.public_url,
+                             notify=not args.no_notify and os.environ.get("KAAKA_NOTIFY", "1") != "0")
     try:
         asyncio.run(server.start())
     except KeyboardInterrupt:
