@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-24T21:57:00+05:30 — Add rebuilt Kaaka debug APKs
+
+- Changed: Added `gateway/Kaaka.apk` (`com.kaaka.callapp`, label "Kaaka Call") and `client/KaakaSensors.apk` (`com.kaaka.sensors`, label "KaakaSensors"), debug builds of the previous commit.
+- Why: Installable apps for the gateway phone and the client phone.
+- Validation: `aapt dump badging` confirms app IDs and labels; unpacked APKs contain none of the old numbers, IPs or names; `gateway/Kaaka.apk` installed on the Galaxy S23 with `adb install -r` (Success).
+- Limitations: Debug-signed builds. The client app requests the default-SMS role and is meant for a separate phone, not the gateway phone.
+
 ## 2026-10-24T21:55:00+05:30 — Make the Android apps' server and phone numbers configurable
 
 - Changed: Removed hardcoded phone numbers, server IPs and device IDs from `client/` and `gateway/`. Client: new Settings card (`SettingsCard.svelte`, `appSettings.svelte.ts`) for gateway phone number, Mac server WebSocket and telemetry backend URL, with a red "Not set" warning; the authorized number is mirrored to native SharedPreferences for `SmsReceiver.java`; telemetry device ID is now a random per-install ID. Gateway: server endpoint starts empty and the app shows "no server" until set; saving a new endpoint reconnects; manual sends without a number show an error instead of using a fallback. `gateway/README.md` rewritten to describe the current app. `client/package-lock.json` resynced with `package.json`.
