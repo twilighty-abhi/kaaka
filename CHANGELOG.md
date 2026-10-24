@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T04:16:44+05:30 — Landing page animations
+
+- Added: motion on `site/index.html`: hero entrance, particle sphere that follows the pointer, scroll reveals with a stagger, stat count-up, signals moving through the network drawing, the Malayalam word drifting with the scroll, a scroll progress bar and hover lifts. Fixed the default 8 px body margin and the large word being clipped at the right edge.
+- Why: Make the landing page feel alive for demos.
+- Validation: Headless Chrome at 1440 px and 390 px served from the live server: no console errors, all 27 reveal targets shown after scrolling, stats end at 1, 0, 15 s and 112, no horizontal overflow at either width.
+- Limitations: With reduced motion on, all animation is off by design. The moving signals use SVG animation and are hidden in that mode.
+
 ## 2026-10-25T04:13:15+05:30 — Landing page at /, dashboard at /admin
 
 - Changed: the server serves `site/index.html` at `/` and `/index.html` without the admin token. The dashboard and its token check move to `/admin`; `/admin/` redirects there with the query string. The landing page footer links to `/admin`. Startup output, README, PLAN, TESTING, `scripts/public-url.sh` and the demo recording scripts use the new address.
