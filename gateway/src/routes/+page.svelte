@@ -21,6 +21,7 @@
     dashboardUrl: string;
     responderNumbers: string;
     publicUrl: string;
+    autoPublicUrl?: string;
     dashboardToken: string;
     escalateMinutes: number;
     maxRepliesPerHour: number;
@@ -93,8 +94,10 @@
   let dashboardUrl = $state('');
   let responderNumbers = $state('');
   let publicUrl = $state('');
+  let autoPublicUrl = $state(''); // reported by the dashboard in its heartbeat reply; used when the field is empty
   let dashboardToken = $state('');
   // Browsers only allow location sharing on https pages, so the link needs an https public URL.
+  const autoPublicUrlSecure = $derived(/^https:\/\//.test(autoPublicUrl));
   const publicUrlInsecure = $derived(publicUrl.trim() !== '' && !/^https:\/\//.test(publicUrl.trim()));
   let showSettings = $state(false);
 
@@ -186,6 +189,7 @@
     dashboardUrl = saved.dashboardUrl ?? '';
     responderNumbers = saved.responderNumbers ?? '';
     publicUrl = saved.publicUrl ?? '';
+    autoPublicUrl = saved.autoPublicUrl ?? '';
     dashboardToken = saved.dashboardToken ?? '';
   }
 
@@ -419,6 +423,10 @@
         />
         {#if publicUrlInsecure}
           <p class="setup-state bad">not https: callers' browsers will block location sharing</p>
+        {:else if publicUrl.trim() === '' && autoPublicUrl}
+          <p class="setup-state {autoPublicUrlSecure ? 'ok' : 'bad'}">auto: {autoPublicUrl} (from the dashboard){autoPublicUrlSecure ? '' : ' · not https'}</p>
+        {:else if publicUrl.trim() === ''}
+          <p class="setup-state">leave empty to use the URL the dashboard reports</p>
         {/if}
         <label class="field-label" for="token-input">dashboard token</label>
         <div class="config-input-group">

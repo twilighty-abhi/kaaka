@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:23:02+05:30 — Show the automatic public URL in the gateway settings
+
+- Changed: `getSettings` returns `autoPublicUrl`; under the public link field the UI shows "auto: <url> (from the dashboard)" when the field is empty and a URL was reported (flagged when not https), or a hint to leave the field empty.
+- Why: The operator should see which URL callers will get without digging into logs.
+- Validation: `npx svelte-check` 0 errors; `npm run build`; `npx cap sync android`; `assembleDebug`.
+- Limitations: Not checked on a device.
+
 ## 2026-10-25T03:23:02+05:30 — Gateway learns the public URL from the dashboard heartbeat
 
 - Changed: `GatewayStore.postToDashboardForReply` returns the JSON reply (the existing `postToDashboard` wraps it). `Heartbeat` stores the reply's `public_url` as the automatic URL (`autoPublicUrl`), logging changes. `CallHandler` builds the reply's location link from `effectivePublicUrl` (manual setting, else automatic).
