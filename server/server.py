@@ -23,6 +23,7 @@ import http.server
 import json
 import os
 import re
+import signal
 import socket
 import socketserver
 import sys
@@ -80,6 +81,27 @@ if IS_MAC:
         from mac_telephony import HfpBridgeClient
 
 MAX_TEXT = 500  # help-SMS message and resolution note limit
+
+SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+# Runtime data (events.jsonl, responders.json, last_call.json, latest_telemetry.json): KAAKA_DATA_DIR
+# or the server directory, so a service or container can keep it on a volume.
+DEFAULT_DATA_DIR = os.environ.get("KAAKA_DATA_DIR") or SERVER_DIR
+
+
+def write_json_atomic(path, obj, indent=None):
+    """Write JSON to a temp file in the same directory and rename it over `path`, so a crash
+    or a concurrent reader never sees a half-written file."""
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", suffix=".tmp", dir=os.path.dirname(path) or ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=indent)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 CSV_COLUMNS = ["number", "status", "first_seen", "last_seen", "calls", "help_sms", "alerts", "latest_lat", "latest_lon",
                "acknowledged_by", "acknowledged_at", "resolved_by", "resolved_at", "resolved_note"]
@@ -712,8 +734,13 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
 class TelemetryServer:
     def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="", client_number="", adb_serial="",
-                 admin_token="", public_url="", notify=True):
+                 admin_token="", public_url="", notify=True, data_dir=None, console=True):
         self.host = host
+        self.data_dir = os.path.abspath(data_dir or DEFAULT_DATA_DIR)
+        os.makedirs(self.data_dir, exist_ok=True)
+        # Interactive console (Enter = test call, "t" = test telemetry): off with --no-console or when stdin is not a TTY.
+        self.console_enabled = bool(console)
+        self.stop_event = None  # asyncio.Event set by SIGTERM/SIGINT for a clean shutdown
         # macOS notifications for new/reopened incidents, acks, resolutions and a silent gateway phone.
         self.notify_enabled = notify and IS_MAC
         self.started_epoch = time.time()
@@ -721,9 +748,9 @@ class TelemetryServer:
         # Optional KAAKA_ADMIN_TOKEN protects the dashboard and gateway endpoints (location links stay public).
         self.admin_token = admin_token
         self.public_url = public_url.rstrip("/")
-        self.incidents = IncidentStore(os.path.join(os.path.dirname(os.path.abspath(__file__)), "events.jsonl"))
-        # Responders (volunteers with a home position) for nearest-responder routing; server/responders.json.
-        self.responders = ResponderRegistry(os.path.join(os.path.dirname(os.path.abspath(__file__)), "responders.json"))
+        self.incidents = IncidentStore(os.path.join(self.data_dir, "events.jsonl"))
+        # Responders (volunteers with a home position) for nearest-responder routing; <data dir>/responders.json.
+        self.responders = ResponderRegistry(os.path.join(self.data_dir, "responders.json"))
         self.port = port
         self.http_port = http_port
         self.bt_mac = bt_mac
@@ -736,7 +763,7 @@ class TelemetryServer:
         self.loop = None
         self.telephony_service = "org.pipewire.Telephony"
         self.last_detected_number = None
-        self.last_call_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_call.json")
+        self.last_call_file = os.path.join(self.data_dir, "last_call.json")
         if os.path.exists(self.last_call_file):
             try:
                 with open(self.last_call_file, "r") as f:
@@ -745,7 +772,7 @@ class TelemetryServer:
                 pass
         self.last_call_time = 0
         self.last_call_number = None
-        self.telemetry_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "latest_telemetry.json")
+        self.telemetry_file = os.path.join(self.data_dir, "latest_telemetry.json")
         self.latest_telemetry = None
         self.telemetry_count = 0
         if os.path.exists(self.telemetry_file):
@@ -885,8 +912,7 @@ class TelemetryServer:
             "update_count": self.telemetry_count
         }
         try:
-            with open(self.telemetry_file, "w") as f:
-                json.dump(self.latest_telemetry, f, indent=2)
+            write_json_atomic(self.telemetry_file, self.latest_telemetry, indent=2)
         except Exception:
             pass
 
@@ -958,8 +984,7 @@ class TelemetryServer:
         """Remember the last real caller across restarts (server/last_call.json, not committed)."""
         self.last_detected_number = number
         try:
-            with open(self.last_call_file, "w") as f:
-                json.dump({"number": number, "name": str(name), "timestamp": format_timestamp()}, f)
+            write_json_atomic(self.last_call_file, {"number": number, "name": str(name), "timestamp": format_timestamp()})
         except Exception:
             pass
 
@@ -1676,12 +1701,25 @@ class TelemetryServer:
         except Exception as e:
             print(f"[{format_timestamp()}] HTTP server error: {e}")
 
+    def console_available(self) -> bool:
+        """The interactive console needs a real terminal on stdin (not a service, pipe or /dev/null)."""
+        if not self.console_enabled:
+            return False
+        try:
+            return sys.stdin is not None and sys.stdin.isatty()
+        except (AttributeError, ValueError):
+            return False
+
     async def console_trigger_loop(self):
         """Allows testing in terminal: press Enter to test call, or type 't' to test telemetry."""
         loop = asyncio.get_event_loop()
         reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(reader)
-        await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+        try:
+            await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+        except Exception as e:
+            print(f"[{format_timestamp()}] ℹ️ Console disabled (stdin not readable: {e})", flush=True)
+            return
 
         try:
             while True:
@@ -1834,15 +1872,35 @@ class TelemetryServer:
         print(f"  🔒 Admin token     : \033[1;36m{'on' if self.admin_token else 'off'}\033[0m")
         print(f"  🔔 Notifications   : \033[1;36m{'on (macOS)' if self.notify_enabled else 'off'}\033[0m")
         print("=" * 65)
+        print(f"  📁 Data directory  : \033[1;36m{self.data_dir}\033[0m")
+        print("=" * 65)
         print("  💡 Tip: Open /admin in a browser for the dashboard and live sensors.")
-        print("  💡 Tip: Press [Enter] to simulate a call test.")
-        print("  💡 Tip: Type 't' + [Enter] to simulate sensor telemetry display.")
+        console = self.console_available()
+        if console:
+            print("  💡 Tip: Press [Enter] to simulate a call test.")
+            print("  💡 Tip: Type 't' + [Enter] to simulate sensor telemetry display.")
+        else:
+            print("  ℹ️ Console off (--no-console or stdin is not a terminal); use POST /api/trigger-call to test.")
         print("=" * 65 + "\n", flush=True)
 
+        self.stop_event = asyncio.Event()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                self.loop.add_signal_handler(sig, self.request_stop, sig)
+            except (NotImplementedError, RuntimeError, ValueError):
+                pass  # not supported on this platform/thread: KeyboardInterrupt still stops the server
         async with websockets.serve(self.handle_client, self.host, self.port, process_request=self.ws_process_request):
-            asyncio.create_task(self.console_trigger_loop())
+            if console:
+                asyncio.create_task(self.console_trigger_loop())
             asyncio.create_task(self.stale_monitor())
-            await asyncio.Future()  # run forever
+            await self.stop_event.wait()  # run until SIGTERM / Ctrl-C
+
+    def request_stop(self, sig=None):
+        """Signal handler (event-loop thread): stop the WebSocket server; the daemon threads exit with the process."""
+        if self.stop_event and not self.stop_event.is_set():
+            name = signal.Signals(sig).name if sig is not None else "stop"
+            print(f"\n[{format_timestamp()}] {name} received, shutting down...", flush=True)
+            self.stop_event.set()
 
 def main():
     parser = argparse.ArgumentParser(description="Kaaka Bluetooth Call & Telemetry Server")
@@ -1854,6 +1912,10 @@ def main():
     parser.add_argument("--adb-serial", default=os.environ.get("KAAKA_ADB_SERIAL", ""), help="adb serial of the phone to read SMS from (or KAAKA_ADB_SERIAL); optional")
     parser.add_argument("--public-url", default=os.environ.get("KAAKA_PUBLIC_URL", ""), help="Public https URL of this server (or KAAKA_PUBLIC_URL); shown for reference, the gateway app builds the links")
     parser.add_argument("--no-notify", action="store_true", help="Disable macOS notifications (or KAAKA_NOTIFY=0)")
+    parser.add_argument("--no-console", action="store_true",
+                        help="Disable the interactive console (also off automatically when stdin is not a terminal, or KAAKA_CONSOLE=0)")
+    parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR,
+                        help="Directory for events.jsonl, responders.json and other runtime data (or KAAKA_DATA_DIR; default: the server directory)")
     parser.add_argument("--allow-unprotected-public", action="store_true",
                         help="Allow a public URL without KAAKA_ADMIN_TOKEN (not recommended)")
     args = parser.parse_args()
@@ -1866,11 +1928,14 @@ def main():
     server = TelemetryServer(host=args.host, port=args.port, http_port=args.http_port, bt_mac=args.bt_mac,
                              client_number=args.client_number, adb_serial=args.adb_serial,
                              admin_token=os.environ.get("KAAKA_ADMIN_TOKEN", ""), public_url=args.public_url,
-                             notify=not args.no_notify and os.environ.get("KAAKA_NOTIFY", "1") != "0")
+                             notify=not args.no_notify and os.environ.get("KAAKA_NOTIFY", "1") != "0",
+                             data_dir=args.data_dir,
+                             console=not args.no_console and os.environ.get("KAAKA_CONSOLE", "1") != "0")
     try:
         asyncio.run(server.start())
     except KeyboardInterrupt:
-        print("\nServer stopped.")
+        pass
+    print("Server stopped.", flush=True)
 
 if __name__ == "__main__":
     main()
