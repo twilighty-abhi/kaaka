@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:24:11+05:30 — "I'm safe" button in Kaaka Sensors
+
+- Changed: While the beacon runs or a countdown is active, the SOS card shows "I'm safe — close my alert". It stops the beacon, cancels any countdown and the safety timer, texts SAFE to the gateway number and shows the real send result (`emergencyService.reportSafe`).
+- Why: One tap for the caller to end the alert once help has arrived or the alarm was false.
+- Validation: `npx svelte-check` 0 errors / 0 warnings; web build, `cap sync`, `./gradlew assembleDebug` succeeded.
+- Limitations: Not run on a device; APK not committed.
+
 ## 2026-10-25T03:23:02+05:30 — Show "safe" events in the gateway app
 
 - Changed: Kaaka Call's recent-events list shows `safe <number> · incident closed · caller sms <result>` plus the responder count.
