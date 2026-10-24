@@ -51,3 +51,8 @@ demo/
 
 # Responder registry (names and phone numbers)
 server/responders.json
+
+# Android release signing (never commit keystores or their passwords)
+**/keystore.properties
+*.jks
+*.keystore

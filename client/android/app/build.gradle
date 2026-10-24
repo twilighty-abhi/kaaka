@@ -1,5 +1,29 @@
 apply plugin: 'com.android.application'
 
+// Release signing: reads android/keystore.properties (gitignored, see keystore.properties.example).
+// If it is missing, the release build falls back to the debug key so it still succeeds locally.
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+def hasReleaseKeystore = false
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+    def storeFileValue = keystoreProps.getProperty('storeFile')
+    if (storeFileValue) {
+        def storeFile = new File(storeFileValue)
+        if (!storeFile.isAbsolute()) storeFile = rootProject.file(storeFileValue)
+        if (storeFile.exists()) {
+            keystoreProps.setProperty('storeFile', storeFile.absolutePath)
+            hasReleaseKeystore = true
+        } else {
+            logger.warn("keystore.properties storeFile not found (${storeFile}): release build is debug-signed")
+        }
+    } else {
+        logger.warn("keystore.properties has no storeFile: release build is debug-signed")
+    }
+} else {
+    logger.warn("keystore.properties not found: release build is debug-signed")
+}
+
 android {
     namespace = "com.kaaka.sensors"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +40,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseKeystore) {
+                storeFile file(keystoreProps.getProperty('storeFile'))
+                storePassword keystoreProps.getProperty('storePassword')
+                keyAlias keystoreProps.getProperty('keyAlias')
+                keyPassword keystoreProps.getProperty('keyPassword')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
         }
     }
 }
