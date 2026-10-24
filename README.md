@@ -43,6 +43,7 @@ Then, in the gateway app on the S23, set **Dashboard server** to `http://<mac-ip
 - **Mac notifications:** on macOS the server posts a notification for a new or reopened incident, an acknowledgement, a resolution, and when the gateway phone goes silent (no heartbeat for 20 minutes) or comes back. Disable with `--no-notify` or `KAAKA_NOTIFY=0`. The dashboard also receives `GATEWAY_STALE` over the WebSocket.
 - **Map:** the dashboard's incident map shows each incident's latest location on OpenStreetMap (Leaflet 1.9.4 from cdnjs). It needs internet; offline, the panel says the map is unavailable and the rest of the dashboard works.
 - **CSV export:** **[download csv]** or `GET /api/incidents.csv` (same admin-token rule as `/api/incidents`).
+- **Nearest responders and dispatch:** register responders (name, number, home position) in the dashboard's **Responders** panel (type `lat, lon` or **[pick on map]**; toggle availability). Each incident with a location shows its nearest available responders with straight-line distance and an ETA that assumes 25 km/h city travel (a planning estimate). The first time an open incident gets a location, the server **dispatches** the 1–2 nearest available responders: it records them on the incident, broadcasts `RESPONDER_DISPATCHED`, and returns them in the `/api/telemetry` response so the gateway app texts each one ("Kaaka dispatch: you are the nearest responder (1.2 km, ~3 min) to <caller>. Location: <maps> Reply ACK <caller> to confirm."). Later reports of the same open incident do not dispatch again; a resolved incident that reopens does. The map draws a dashed line from the nearest responder to each open incident, labelled with distance and ETA. Responders live in `server/responders.json` (runtime data, not committed).
 
 ### Server settings
 
@@ -62,13 +63,17 @@ All bodies are JSON. Errors return `{"success": false, "error": "…"}`.
 | Endpoint | Body | Responses |
 |---|---|---|
 | `POST /api/call-event` | `number` (string, `""` if hidden), `state` (`rejected`\|`allowed`, or `sms` for a help SMS), `sms` (`sent`\|`failed`\|`skipped`), `timestamp` (ISO-8601 string), optional `token` (6–32 of `A-Z a-z 0-9 _ -`, the location-link token sent to this caller), optional `message` (help SMS text, max 500 characters) | 200, 400, 401 |
-| `POST /api/telemetry` | `report` (alert text, e.g. a forwarded "Kaaka Alert" SMS) and `sender`; or the client app's live stream `{deviceId, sensors: {...}}` | 200, 401 |
+| `POST /api/telemetry` | `report` (alert text, e.g. a forwarded "Kaaka Alert" SMS) and `sender`; or the client app's live stream `{deviceId, sensors: {...}}` | 200 `{"success": true, "dispatch": [{name, number, distance_km, eta_min, maps_url}]}` (`dispatch` is non-empty only the first time an open incident gets a location; empty for the live stream), 401 |
 | `POST /api/heartbeat` | `timestamp`, `battery` (int −1…100), `charging`, `screeningRole`, `smsGranted`, `contactCalls` (booleans; all optional) | 200, 400, 401 |
 | `POST /api/ack` | `number` (caller being acknowledged, required), `responder` (string), `timestamp` (ISO-8601 string) | 200, 400, 401 |
 | `POST /api/resolve` | `number` (incident to close, required), `by` (string, default `"dashboard"`, max 100), `note` (max 500), `timestamp` (ISO-8601 string) | 200, 400, 401, 404 (no incident for this number) |
 | `POST /api/location` (public) | `token`, `lat` (−90…90), `lon` (−180…180), optional `accuracy` (metres) | 200, 400 (malformed), 404 (unknown or expired token) |
 | `GET /l/<token>` (public) | — | 200 location page, 404 unknown or expired |
 | `GET /api/incidents` | — | 200 `{"incidents": [...]}` (newest first, max 50; each with `status` `open`\|`acknowledged`\|`resolved`, `calls`, `help_sms`, `alerts`, `locations`, `acknowledged`, `resolved`, `latest_location`), 401 |
+| `GET /api/responders` | — | 200 `{"responders": [{id, name, number, lat, lon, available}]}`; 401 |
+| `POST /api/responders` | `name` (≤ 80 chars), `number` (phone number), `lat`, `lon`, optional `available` (default true) | 200 `{"success": true, "responder": {…}}`, 400, 401 |
+| `PATCH /api/responders/<id>` | any of the fields above | 200, 400, 401, 404 |
+| `DELETE /api/responders/<id>` | — | 200, 401, 404 |
 | `GET /api/incidents.csv` | — | 200 CSV: `number,status,first_seen,last_seen,calls,help_sms,alerts,latest_lat,latest_lon,acknowledged_by,acknowledged_at,resolved_by,resolved_at,resolved_note`; 401 |
 | `GET /api/status` | — | 200 status incl. `last_heartbeat`, `gateway_stale`, `public_url`, `admin_token_enabled`; 401 |
 

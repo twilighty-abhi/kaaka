@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:28:25+05:30 — Document nearest-responder routing
+
+- Changed: README (Mac + S23 section): how responders are registered, how distance/ETA are computed (straight line, 25 km/h assumption), the dispatch rule and the dispatch SMS; API table gains the four `/api/responders` endpoints and the `dispatch` field in the `/api/telemetry` response. `docs/PLAN.md`: status row for the feature and a next step for responder accept/decline.
+- Why: Keep the setup and API documentation complete.
+- Validation: Re-read the rendered Markdown table rows for alignment.
+- Limitations: None identified.
+
 ## 2026-10-25T03:27:35+05:30 — Dashboard: responders panel, nearest-responder lines and dispatch status
 
 - Changed: `server/dashboard.html` gets a Responders panel (list with available/unavailable toggle and remove; add form with name, number and "lat, lon" or a click on the map via "pick on map"). The map shows responders as blue dots (dimmed when unavailable) and, for each open incident with a location, a dashed line to its nearest responder labelled "1.2 km · ~3 min". Incident cards show "Nearest: <name> (km, ETA) · dispatched: <names>" (or "not dispatched yet" / "no available responder registered"). `RESPONDER_DISPATCHED` appears in the activity feed with a beep. Responder names and numbers are inserted with `textContent`.
