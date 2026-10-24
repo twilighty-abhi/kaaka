@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:23:02+05:30 — Gateway learns the public URL from the dashboard heartbeat
+
+- Changed: `GatewayStore.postToDashboardForReply` returns the JSON reply (the existing `postToDashboard` wraps it). `Heartbeat` stores the reply's `public_url` as the automatic URL (`autoPublicUrl`), logging changes. `CallHandler` builds the reply's location link from `effectivePublicUrl` (manual setting, else automatic).
+- Why: No one should have to copy a tunnel URL into the phone: the dashboard already knows it.
+- Validation: `./gradlew assembleDebug` builds; unit tests 15/15. Not yet exercised against a running dashboard from the app.
+- Limitations: The automatic URL only updates when a heartbeat gets through (every 15 min or on settings save).
+
 ## 2026-10-25T03:23:02+05:30 — Decide the location-link URL in pure code, with tests
 
 - Changed: `GatewayText.effectivePublicUrl(manual, auto)` (manual setting wins, else the dashboard-reported URL, else none; trailing slashes dropped) and `isInsecurePublicUrl`. Four new unit tests in `GatewayTextTest`.

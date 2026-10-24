@@ -28,7 +28,7 @@ final class CallHandler {
         boolean limited = GatewayStore.isRateLimited(context, number);
         // Token for the optional "share your location" link; the server maps it to this caller.
         String token = number.isEmpty() ? "" : GatewayText.newToken();
-        String link = limited ? "" : GatewayText.locationLine(GatewayStore.publicUrl(context), token);
+        String link = limited ? "" : GatewayText.locationLine(GatewayStore.effectivePublicUrl(context), token);
         String smsResult = limited ? "skipped" : sendReply(context, number, link);
         String excerpt = message.length() > 500 ? message.substring(0, 500) : message;
 
