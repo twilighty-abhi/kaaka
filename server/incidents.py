@@ -129,6 +129,10 @@ class IncidentStore:
     def add_ack(self, number, responder, phone_timestamp):
         return self._record({"kind": "ack", "number": number, "responder": responder, "phone_timestamp": phone_timestamp})
 
+    def add_dispatch(self, number, responders):
+        """Records which responders were asked to go to this caller (nearest first)."""
+        return self._record({"kind": "dispatch", "number": number, "responders": responders})
+
     def add_resolve(self, number, by, note, phone_timestamp):
         return self._record({"kind": "resolve", "number": number, "by": by, "note": note, "phone_timestamp": phone_timestamp})
 
@@ -154,7 +158,7 @@ class IncidentStore:
                 inc = groups[key] = {
                     "key": key, "number": e.get("number") or "hidden", "first_seen": e["received"],
                     "calls": [], "help_sms": [], "alerts": [], "locations": [], "acknowledged": None,
-                    "resolved": None, "latest_location": None, "_last_activity": 0, "_last_epoch": 0,
+                    "resolved": None, "dispatched": [], "latest_location": None, "_last_activity": 0, "_last_epoch": 0,
                 }
             inc["last_seen"] = e["received"]
             inc["_last_epoch"] = e["received_epoch"]
@@ -188,9 +192,12 @@ class IncidentStore:
             elif kind == "ack":
                 inc["acknowledged"] = {"responder": e.get("responder", ""), "timestamp": e["received"],
                                        "_epoch": e["received_epoch"]}
+            elif kind == "dispatch":
+                inc["dispatched"] = [{**r, "timestamp": e["received"]} for r in e.get("responders", [])]
             elif kind == "resolve":
                 inc["resolved"] = {"by": e.get("by", ""), "note": e.get("note", ""), "timestamp": e["received"],
                                    "_epoch": e["received_epoch"]}
+                inc["dispatched"] = []  # a reopened incident gets a fresh dispatch
         for inc in groups.values():
             # A new call, help SMS or alert after an acknowledgement/resolution reopens the incident.
             for field in ("acknowledged", "resolved"):

@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:22:52+05:30 — Dispatch the nearest responders when an incident gets a location
+
+- Changed: The first time an open incident has a location (an alert with coordinates via `/api/telemetry`, or a share via `/api/location`), the server picks the 1–2 nearest available responders, records a `dispatch` event in `events.jsonl` (`dispatched` on the incident), broadcasts `RESPONDER_DISPATCHED`, notifies, and returns `dispatch: [{name, number, distance_km, eta_min, maps_url}]` in the `/api/telemetry` response so the gateway app can text them. Later reports of the same open incident do not dispatch again; resolving clears the dispatch so a reopened incident gets a fresh one.
+- Why: Turn alerts into dispatch: the people closest to the caller are asked to go.
+- Validation: Spare-port run with three responders: first alert dispatched Near (0.11 km, ~1 min) and Mid (2.24 km, ~5 min), `RESPONDER_DISPATCHED` received over WebSocket, second alert returned no dispatch, resolve cleared it, third alert re-dispatched; a location share for another caller dispatched Mid then Near; both incidents and all responders persisted across a restart.
+- Limitations: Dispatch is advisory (SMS), there is no accept/decline step yet.
+
 ## 2026-10-25T03:21:22+05:30 — Distance and ETA to the nearest responders
 
 - Changed: `server/responders.py` adds `haversine_km`, `eta_minutes` (assumes 25 km/h average city travel; a planning estimate, not a promise) and `ResponderRegistry.nearest`. `GET /api/incidents` adds `nearest_responders` per incident: the 3 nearest available responders to its latest location with `distance_km` and `eta_min`.

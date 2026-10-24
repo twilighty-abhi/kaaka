@@ -49,10 +49,10 @@ except ImportError:
     from audio_bridge import AudioConversationBridge, ensure_audio_sinks
 
 try:
-    from server.incidents import IncidentStore, TOKEN_RE
+    from server.incidents import IncidentStore, TOKEN_RE, number_key
     from server.responders import ResponderRegistry
 except ImportError:
-    from incidents import IncidentStore, TOKEN_RE
+    from incidents import IncidentStore, TOKEN_RE, number_key
     from responders import ResponderRegistry
 
 if IS_MAC:
@@ -539,11 +539,13 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     self.server_instance.display_telemetry(format_sensor_report(payload["sensors"]),
                                                            sender=str(payload.get("deviceId", "")),
                                                            source="Live sensor stream", live=True)
+                    body = b'{"success":true}'
                 else:
                     report = (payload.get("report") or payload.get("content")) if isinstance(payload, dict) else None
                     sender = payload.get("sender", "") if isinstance(payload, dict) else ""
-                    self.server_instance.display_telemetry(report or post_data, sender=sender, source="HTTP REST /api/telemetry")
-                body = b'{"success":true}'
+                    dispatch = self.server_instance.display_telemetry(report or post_data, sender=sender, source="HTTP REST /api/telemetry")
+                    # The gateway app texts these responders ("you are the nearest responder ...").
+                    body = json.dumps({"success": True, "dispatch": dispatch or []}).encode("utf-8")
             except Exception as e:
                 body = json.dumps({"error": str(e)}).encode("utf-8")
             self.send_response(200)
@@ -753,8 +755,12 @@ class TelemetryServer:
         print("=" * 65 + "\n", flush=True)
 
         before = self.incidents.status_of(sender)
-        if self.incidents.add_alert(sender, clean_text, source):
+        dispatch = []
+        alert_event = self.incidents.add_alert(sender, clean_text, source)
+        if alert_event:
             self.notify_if_opened(sender, before, f"alert from {sender or 'unknown sender'}")
+            if "lat" in alert_event:
+                dispatch = self.maybe_dispatch(sender)
 
         # Store latest telemetry in memory and persist to disk
         self.latest_telemetry = {
@@ -781,6 +787,32 @@ class TelemetryServer:
                 "update_count": self.telemetry_count
             }
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+        return dispatch
+
+    def maybe_dispatch(self, number):
+        """
+        The first time an open incident has a location, ask the 1-2 nearest available responders to go.
+        Later reports of the same open incident do not dispatch again; a resolved incident that reopens does.
+        Returns the dispatch list (possibly empty).
+        """
+        inc = self.incidents._build().get(number_key(number))
+        if not inc or inc["status"] == "resolved" or inc["dispatched"] or not inc["latest_location"]:
+            return []
+        loc = inc["latest_location"]
+        nearest = self.responders.nearest(loc["lat"], loc["lon"], limit=2)
+        if not nearest:
+            return []
+        dispatch = [{"name": r["name"], "number": r["number"], "distance_km": r["distance_km"],
+                     "eta_min": r["eta_min"], "maps_url": loc["maps_url"]} for r in nearest]
+        self.incidents.add_dispatch(inc["number"], dispatch)
+        who = ", ".join(f"{d['name']} ({d['distance_km']} km, ~{d['eta_min']} min)" for d in dispatch)
+        print(f"[{format_timestamp()}] 🚨 Dispatch for {inc['number']}: {who}", flush=True)
+        self.notify(f"Dispatch for {inc['number']}: {who}")
+        if self.loop:
+            payload = {"type": "RESPONDER_DISPATCHED", "number": inc["number"], "dispatch": dispatch,
+                       "timestamp": format_timestamp()}
+            asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+        return dispatch
 
     def incidents_with_nearest(self):
         """Incidents plus, for each one with a location, the 3 nearest available responders (distance, ETA)."""
@@ -864,6 +896,8 @@ class TelemetryServer:
             payload = {"type": "LOCATION_SHARED", "number": event["number"], "lat": lat, "lon": lon,
                        "accuracy": accuracy, "maps_url": event["maps_url"], "timestamp": event["received"]}
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+        if event["number"]:
+            self.maybe_dispatch(event["number"])
 
     def on_ack(self, number, responder, timestamp):
         """A responder acknowledged a caller's incident (POST /api/ack)."""
