@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:49:17+05:30 — Map: hotspots toggle
+
+- Changed: The incident map gets a [hotspots: off/on] toggle (off by default) that draws the analytics hotspot cells (about 500 m) as circles sized by incident count (10–26 px radius, area grows with count) and shaded on a four-step sequential blue ramp, with a 2 px white ring and a "N incidents" tooltip. The hotspots follow the analytics range filter, and the meta line says "N hotspot cells (7d, darker = more)".
+- Why: Show where incidents cluster without reading coordinates.
+- Validation: The ramp `#6da7ec,#3987e5,#1c5cab,#0d366b` passes `validate_palette.js --ordinal` against the OpenStreetMap land colour `#f2efe9` and `#fcfcfb` (monotone lightness, adjacent ΔL ≥ 0.06, light end 2.18:1, single hue). The reference ramp's lightest ordinal step `#86b6ef` failed against the tiles (1.84:1), so the ramp starts one step darker. Headless Chrome render with the toggle forced on (temporary local edit, reverted): the 3-incident cell shows larger and darker than the single-incident cells. The first try used geographic 275 m circles, which were hidden under the markers at city zoom, so they were changed to screen-sized circles.
+- Limitations: Tooltips were not hovered in the headless run. Circles sit under the incident pins, so a pin covers the centre of its own cell.
+
 ## 2026-10-25T03:48:11+05:30 — Dashboard: analytics section
 
 - Changed: `server/dashboard.html` gets an "analytics" panel between incidents and the map: one range filter row (24h / 7d / 30d / all) above everything, seven KPI tiles ("—" plus a reason such as "no acknowledgements yet" when the API returns `null`), stacked columns of contacts per day (per hour for 24h) by channel with legend, a direct label on the peak only, crosshair and a tooltip listing all three channels and the total, peak-hours columns, an outcomes bar list and a responder leaderboard table. Every chart has a [table] toggle. Inline SVG and vanilla JS, no new libraries; columns ≤ 24 px with 4 px rounded tops, 2 px surface gaps between stacked segments, hairline grid. Charts accept arrow keys for the same tooltip. Refreshes on the existing 10 s refresh and on `CALL_EVENT`, `TELEMETRY_RECEIVED` (not the live stream), `INCIDENT_ACK` and `INCIDENT_RESOLVED`; while refetching, the previous render stays in place, dimmed. Names and numbers are inserted with `textContent`.
