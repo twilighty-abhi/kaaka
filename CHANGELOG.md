@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:23:02+05:30 — Decide the location-link URL in pure code, with tests
+
+- Changed: `GatewayText.effectivePublicUrl(manual, auto)` (manual setting wins, else the dashboard-reported URL, else none; trailing slashes dropped) and `isInsecurePublicUrl`. Four new unit tests in `GatewayTextTest`.
+- Why: The gateway will soon learn the public URL from the dashboard; the choice between manual and automatic URL must be simple and tested.
+- Validation: `./gradlew testDebugUnitTest`: GatewayTextTest 15/15 (manual wins, auto when manual empty, none when both empty, non-https auto used but flagged).
+- Limitations: None identified.
+
 ## 2026-10-25T03:20:28+05:30 — Location page keeps sharing while open
 
 - Changed: `server/locate.html`: after the first successful share it watches the position and sends an update at most every 15 s, shows "Sharing live location · N updates" and a "Stop sharing" button; 429 replies (sent too soon) are skipped silently. The https warning stays. Plain HTML/JS, no external scripts.
