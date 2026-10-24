@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:13:45+05:30 — Require an admin token for a public dashboard URL
+
+- Changed: `server/server.py` exits with a clear error when a public URL (`--public-url` / `KAAKA_PUBLIC_URL`) is set without `KAAKA_ADMIN_TOKEN`, unless `--allow-unprotected-public` is given.
+- Why: A public URL exposes the dashboard and gateway endpoints to the internet; without the token anyone could read callers' numbers and locations.
+- Validation: `py_compile`; starting with `KAAKA_PUBLIC_URL` and no token prints the error and exits.
+- Limitations: None identified.
+
 ## 2026-10-25T02:13:16+05:30 — Beacon update interval and location trail on the dashboard
 
 - Changed: Kaaka Sensors gets an "Update every 15 / 30 / 60 s" beacon setting (saved; default 60 s) on the SOS card. The dashboard map draws each incident's reported positions as a trail (oldest to newest) and fits the view to it. Rebuilt `client/KaakaSensors.apk`.

@@ -1615,7 +1615,14 @@ def main():
     parser.add_argument("--adb-serial", default=os.environ.get("KAAKA_ADB_SERIAL", ""), help="adb serial of the phone to read SMS from (or KAAKA_ADB_SERIAL); optional")
     parser.add_argument("--public-url", default=os.environ.get("KAAKA_PUBLIC_URL", ""), help="Public https URL of this server (or KAAKA_PUBLIC_URL); shown for reference, the gateway app builds the links")
     parser.add_argument("--no-notify", action="store_true", help="Disable macOS notifications (or KAAKA_NOTIFY=0)")
+    parser.add_argument("--allow-unprotected-public", action="store_true",
+                        help="Allow a public URL without KAAKA_ADMIN_TOKEN (not recommended)")
     args = parser.parse_args()
+    # A public URL exposes the dashboard and gateway endpoints to the internet: require the admin token.
+    if args.public_url and not os.environ.get("KAAKA_ADMIN_TOKEN") and not args.allow_unprotected_public:
+        parser.error("a public URL (--public-url / KAAKA_PUBLIC_URL) needs KAAKA_ADMIN_TOKEN, otherwise anyone "
+                     "on the internet can read callers' numbers and locations. Set KAAKA_ADMIN_TOKEN "
+                     "(and the same token in Kaaka Call), or pass --allow-unprotected-public.")
 
     server = TelemetryServer(host=args.host, port=args.port, http_port=args.http_port, bt_mac=args.bt_mac,
                              client_number=args.client_number, adb_serial=args.adb_serial,
