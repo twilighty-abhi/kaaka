@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:27:35+05:30 — Dashboard: responders panel, nearest-responder lines and dispatch status
+
+- Changed: `server/dashboard.html` gets a Responders panel (list with available/unavailable toggle and remove; add form with name, number and "lat, lon" or a click on the map via "pick on map"). The map shows responders as blue dots (dimmed when unavailable) and, for each open incident with a location, a dashed line to its nearest responder labelled "1.2 km · ~3 min". Incident cards show "Nearest: <name> (km, ETA) · dispatched: <names>" (or "not dispatched yet" / "no available responder registered"). `RESPONDER_DISPATCHED` appears in the activity feed with a beep. Responder names and numbers are inserted with `textContent`.
+- Why: Let the operator see who is closest and who was asked to go, and keep the responder list up to date without editing files.
+- Validation: Script parses; spare-port server seeded with three responders and two located incidents, rendered with headless Chrome: panel, dots, dashed lines with ETA labels and the "nearest … dispatched" card lines all visible.
+- Limitations: Lines use straight-line distance; the map fits incidents and their nearest responders, so far-away responders may be off-screen until zoomed out.
+
 ## 2026-10-25T03:25:32+05:30 — Gateway: text the dispatched responders
 
 - Changed: After forwarding a Kaaka Alert to the dashboard, `AlertSmsReceiver` reads the `dispatch` list in the reply and texts each responder with `GatewayText.dispatchMessage` (distance, ETA, Maps link, "Reply ACK <caller>"), then logs a local `dispatch` event (names texted, failures). The event list shows "dispatch for <caller>: <names>". Later reports of an already-dispatched incident get an empty list from the dashboard, so nobody is texted twice.

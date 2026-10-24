@@ -362,6 +362,28 @@
       overflow-y: auto;
     }
 
+    .responder-list { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.5rem; }
+    .responder-item {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+      font-size: 0.74rem; padding: 0.4rem 0.6rem;
+      background: var(--bg-box); border: 1px solid var(--border-dim);
+    }
+    .responder-item.away { opacity: 0.55; }
+    .responder-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: #2bb3ff; display: inline-block; }
+    .responder-form { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+    .responder-form input {
+      font: inherit; font-size: 0.74rem; padding: 0.35rem 0.5rem; min-width: 0;
+      background: var(--bg-input); color: var(--text-bright); border: 1px solid var(--border-mid);
+    }
+    .responder-form input:focus { outline: 1px solid var(--border-active); }
+    #pick-btn.active { border-color: var(--border-active); color: var(--text-bright); }
+    .incident-nearest { font-size: 0.72rem; color: #2bb3ff; }
+    .leaflet-tooltip.eta-label {
+      background: #0a0a0a; color: #2bb3ff; border: 1px solid #2bb3ff; border-radius: 0;
+      font: 500 0.7rem 'IBM Plex Mono', monospace; padding: 0.1rem 0.35rem;
+    }
+    .leaflet-tooltip.eta-label::before { display: none; }
+
     .incident-item {
       display: flex;
       flex-direction: column;
@@ -507,6 +529,22 @@
       <span class="panel-meta map-message" id="map-message">loading map…</span>
     </div>
     <div id="incident-map"></div>
+  </section>
+
+  <!-- Responders: volunteers with a home position; the server dispatches the nearest ones to each incident -->
+  <section class="panel" id="responders-panel">
+    <div class="panel-label-row">
+      <span class="panel-label">// responders</span>
+      <span class="panel-meta" id="responders-meta">none registered</span>
+    </div>
+    <div class="responder-list" id="responder-list"></div>
+    <form class="responder-form" id="responder-form" onsubmit="addResponder(event)">
+      <input id="resp-name" placeholder="name" maxlength="80" required>
+      <input id="resp-number" placeholder="+91XXXXXXXXXX" required>
+      <input id="resp-coords" placeholder="lat, lon" required>
+      <button type="button" class="action-btn" id="pick-btn" onclick="togglePick()">[pick on map]</button>
+      <button type="submit" class="action-btn">[add responder]</button>
+    </form>
   </section>
 
   <!-- Emergency Alert Priority Section -->
@@ -821,6 +859,11 @@ awaiting emergency trigger from client or gateway...</div>
     } else if (msg.type === 'LOCATION_SHARED') {
       addFeedItem(`location shared by ${msg.number || 'a caller'}: ${Number(msg.lat).toFixed(5)}, ${Number(msg.lon).toFixed(5)}`, true);
       playBeep(760, 0.2);
+      refreshIncidents();
+    } else if (msg.type === 'RESPONDER_DISPATCHED') {
+      const who = (msg.dispatch || []).map((d) => d.name + ' (' + d.distance_km + ' km, ~' + d.eta_min + ' min)').join(', ');
+      addFeedItem(`dispatched to ${msg.number}: ${who || 'nobody available'}`, true);
+      playBeep(700, 0.2);
       refreshIncidents();
     } else if (msg.type === 'INCIDENT_ACK') {
       addFeedItem(`incident for ${msg.number} acknowledged by ${msg.responder || 'a responder'}`);
@@ -1205,6 +1248,16 @@ awaiting emergency trigger from client or gateway...</div>
     }
     item.append(locRow);
 
+    const nearest = (inc.nearest_responders || [])[0];
+    if (nearest) {
+      const dispatchedNames = (inc.dispatched || []).map((d) => d.name).filter(Boolean);
+      item.append(el('div', 'incident-nearest',
+        'Nearest: ' + nearest.name + ' (' + nearest.distance_km + ' km, ~' + nearest.eta_min + ' min)' +
+        (dispatchedNames.length ? ' · dispatched: ' + dispatchedNames.join(', ') : ' · not dispatched yet')));
+    } else if (loc) {
+      item.append(el('div', 'incident-nearest', 'Nearest: no available responder registered'));
+    }
+
     const footer = el('div', 'incident-actions');
     let state;
     if (status === 'resolved') {
@@ -1265,12 +1318,107 @@ awaiting emergency trigger from client or gateway...</div>
     tiles.on('tileerror', () => { message.textContent = 'map tiles unavailable (offline?)'; });
     incidentMarkers = L.layerGroup().addTo(incidentMap);
     message.textContent = 'latest location per incident';
+    incidentMap.on('click', (e) => {
+      if (!pickingLocation) return;
+      document.getElementById('resp-coords').value = e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6);
+      togglePick();
+    });
   }
+
+  // Responders panel
+  function togglePick() {
+    pickingLocation = !pickingLocation;
+    const btn = document.getElementById('pick-btn');
+    btn.textContent = pickingLocation ? '[click the map…]' : '[pick on map]';
+    btn.classList.toggle('active', pickingLocation);
+  }
+
+  function renderResponders() {
+    const list = document.getElementById('responder-list');
+    list.replaceChildren();
+    responders.forEach((r) => {
+      const item = el('div', 'responder-item' + (r.available ? '' : ' away'));
+      item.append(el('span', 'responder-dot'), el('span', '', r.name), el('span', 'incident-meta', r.number),
+                  el('span', 'incident-meta', Number(r.lat).toFixed(4) + ', ' + Number(r.lon).toFixed(4)));
+      const avail = el('button', 'action-btn', r.available ? '[available]' : '[unavailable]');
+      avail.type = 'button';
+      avail.onclick = () => updateResponder(r.id, { available: !r.available });
+      const del = el('button', 'action-btn', '[remove]');
+      del.type = 'button';
+      del.onclick = () => deleteResponder(r.id);
+      item.append(avail, del);
+      list.append(item);
+    });
+    const available = responders.filter((r) => r.available).length;
+    document.getElementById('responders-meta').textContent = responders.length
+      ? responders.length + ' registered · ' + available + ' available' : 'none registered';
+  }
+
+  async function refreshResponders() {
+    try {
+      const res = await api('/api/responders');
+      if (!res.ok) return;
+      responders = (await res.json()).responders || [];
+      renderResponders();
+    } catch (e) {}
+  }
+
+  function parseCoords(text) {
+    const m = String(text).trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+    return m ? { lat: Number(m[1]), lon: Number(m[2]) } : null;
+  }
+
+  async function addResponder(event) {
+    event.preventDefault();
+    const coords = parseCoords(document.getElementById('resp-coords').value);
+    if (!coords) { addFeedItem('responder location must be "lat, lon" (or pick it on the map)', true); return; }
+    const body = { name: document.getElementById('resp-name').value.trim(),
+                   number: document.getElementById('resp-number').value.trim(), ...coords };
+    const res = await api('/api/responders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { addFeedItem('could not add responder: ' + (data.error || 'HTTP ' + res.status), true); return; }
+    document.getElementById('responder-form').reset();
+    addFeedItem('responder added: ' + body.name);
+    await refreshResponders();
+    refreshIncidents();
+  }
+
+  async function updateResponder(id, patch) {
+    await api('/api/responders/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+    await refreshResponders();
+    refreshIncidents();
+  }
+
+  async function deleteResponder(id) {
+    await api('/api/responders/' + id, { method: 'DELETE' });
+    await refreshResponders();
+    refreshIncidents();
+  }
+
+  let responders = [];
+  let pickingLocation = false;
 
   function updateMap(incidents) {
     if (!incidentMap) return;
     incidentMarkers.clearLayers();
     const points = [];
+    // Responders: blue dots (dimmed when unavailable); open incidents get a dashed line to their nearest one.
+    responders.forEach((r) => {
+      const popup = el('div', '', r.name + ' · ' + r.number + (r.available ? '' : ' · unavailable'));
+      L.circleMarker([r.lat, r.lon], { radius: 7, color: '#2bb3ff', fillColor: '#2bb3ff', fillOpacity: r.available ? 0.9 : 0.3 })
+        .bindPopup(popup).addTo(incidentMarkers);
+    });
+    incidents.forEach((inc) => {
+      const nearest = (inc.nearest_responders || [])[0];
+      if (nearest && inc.latest_location && inc.status !== 'resolved') {
+        const from = [Number(nearest.lat), Number(nearest.lon)];
+        const to = [Number(inc.latest_location.lat), Number(inc.latest_location.lon)];
+        L.polyline([from, to], { color: '#2bb3ff', weight: 2, dashArray: '6 6', opacity: 0.9 })
+          .bindTooltip(nearest.distance_km + ' km · ~' + nearest.eta_min + ' min', { permanent: true, direction: 'center', className: 'eta-label' })
+          .addTo(incidentMarkers);
+        points.push(from);
+      }
+    });
     incidents.forEach((inc) => {
       const loc = inc.latest_location;
       if (!loc) return;
@@ -1323,9 +1471,11 @@ awaiting emergency trigger from client or gateway...</div>
     initMap();
     await updateServerStatus();  // learns the WebSocket port first
     connectWebSocket();
+    await refreshResponders();
     refreshIncidents();
     setInterval(updateServerStatus, 2000);
     setInterval(refreshIncidents, 10000);
+    setInterval(refreshResponders, 30000);
     setInterval(tickTelemetryTimer, 1000);
   });
 </script>
