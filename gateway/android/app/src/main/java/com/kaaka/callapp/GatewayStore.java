@@ -230,7 +230,9 @@ public final class GatewayStore {
         for (int i = 0; i < events.length(); i++) {
             JSONObject e = events.optJSONObject(i);
             if (e == null) continue;
-            list.add(new GatewayText.Ev(e.optString("type"), e.optString("number"), e.optString("state"),
+            // Alert events store the caller under "sender"; everything else under "number".
+            String number = e.has("number") ? e.optString("number") : e.optString("sender");
+            list.add(new GatewayText.Ev(e.optString("type"), number, e.optString("state"),
                 eventMillis(e), e.optBoolean("rateLimited", false)));
         }
         return list;

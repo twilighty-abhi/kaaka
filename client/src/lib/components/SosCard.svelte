@@ -20,6 +20,13 @@
 		telemetryBeacon.endsAt ? Math.max(0, Math.ceil((telemetryBeacon.endsAt - now) / 60000)) : null
 	);
 
+	let safeSending = $state(false);
+	async function reportSafe() {
+		safeSending = true;
+		await emergencyService.reportSafe();
+		safeSending = false;
+	}
+
 	async function sos() {
 		sending = true;
 		await emergencyService.triggerSos("sos");
@@ -73,6 +80,16 @@
 				{#if emergencyService.status.type === "error"}<AlertCircle class="h-4 w-4 shrink-0" />{:else}<CheckCircle2 class="h-4 w-4 shrink-0" />{/if}
 				{emergencyService.status.text}
 			</p>
+		{/if}
+
+		{#if telemetryBeacon.isActive || emergencyService.countdown}
+			<Button
+				class="w-full h-14 text-lg font-bold bg-emerald-600 hover:bg-emerald-500 text-white"
+				disabled={safeSending}
+				onclick={reportSafe}
+			>
+				{safeSending ? "Sending SAFE…" : "I'm safe — close my alert"}
+			</Button>
 		{/if}
 
 		{#if telemetryBeacon.isActive}

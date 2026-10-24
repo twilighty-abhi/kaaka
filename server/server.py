@@ -811,8 +811,12 @@ class TelemetryServer:
         """An incident was closed (POST /api/resolve)."""
         event = self.incidents.add_resolve(number, by, note, timestamp)
         note_text = f": {note}" if note else ""
-        print(f"[{format_timestamp()}] ☑️ Incident for {number} resolved by {by}{note_text}", flush=True)
-        self.notify(f"Resolved: {number} by {by}{note_text}")
+        if by == "caller":
+            print(f"[{format_timestamp()}] ☑️ Caller {number} reported safe — incident closed", flush=True)
+            self.notify(f"Caller reported safe: {number}")
+        else:
+            print(f"[{format_timestamp()}] ☑️ Incident for {number} resolved by {by}{note_text}", flush=True)
+            self.notify(f"Resolved: {number} by {by}{note_text}")
         if self.loop:
             payload = {"type": "INCIDENT_RESOLVED", "number": number, "by": by, "note": note, "timestamp": event["received"]}
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)

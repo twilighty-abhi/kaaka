@@ -1,5 +1,6 @@
 import { appSettings } from "./appSettings.svelte.js";
 import { sensorManager } from "./sensorManager.svelte.js";
+import { sendSms } from "./smsService.js";
 import { telemetryBeacon } from "./telemetryBeaconService.svelte.js";
 
 const FALL_KEY = "kaaka_auto_sos_on_fall";
@@ -175,7 +176,33 @@ class EmergencyService {
 		return true;
 	}
 
-	/** "I'm safe": stops the safety timer (and its countdown if it already began). */
+	/**
+	 * "I'm safe" after an alert: stops the beacon, any countdown and the safety timer, and texts SAFE
+	 * to the Kaaka number so the gateway closes the incident. Returns true if the SMS was sent.
+	 */
+	async reportSafe(): Promise<boolean> {
+		const gateway = appSettings.gatewayNumber.trim();
+		if (!gateway) {
+			this.status = { type: "error", text: "Gateway number not set. Add it in Settings first." };
+			return false;
+		}
+		this.stopCountdownTimer();
+		this.setSafetyDeadline(null);
+		this.impactAt = null;
+		this.stillSince = null;
+		if (telemetryBeacon.isActive) {
+			while (telemetryBeacon.isSending) await sleep(200);
+			telemetryBeacon.stopBeacon("Beacon stopped: you reported safe.", true);
+		}
+		this.status = { type: "info", text: "Sending SAFE to Kaaka…" };
+		const res = await sendSms(gateway, "SAFE");
+		this.status = res.success
+			? { type: "success", text: "SAFE sent. Kaaka will close your alert." }
+			: { type: "error", text: `SAFE not sent: ${res.message}` };
+		return res.success;
+	}
+
+	/** Check-in on the safety timer: stops it (and its countdown if it already began). */
 	checkIn() {
 		const wasRunning = this.safetyDeadline !== null || this.countdown?.reason === "safety timer";
 		this.setSafetyDeadline(null);

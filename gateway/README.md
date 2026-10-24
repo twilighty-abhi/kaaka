@@ -34,6 +34,10 @@ Capacitor (SvelteKit) gateway app for the phone whose number people call (the "1
 
 Settings are stored natively, so screening and replies work while the app is closed.
 
+## Caller reports safe
+
+A text of `SAFE`, `I'm safe`, `I am safe` or `സുരക്ഷിതം` from a number with an open incident (a call, help SMS or alert in the last 24 h with no later RESOLVE or SAFE) closes it: the caller gets "Kaaka: glad you are safe. Your alert is closed. If you need help again, call or text this number.", every responder gets "Kaaka: <number> reported safe at HH:mm. Incident closed.", a `safe` event is logged, the dashboard receives `POST /api/resolve` with `by: "caller"`, and no escalation reminder is sent. A SAFE from a number without an open incident is ignored. Responder commands (ACK / STATUS / RESOLVE) are checked first, so a responder's own "safe" text is not misread.
+
 ## Notes and limits
 
 - Call screening needs Android 10 or newer and the call screening role; without it nothing happens on incoming calls.

@@ -136,4 +136,40 @@ public class GatewayTextTest {
         assertFalse(GatewayText.handledSince(events, "+919800000001", 2_000));
         assertFalse(GatewayText.handledSince(events, "+919800000002", 0));
     }
+
+    @Test
+    public void safeReportsAreRecognised() {
+        for (String s : new String[] { "SAFE", "safe", " Safe. ", "I'm safe", "im safe!", "I am safe", "I AM SAFE", "ഞാൻ സുരക്ഷിതം" }) {
+            assertTrue(s, GatewayText.isSafeReport(s));
+        }
+        for (String s : new String[] { "not safe", "safe house", "SAFE HELP", "Kaaka: glad you are safe. Your alert is closed.", "", null }) {
+            assertFalse(String.valueOf(s), GatewayText.isSafeReport(s));
+        }
+        // A safe report is not a help request, and Kaaka's own safe notices are neither.
+        assertFalse(GatewayText.isHelpRequest("I'm safe"));
+        assertFalse(GatewayText.isHelpRequest("Kaaka: +919876543210 reported safe at 10:42. Incident closed."));
+        assertFalse(GatewayText.isHelpRequest("Kaaka: glad you are safe. Your alert is closed. If you need help again, call or text this number."));
+    }
+
+    @Test
+    public void openIncidentClosesOnSafeOrResolveNotAck() {
+        long now = 1_000_000_000L;
+        GatewayText.Ev call = new GatewayText.Ev("call", "+919876543210", "rejected", now - 60_000, false);
+        GatewayText.Ev alertOnly = new GatewayText.Ev("alert", "+919000000001", "", now - 60_000, false);
+        assertTrue(GatewayText.hasOpenIncident(Arrays.asList(call), "9876543210", now));
+        assertTrue(GatewayText.hasOpenIncident(Arrays.asList(alertOnly), "+919000000001", now));
+        assertFalse(GatewayText.hasOpenIncident(Arrays.asList(call), "+911111111111", now));
+        GatewayText.Ev ack = new GatewayText.Ev("ack", "+919876543210", "", now - 30_000, false);
+        assertTrue(GatewayText.hasOpenIncident(Arrays.asList(call, ack), "+919876543210", now));
+        GatewayText.Ev safe = new GatewayText.Ev("safe", "+919876543210", "", now - 10_000, false);
+        assertFalse(GatewayText.hasOpenIncident(Arrays.asList(call, ack, safe), "+919876543210", now));
+        // A "safe" counts as handled for the escalation reminder.
+        assertTrue(GatewayText.handledSince(Arrays.asList(call, safe), "+919876543210", call.at));
+        // ...and reopens when the caller contacts again.
+        GatewayText.Ev again = new GatewayText.Ev("call", "+919876543210", "sms", now, false);
+        assertTrue(GatewayText.hasOpenIncident(Arrays.asList(call, safe, again), "+919876543210", now));
+        // Old contact (over 24 h) is not open.
+        GatewayText.Ev old = new GatewayText.Ev("call", "+919000000002", "rejected", now - 25L * 3600_000, false);
+        assertFalse(GatewayText.hasOpenIncident(Arrays.asList(old), "+919000000002", now));
+    }
 }

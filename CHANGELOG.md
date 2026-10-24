@@ -4,6 +4,48 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:24:45+05:30 — Document "I'm safe" / SAFE
+
+- Changed: README (Mac + S23 section), `gateway/README.md`, `client/README.md` and `docs/TESTING.md` describe the SAFE text, the "I'm safe" button, the dashboard badge and two device checks.
+- Why: Keep docs and the test checklist in step with the feature.
+- Validation: Re-read against the implemented behaviour.
+- Limitations: None identified.
+
+## 2026-10-25T03:24:11+05:30 — Dashboard shows incidents closed by the caller
+
+- Changed: `/api/incidents` adds `closed_by_caller` (true when the incident was resolved with `by: "caller"`). The dashboard shows a green "safe" badge and "closed by caller · reported safe at …"; the feed and the macOS notification say "Caller reported safe". A later call, help SMS or alert reopens the incident as before.
+- Why: Responders should see at a glance that the caller ended the alert themselves.
+- Validation: `py_compile`; spare-port run: call → open; resolve by caller → resolved with `closed_by_caller: true`; new call → open again; responder resolve → resolved with `closed_by_caller: false`; console shows "Caller … reported safe — incident closed".
+- Limitations: Dashboard rendering not checked in a browser.
+
+## 2026-10-25T03:24:11+05:30 — "I'm safe" button in Kaaka Sensors
+
+- Changed: While the beacon runs or a countdown is active, the SOS card shows "I'm safe — close my alert". It stops the beacon, cancels any countdown and the safety timer, texts SAFE to the gateway number and shows the real send result (`emergencyService.reportSafe`).
+- Why: One tap for the caller to end the alert once help has arrived or the alarm was false.
+- Validation: `npx svelte-check` 0 errors / 0 warnings; web build, `cap sync`, `./gradlew assembleDebug` succeeded.
+- Limitations: Not run on a device; APK not committed.
+
+## 2026-10-25T03:23:02+05:30 — Show "safe" events in the gateway app
+
+- Changed: Kaaka Call's recent-events list shows `safe <number> · incident closed · caller sms <result>` plus the responder count.
+- Why: The gateway operator should see when a caller closed their own incident.
+- Validation: `svelte-check` (gateway) 0 errors / 0 warnings.
+- Limitations: UI only.
+
+## 2026-10-25T03:22:13+05:30 — SAFE by SMS closes the caller's incident on the S23
+
+- Changed: `AlertSmsReceiver` handles a SAFE text from a number with an open incident (checked before help keywords, after responder commands): replies "Kaaka: glad you are safe. Your alert is closed. If you need help again, call or text this number.", texts each responder "Kaaka: <caller> reported safe at HH:mm. Incident closed.", logs a `safe` event and posts `/api/resolve {number, by: "caller", note: "Caller reported safe"}`. A SAFE from a number without an open incident is ignored. Kaaka's own safe notices are excluded from help/safe matching so two gateways never answer each other.
+- Why: Let the person who asked for help close the loop themselves.
+- Validation: `./gradlew testDebugUnitTest assembleDebug`: GatewayTextTest 13/13 (own-message exclusions added); debug APK builds.
+- Limitations: Not exercised with a real SMS; APK not committed.
+
+## 2026-10-25T03:21:04+05:30 — Recognise "SAFE" texts from callers (gateway rules)
+
+- Changed: `GatewayText.isSafeReport` matches SAFE, I'm safe, im safe, I am safe (any case, trailing punctuation allowed) and the Malayalam word സുരക്ഷിതം; Kaaka's own messages never match. `hasOpenIncident` says whether a number has a call, help SMS or alert in the last 24 h with no later resolve or safe (an ACK alone keeps it open); `handledSince` treats a logged "safe" like a resolve so the escalation reminder stays quiet. `GatewayStore.eventList` now reads the caller of alert events from their `sender` field.
+- Why: First step of "I'm safe" closing an incident: pure rules, unit-tested before any SMS handling.
+- Validation: `./gradlew testDebugUnitTest`: GatewayTextTest 13/13 (2 new tests: safe-text matching incl. negatives, open/closed/reopen logic).
+- Limitations: Rules only; no SMS handling yet.
+
 ## 2026-10-25T02:13:16+05:30 — Beacon update interval and location trail on the dashboard
 
 - Changed: Kaaka Sensors gets an "Update every 15 / 30 / 60 s" beacon setting (saved; default 60 s) on the SOS card. The dashboard map draws each incident's reported positions as a trail (oldest to newest) and fits the view to it. Rebuilt `client/KaakaSensors.apk`.
