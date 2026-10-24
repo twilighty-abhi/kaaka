@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:21:04+05:30 — Recognise "SAFE" texts from callers (gateway rules)
+
+- Changed: `GatewayText.isSafeReport` matches SAFE, I'm safe, im safe, I am safe (any case, trailing punctuation allowed) and the Malayalam word സുരക്ഷിതം; Kaaka's own messages never match. `hasOpenIncident` says whether a number has a call, help SMS or alert in the last 24 h with no later resolve or safe (an ACK alone keeps it open); `handledSince` treats a logged "safe" like a resolve so the escalation reminder stays quiet. `GatewayStore.eventList` now reads the caller of alert events from their `sender` field.
+- Why: First step of "I'm safe" closing an incident: pure rules, unit-tested before any SMS handling.
+- Validation: `./gradlew testDebugUnitTest`: GatewayTextTest 13/13 (2 new tests: safe-text matching incl. negatives, open/closed/reopen logic).
+- Limitations: Rules only; no SMS handling yet.
+
 ## 2026-10-25T02:13:16+05:30 — Beacon update interval and location trail on the dashboard
 
 - Changed: Kaaka Sensors gets an "Update every 15 / 30 / 60 s" beacon setting (saved; default 60 s) on the SOS card. The dashboard map draws each incident's reported positions as a trail (oldest to newest) and fits the view to it. Rebuilt `client/KaakaSensors.apk`.

@@ -21,6 +21,9 @@ final class GatewayText {
     /** "RESOLVE", optionally followed by a phone number and a free-text note. */
     private static final Pattern RESOLVE = Pattern.compile("(?is)^\\s*resolve\\b[\\s:,-]*(\\+?[0-9][0-9 ()-]{5,})?\\s*(.*)$");
     private static final Pattern STATUS = Pattern.compile("(?is)^\\s*status\\s*$");
+    // "SAFE", "I'm safe", "im safe", "I am safe", with optional trailing punctuation.
+    private static final Pattern SAFE = Pattern.compile("(?is)^\\s*(?:i\\s*(?:'|’)?\\s*m\\s+|i\\s+am\\s+)?safe\\s*[.!]*\\s*$");
+    private static final String SAFE_MALAYALAM = "സുരക്ഷിതം";
     /** Latin help keywords as whole words ("helpful" or "kaakaa" do not match). */
     private static final Pattern HELP_WORDS = Pattern.compile("(?i)(?<![\\p{L}\\p{N}])(help|sos|kaaka)(?![\\p{L}\\p{N}])");
     private static final String HELP_MALAYALAM = "സഹായം";
@@ -84,9 +87,17 @@ final class GatewayText {
         return text.contains(HELP_MALAYALAM) || HELP_WORDS.matcher(text).find();
     }
 
+    /** True if an SMS says the sender is safe (SAFE / I'm safe / I am safe, or the Malayalam word). */
+    static boolean isSafeReport(String body) {
+        if (body == null) return false;
+        String text = body.trim();
+        if (isOwnMessage(text)) return false;
+        return text.contains(SAFE_MALAYALAM) || SAFE.matcher(text).matches();
+    }
+
     /** Exact starts of the texts this app sends (replies, responder notifications, command answers). */
     private static final Pattern OWN_MESSAGE = Pattern.compile(
-        "^(Kaaka received|Kaaka UNACKNOWLEDGED|A Kaaka responder|Kaaka alert from|കാക്ക നിങ്ങളുടെ"
+        "^(Kaaka received|Kaaka UNACKNOWLEDGED|A Kaaka responder|Kaaka alert from|Kaaka: glad you are safe|കാക്ക നിങ്ങളുടെ"
             + "|Kaaka: (call from|help SMS from|ACK recorded|resolved|no recent incident|no open incidents|\\d+ open))");
 
     private static boolean isOwnMessage(String text) {
@@ -154,10 +165,10 @@ final class GatewayText {
         return replied >= maxPerHour;
     }
 
-    /** True if an "ack" or "resolve" for this number was logged after {@code since}. */
+    /** True if an "ack", "resolve" or "safe" for this number was logged after {@code since}. */
     static boolean handledSince(List<Ev> events, String number, long since) {
         for (Ev e : events) {
-            if (("ack".equals(e.type) || "resolve".equals(e.type)) && e.at >= since && sameNumber(e.number, number)) return true;
+            if (("ack".equals(e.type) || "resolve".equals(e.type) || "safe".equals(e.type)) && e.at >= since && sameNumber(e.number, number)) return true;
         }
         return false;
     }
@@ -186,6 +197,24 @@ final class GatewayText {
         }
         open.sort((x, y) -> Long.compare(y.at, x.at));
         return open;
+    }
+
+    /**
+     * True if this number has an incident to close: a call, help SMS or alert in the last 24 h with no
+     * later "resolve" or "safe" (an ACK alone keeps it open).
+     */
+    static boolean hasOpenIncident(List<Ev> events, String number, long now) {
+        long latest = 0;
+        for (Ev e : events) {
+            if (("call".equals(e.type) || "alert".equals(e.type)) && now - e.at <= DAY_MS && sameNumber(e.number, number)) {
+                latest = Math.max(latest, e.at);
+            }
+        }
+        if (latest == 0) return false;
+        for (Ev e : events) {
+            if (("resolve".equals(e.type) || "safe".equals(e.type)) && e.at >= latest && sameNumber(e.number, number)) return false;
+        }
+        return true;
     }
 
     /** STATUS reply, kept within about two SMS parts. */
