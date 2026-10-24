@@ -151,6 +151,78 @@ class IncidentStore:
         result = sorted(self._build().values(), key=lambda i: i.pop("_last_epoch"), reverse=True)
         return result[:MAX_INCIDENTS]
 
+    def query(self, status="all", q="", date_from="", date_to="", outcome="", limit=MAX_INCIDENTS, offset=0):
+        """
+        Filtered incidents for the dashboard's Live and History pages (no MAX_INCIDENTS cap), newest first.
+        status: "open" (open or acknowledged), "resolved" or "all". q: digits that must appear in the number
+        (or text, for hidden/simulated numbers). date_from/date_to: "YYYY-MM-DD", compared with the date of
+        the last activity. outcome: "closed_by_caller" or "resolved_by_responder" (resolved ones only).
+        Returns {"total", "counts": {open, acknowledged, resolved}, "incidents"}.
+        """
+        result = sorted(self._build().values(), key=lambda i: i.pop("_last_epoch"), reverse=True)
+        counts = {"open": 0, "acknowledged": 0, "resolved": 0}
+        for inc in result:
+            counts[inc["status"]] += 1
+        digits = re.sub(r"\D", "", q or "")
+        text = (q or "").strip().lower()
+
+        def keep(inc):
+            if status == "open" and inc["status"] == "resolved":
+                return False
+            if status == "resolved" and inc["status"] != "resolved":
+                return False
+            if digits and digits not in re.sub(r"\D", "", inc["number"]):
+                return False
+            if text and not digits and text not in inc["number"].lower():
+                return False
+            day = inc["last_seen"][:10]
+            if (date_from and day < date_from) or (date_to and day > date_to):
+                return False
+            if outcome == "closed_by_caller" and not inc["closed_by_caller"]:
+                return False
+            if outcome == "resolved_by_responder" and (inc["status"] != "resolved" or inc["closed_by_caller"]):
+                return False
+            return True
+
+        matched = [inc for inc in result if keep(inc)]
+        return {"total": len(matched), "counts": counts, "incidents": matched[offset:offset + limit]}
+
+    def detail(self, key):
+        """One incident (by number_key) with a time-ordered "timeline" of every event for it, or None."""
+        inc = self._build().get(key)
+        if inc is None:
+            return None
+        inc.pop("_last_epoch", None)
+        timeline = []
+        for e in self.events_snapshot():
+            if number_key(e.get("number")) != key:
+                continue
+            item = {"kind": e["kind"], "timestamp": e["received"]}
+            for field in ("state", "sms", "phone_timestamp", "message", "text", "source", "lat", "lon", "accuracy",
+                          "maps_url", "responder", "responders", "by", "note"):
+                if field in e:
+                    item[field] = e[field]
+            if e["kind"] == "call":
+                item["location_link"] = bool(e.get("token"))  # the token itself stays private
+            timeline.append(item)
+        inc["timeline"] = timeline
+        return inc
+
+    def responder_activity(self, limit=1000):
+        """Dispatches and ACKs, newest first: {kind, responder_number, responder_name, caller, timestamp, distance_km}."""
+        out = []
+        for e in self.events_snapshot():
+            if e["kind"] == "dispatch":
+                for r in e.get("responders", []):
+                    out.append({"kind": "dispatch", "responder_number": r.get("number", ""), "responder_name": r.get("name", ""),
+                                "caller": e.get("number", ""), "timestamp": e["received"],
+                                "distance_km": r.get("distance_km"), "eta_min": r.get("eta_min")})
+            elif e["kind"] == "ack":
+                out.append({"kind": "ack", "responder_number": e.get("responder", ""), "responder_name": "",
+                            "caller": e.get("number", ""), "timestamp": e["received"]})
+        out.reverse()
+        return out[:limit]
+
     def _build(self):
         """All incidents keyed by number_key."""
         with self.lock:

@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:51:07+05:30 — Server: incident history queries, incident detail and responder activity
+
+- Changed: `GET /api/incidents` accepts `status=open|resolved|all` (open includes acknowledged), `q` (digits in the number), `from`/`to` (`YYYY-MM-DD`, date of last activity), `outcome=closed_by_caller|resolved_by_responder`, `limit` (0–500, default 50) and `offset`. With any of these it returns `{incidents, total, counts: {open, acknowledged, resolved}, limit, offset}` over all incidents in memory, without the 50-incident cap; with none, the response is unchanged. `/api/incidents.csv` takes the same filters. New `GET /api/incidents/<key>` (key = last 10 digits) returns the incident with a time-ordered `timeline` of its calls, help SMS, alerts, location shares, dispatches, ACKs and resolutions (the location-link token is left out). New `GET /api/responders/activity` lists dispatches and ACKs, newest first. All use the admin-token rule.
+- Why: The dashboard's History, incident-detail and Responders pages need filtered, paged and per-incident data.
+- Validation: `py_compile`; spare-port server with the seeded data: the default response still has only `incidents` (8); `status=open` gives 5 (counts 4 open / 1 acknowledged / 3 resolved); `outcome=closed_by_caller` 1 and `resolved_by_responder` 2; `q=0006` finds one; `limit=3&offset=3` pages; `from` tomorrow gives 0; `status=x`, `from=26-10-2026`, `limit=999` and `offset=-1` give 400; detail of `9447000001` lists call, alert, dispatch, ack, resolve in order; an unknown key gives 404; activity lists 16 entries; the filtered CSV has the 2 resolved rows.
+- Limitations: History covers the newest 5000 events kept in memory (the store's existing cap). Incidents are grouped per caller number as before, so a reopened incident shows its whole history in one entry.
+
 ## 2026-10-25T03:49:36+05:30 — Document analytics
 
 - Changed: README (Mac + S23 section): an "Analytics" bullet covering the range filter, KPI definitions, charts, table toggles, refresh triggers, the map's hotspots toggle and how incidents are counted; the API table gains `GET /api/analytics` with its full response shape.
