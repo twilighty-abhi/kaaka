@@ -13,7 +13,7 @@ set -euo pipefail
 GATEWAY="${1:?gateway phone adb serial}"
 CALLER="${2:?caller phone adb serial}"
 SECONDS_TOTAL="${3:-170}"
-DASHBOARD="${4:-http://127.0.0.1:8080}"
+DASHBOARD="${4:-http://127.0.0.1:8080/admin}"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 FRAME_EVERY=2
 
