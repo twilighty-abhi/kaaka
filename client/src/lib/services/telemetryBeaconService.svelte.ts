@@ -3,6 +3,10 @@ import { sendSms } from "./smsService.js";
 import { appSettings, sendToServer } from "./appSettings.svelte.js";
 
 const DURATION_KEY = "kaaka_beacon_minutes";
+const INTERVAL_KEY = "kaaka_beacon_interval";
+// Seconds between reports; faster updates help when the person is moving (e.g. in a vehicle).
+export const BEACON_INTERVALS = [15, 30, 60] as const;
+const DEFAULT_INTERVAL_S = 60;
 const DEFAULT_DURATION_MIN = 30;
 // Do not hold the first report back for a GPS fix: send what we have after this long.
 const LOCATION_WAIT_MS = 5000;
@@ -16,14 +20,23 @@ function loadDuration(): number {
 	}
 }
 
+function loadInterval(): number {
+	try {
+		const n = Number(localStorage.getItem(INTERVAL_KEY));
+		return (BEACON_INTERVALS as readonly number[]).includes(n) ? n : DEFAULT_INTERVAL_S;
+	} catch {
+		return DEFAULT_INTERVAL_S;
+	}
+}
+
 export type BeaconTrigger = "manual" | "sos" | "fall" | "safety timer" | "gateway reply";
 
 export class TelemetryBeaconService {
 	// Svelte 5 runes for reactive state
 	isActive = $state(false);
 	targetNumber = $state(appSettings.gatewayNumber);
-	intervalSeconds = $state(60);
-	secondsRemaining = $state(60);
+	intervalSeconds = $state(loadInterval());
+	secondsRemaining = $state(loadInterval());
 	updatesSentCount = $state(0);
 	lastSentTime = $state<string | null>(null);
 	lastReport = $state<string | null>(null);
@@ -126,6 +139,17 @@ export class TelemetryBeaconService {
 			this.secondsRemaining = this.intervalSeconds;
 		}
 		return success;
+	}
+
+	setIntervalSeconds(seconds: number) {
+		if (!(BEACON_INTERVALS as readonly number[]).includes(seconds)) return;
+		this.intervalSeconds = seconds;
+		try {
+			localStorage.setItem(INTERVAL_KEY, String(seconds));
+		} catch {
+			// keep in memory only
+		}
+		if (this.isActive && this.secondsRemaining > seconds) this.secondsRemaining = seconds;
 	}
 
 	setDuration(minutes: number) {

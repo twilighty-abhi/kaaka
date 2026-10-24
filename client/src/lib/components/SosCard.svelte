@@ -3,7 +3,7 @@
 	import { Button } from "#lib/components/ui/button/index.js";
 	import { Siren, AlertCircle, CheckCircle2, Info } from "lucide-svelte";
 	import { emergencyService } from "#lib/services/emergencyService.svelte.js";
-	import { telemetryBeacon } from "#lib/services/telemetryBeaconService.svelte.js";
+	import { telemetryBeacon, BEACON_INTERVALS } from "#lib/services/telemetryBeaconService.svelte.js";
 	import { appSettings } from "#lib/services/appSettings.svelte.js";
 
 	let sending = $state(false);
@@ -105,6 +105,19 @@
 				onchange={() => telemetryBeacon.setDuration(Number(duration))}
 			/>
 			min
+		</label>
+		<label class="flex items-center gap-2 text-xs font-semibold">
+			Update every
+			<select
+				class="rounded-md border border-border bg-background px-2 py-1"
+				value={telemetryBeacon.intervalSeconds}
+				onchange={(e) => telemetryBeacon.setIntervalSeconds(Number((e.currentTarget as HTMLSelectElement).value))}
+			>
+				{#each BEACON_INTERVALS as s}
+					<option value={s}>{s} s</option>
+				{/each}
+			</select>
+			<span class="font-normal text-muted-foreground">(shorter when travelling)</span>
 		</label>
 		<p class="flex items-start gap-2 text-[11px] text-muted-foreground">
 			<Info class="h-3.5 w-3.5 shrink-0 mt-0.5" />
