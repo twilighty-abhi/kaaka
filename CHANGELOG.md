@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:32:47+05:30 — Rebuild both apps with SAFE, location links and nearest-responder dispatch
+
+- Changed: `gateway/Kaaka.apk` and `client/KaakaSensors.apk` rebuilt from the integrated branch (feat/im-safe + feat/location-link + feat/nearest-responder on top of the beacon-interval/trail work). Merge conflicts were all additive and resolved by keeping both sides.
+- Why: One APK rebuild for the three feature PRs, so the binaries do not conflict between them.
+- Validation: Gateway `svelte-check` 0 errors, `GatewayTextTest` 18/18, `assembleDebug`; client `svelte-check` 0 errors, `assembleDebug`; server `py_compile`; combined spare-port smoke test: responder registered → call with token → alert dispatches the nearest responder (3.15 km, ~8 min) → location share 200 then 429 within 10 s → caller SAFE resolves with `closed_by_caller: true`.
+- Limitations: Not yet installed or tested on the phones.
+
 ## 2026-10-25T03:29:08+05:30 — Nearest-responder routing: validation summary
 
 - Changed: `AI_USAGE.md` row for this feature.
