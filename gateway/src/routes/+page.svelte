@@ -11,6 +11,7 @@
     screeningRole: boolean;
     sendSms: boolean;
     receiveSms: boolean;
+    contactCalls: boolean;
   }
 
   interface GatewaySettings {
@@ -25,6 +26,7 @@
     number?: string;
     state?: string;
     sms?: string;
+    via?: string;
     sender?: string;
     text?: string;
   }
@@ -33,6 +35,7 @@
     getStatus(): Promise<GatewayStatus>;
     requestScreeningRole(): Promise<GatewayStatus>;
     requestSmsPermissions(): Promise<GatewayStatus>;
+    requestCallPermissions(): Promise<GatewayStatus>;
     getSettings(): Promise<GatewaySettings>;
     saveSettings(options: GatewaySettings): Promise<void>;
     getEvents(): Promise<{ events: GatewayEvent[] }>;
@@ -96,6 +99,15 @@
     try {
       status = await Gateway.requestSmsPermissions();
       if (!status.sendSms || !status.receiveSms) statusMessage = { text: 'sms permission not granted', type: 'error' };
+    } catch (err) {
+      statusMessage = { text: errorText(err), type: 'error' };
+    }
+  }
+
+  async function requestCallPerms() {
+    try {
+      status = await Gateway.requestCallPermissions();
+      if (!status.contactCalls) statusMessage = { text: 'call permissions not granted: calls from contacts are not handled', type: 'error' };
     } catch (err) {
       statusMessage = { text: errorText(err), type: 'error' };
     }
@@ -241,6 +253,14 @@
             <button type="button" class="field-text-btn" onclick={requestSms}>[allow]</button>
           {/if}
         </div>
+        <div class="setup-row">
+          <span class="field-label">calls from contacts</span>
+          {#if status.contactCalls}
+            <span class="setup-state ok">granted</span>
+          {:else}
+            <button type="button" class="field-text-btn" onclick={requestCallPerms}>[allow]</button>
+          {/if}
+        </div>
       </section>
     {:else if !isNative}
       <div class="status-banner error" role="status">
@@ -287,7 +307,7 @@
             <li class="event-item">
               <span class="event-time">{formatTime(ev.timestamp)}</span>
               {#if ev.type === 'call'}
-                <span>call {ev.number || 'hidden number'} · {ev.state} · sms {ev.sms}</span>
+                <span>call {ev.number || 'hidden number'}{ev.via === 'phone_state' ? ' (contact)' : ''} · {ev.state} · sms {ev.sms}</span>
               {:else}
                 <span>alert from {ev.sender || 'unknown'}</span>
                 <span class="event-text">{ev.text}</span>

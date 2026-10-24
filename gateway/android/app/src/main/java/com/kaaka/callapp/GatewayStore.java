@@ -25,6 +25,9 @@ public final class GatewayStore {
     private static final String KEY_REPLY = "reply_message";
     private static final String KEY_DASHBOARD = "dashboard_url";
     private static final String KEY_EVENTS = "events";
+    private static final String KEY_LAST_CALL = "last_call_number";
+    private static final String KEY_LAST_CALL_AT = "last_call_at";
+    private static final long CALL_DEDUPE_MS = 60_000;
     private static final int MAX_EVENTS = 50;
 
     public static final String DEFAULT_REPLY = "received call. will get back to you shortly.";
@@ -59,6 +62,20 @@ public final class GatewayStore {
 
     public static String nowIso() {
         return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(new Date());
+    }
+
+    /**
+     * Returns true the first time a call from this number is seen within a minute.
+     * Call screening and the phone-state receiver can both see the same call; only one may handle it.
+     */
+    public static synchronized boolean claimCall(Context context, String number) {
+        SharedPreferences p = prefs(context);
+        long now = System.currentTimeMillis();
+        if (number.equals(p.getString(KEY_LAST_CALL, null)) && now - p.getLong(KEY_LAST_CALL_AT, 0) < CALL_DEDUPE_MS) {
+            return false;
+        }
+        p.edit().putString(KEY_LAST_CALL, number).putLong(KEY_LAST_CALL_AT, now).commit();
+        return true;
     }
 
     /** Appends an event (newest first) and keeps at most MAX_EVENTS. */
