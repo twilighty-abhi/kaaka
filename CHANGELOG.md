@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T04:49:46+05:30 — README: event credit
+
+- Changed: README states the project was built at Devin Hacks Kochi (https://www.devinhacks.in/), a 12-hour solo hackathon in Kochi on 24 October 2026.
+- Why: Credit the event the project was built at.
+- Validation: Event name, format and date taken from the event website.
+- Limitations: None.
+
 ## 2026-10-25T04:33:44+05:30 — Landing page: live demo loop and more motion
 
 - Added: on `site/index.html`, particles gather into the hero sphere and pulse outward every few seconds and on tap; headline words sharpen in; a scrolling keyword strip that leans with scroll speed; a "Watch it happen" section where a phone and the control room act out one incident (call, reply, location, dispatch, ACK, SAFE) with the app's real reply texts, looping only while visible; a moving mini map, scrolling history list and growing chart bars in the control room cards; labels that decode in; a pointer light on cards; buttons that lean toward the pointer; a footer wordmark that rises letter by letter. Nav link "Watch it".
