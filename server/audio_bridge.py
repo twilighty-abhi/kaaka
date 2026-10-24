@@ -26,7 +26,11 @@ import shutil
 import threading
 import subprocess
 from datetime import datetime
-import requests
+
+try:
+    import requests  # only needed to post call audio to the n8n voice-AI webhook
+except ImportError:
+    requests = None
 
 IS_MAC = sys.platform == "darwin"
 MAC_UNSUPPORTED_STATUS = "unsupported on macOS (IOBluetooth SCO audio unsupported)"
@@ -242,6 +246,10 @@ class AudioConversationBridge:
 
     def send_to_webhook(self, mp3_path=TEMP_RECORD_PATH):
         """Sends MP3 to webhook-test/passive or fallback /webhook/passive."""
+        if requests is None:
+            self.log("⚠️ Webhook skipped: the `requests` package is not installed (pip install requests)")
+            self.last_status = "requests package missing"
+            return None
         for url in [u for u in (self.primary_url, self.fallback_url) if u]:
             try:
                 self.last_status = f"sending to {url}"

@@ -23,6 +23,7 @@ import http.server
 import json
 import os
 import re
+import signal
 import socket
 import socketserver
 import sys
@@ -37,11 +38,27 @@ import websockets
 
 IS_MAC = sys.platform == "darwin"
 
-if not IS_MAC:
-    # Linux-only: BlueZ / PipeWire / oFono over D-Bus
-    import dbus
-    from dbus.mainloop.glib import DBusGMainLoop
-    from gi.repository import GLib
+# Linux-only: BlueZ / PipeWire / oFono over D-Bus. Imported lazily by load_linux_dbus() when --bt-mac
+# is set, so the server starts on plain Linux / in a container with only `websockets` installed.
+dbus = None
+DBusGMainLoop = None
+GLib = None
+
+
+def load_linux_dbus():
+    """Import python-dbus and PyGObject (GLib) into this module; exits with a clear message if missing."""
+    global dbus, DBusGMainLoop, GLib
+    if dbus is not None:
+        return
+    try:
+        import dbus as _dbus
+        from dbus.mainloop.glib import DBusGMainLoop as _DBusGMainLoop
+        from gi.repository import GLib as _GLib
+    except ImportError as e:
+        sys.exit(f"--bt-mac on Linux needs the D-Bus/GLib bindings (missing: {e.name or e}). "
+                 "Install them with: sudo apt install python3-dbus python3-gi  (Debian/Ubuntu), "
+                 "or run without --bt-mac so the gateway app reports calls over HTTP.")
+    dbus, DBusGMainLoop, GLib = _dbus, _DBusGMainLoop, _GLib
 
 try:
     from server.audio_bridge import AudioConversationBridge, ensure_audio_sinks
@@ -64,6 +81,42 @@ if IS_MAC:
         from mac_telephony import HfpBridgeClient
 
 MAX_TEXT = 500  # help-SMS message and resolution note limit
+
+SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+# Runtime data (events.jsonl, responders.json, last_call.json, latest_telemetry.json): KAAKA_DATA_DIR
+# or the server directory, so a service or container can keep it on a volume.
+DEFAULT_DATA_DIR = os.environ.get("KAAKA_DATA_DIR") or SERVER_DIR
+
+
+def read_version():
+    """Release version from the VERSION file at the repository root ("unknown" if missing)."""
+    try:
+        with open(os.path.join(SERVER_DIR, "..", "VERSION"), "r", encoding="utf-8") as f:
+            return f.read().strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+VERSION = read_version()
+
+# Sent with every HTTP response. Cache-Control: no-store is added for /admin and /api/* (see DashboardHandler).
+SECURITY_HEADERS = (("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "no-referrer"), ("X-Frame-Options", "DENY"))
+
+
+def write_json_atomic(path, obj, indent=None):
+    """Write JSON to a temp file in the same directory and rename it over `path`, so a crash
+    or a concurrent reader never sees a half-written file."""
+    fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", suffix=".tmp", dir=os.path.dirname(path) or ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=indent)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 CSV_COLUMNS = ["number", "status", "first_seen", "last_seen", "calls", "help_sms", "alerts", "latest_lat", "latest_lon",
                "acknowledged_by", "acknowledged_at", "resolved_by", "resolved_at", "resolved_note"]
@@ -208,6 +261,21 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         # Suppress routine HTTP request logging to keep console clean
         pass
 
+    def send_header(self, keyword, value):
+        if keyword.lower() == "cache-control":
+            self._cache_control_sent = True
+        super().send_header(keyword, value)
+
+    def end_headers(self):
+        """Security headers on every response; no caching of the dashboard and API (they carry caller data)."""
+        for name, value in SECURITY_HEADERS:
+            super().send_header(name, value)
+        path = urlparse(self.path).path if self.path else ""
+        if not getattr(self, "_cache_control_sent", False) and (path == "/admin" or path.startswith("/api/")):
+            super().send_header("Cache-Control", "no-store")
+        self._cache_control_sent = False
+        super().end_headers()
+
     def send_json(self, status, obj):
         body = json.dumps(obj).encode("utf-8")
         self.send_response(status)
@@ -297,6 +365,12 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         if path in ("/", "/index.html"):
             self.serve_landing_page()  # public: what Kaaka is; the dashboard lives at /admin
             return
+        if path == "/api/health":
+            # Public liveness probe for load balancers / containers: nothing sensitive in here.
+            self.send_json(200, {"ok": True, "version": VERSION,
+                                 "uptime_seconds": int(time.time() - self.server_instance.started_epoch),
+                                 "gateway_online": self.server_instance.gateway_online()})
+            return
         if path == "/admin/":
             self.send_response(301)
             self.send_header("Location", "/admin" + (("?" + parsed.query) if parsed.query else ""))
@@ -381,7 +455,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             phone_clients = self.server_instance.phone_client_ips()
             bt_connected = self.server_instance.check_bluetooth_connected()
             telephony_ag_online = self.server_instance.check_telephony_ag_online()
-            gateway_online = (bt_connected and telephony_ag_online) or (len(phone_clients) > 0)
+            gateway_online = self.server_instance.gateway_online(phone_clients, bt_connected, telephony_ag_online)
             if not self.server_instance.bt_enabled:
                 gateway_mode = "gateway_app"
             else:
@@ -696,8 +770,13 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
 class TelemetryServer:
     def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="", client_number="", adb_serial="",
-                 admin_token="", public_url="", notify=True):
+                 admin_token="", public_url="", notify=True, data_dir=None, console=True):
         self.host = host
+        self.data_dir = os.path.abspath(data_dir or DEFAULT_DATA_DIR)
+        os.makedirs(self.data_dir, exist_ok=True)
+        # Interactive console (Enter = test call, "t" = test telemetry): off with --no-console or when stdin is not a TTY.
+        self.console_enabled = bool(console)
+        self.stop_event = None  # asyncio.Event set by SIGTERM/SIGINT for a clean shutdown
         # macOS notifications for new/reopened incidents, acks, resolutions and a silent gateway phone.
         self.notify_enabled = notify and IS_MAC
         self.started_epoch = time.time()
@@ -705,9 +784,9 @@ class TelemetryServer:
         # Optional KAAKA_ADMIN_TOKEN protects the dashboard and gateway endpoints (location links stay public).
         self.admin_token = admin_token
         self.public_url = public_url.rstrip("/")
-        self.incidents = IncidentStore(os.path.join(os.path.dirname(os.path.abspath(__file__)), "events.jsonl"))
-        # Responders (volunteers with a home position) for nearest-responder routing; server/responders.json.
-        self.responders = ResponderRegistry(os.path.join(os.path.dirname(os.path.abspath(__file__)), "responders.json"))
+        self.incidents = IncidentStore(os.path.join(self.data_dir, "events.jsonl"))
+        # Responders (volunteers with a home position) for nearest-responder routing; <data dir>/responders.json.
+        self.responders = ResponderRegistry(os.path.join(self.data_dir, "responders.json"))
         self.port = port
         self.http_port = http_port
         self.bt_mac = bt_mac
@@ -720,7 +799,7 @@ class TelemetryServer:
         self.loop = None
         self.telephony_service = "org.pipewire.Telephony"
         self.last_detected_number = None
-        self.last_call_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_call.json")
+        self.last_call_file = os.path.join(self.data_dir, "last_call.json")
         if os.path.exists(self.last_call_file):
             try:
                 with open(self.last_call_file, "r") as f:
@@ -729,7 +808,7 @@ class TelemetryServer:
                 pass
         self.last_call_time = 0
         self.last_call_number = None
-        self.telemetry_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "latest_telemetry.json")
+        self.telemetry_file = os.path.join(self.data_dir, "latest_telemetry.json")
         self.latest_telemetry = None
         self.telemetry_count = 0
         if os.path.exists(self.telemetry_file):
@@ -753,6 +832,8 @@ class TelemetryServer:
         self.audio_bridge = AudioConversationBridge(on_event=self.on_audio_bridge_event)
         # Without --bt-mac the phone's gateway app handles calls and reports them via /api/call-event.
         self.bt_enabled = bool(bt_mac)
+        if self.bt_enabled and not IS_MAC:
+            load_linux_dbus()
         self.last_gateway_event = None
         self.last_heartbeat = None  # latest POST /api/heartbeat from the gateway phone
         self.location_last_accepted = {}  # token -> epoch of the last accepted /api/location update
@@ -867,8 +948,7 @@ class TelemetryServer:
             "update_count": self.telemetry_count
         }
         try:
-            with open(self.telemetry_file, "w") as f:
-                json.dump(self.latest_telemetry, f, indent=2)
+            write_json_atomic(self.telemetry_file, self.latest_telemetry, indent=2)
         except Exception:
             pass
 
@@ -940,8 +1020,7 @@ class TelemetryServer:
         """Remember the last real caller across restarts (server/last_call.json, not committed)."""
         self.last_detected_number = number
         try:
-            with open(self.last_call_file, "w") as f:
-                json.dump({"number": number, "name": str(name), "timestamp": format_timestamp()}, f)
+            write_json_atomic(self.last_call_file, {"number": number, "name": str(name), "timestamp": format_timestamp()})
         except Exception:
             pass
 
@@ -1091,6 +1170,16 @@ class TelemetryServer:
             asyncio.run_coroutine_threadsafe(self.broadcast({"type": "GATEWAY_HEARTBEAT", **self.last_heartbeat}), self.loop)
         self.check_gateway_stale()
 
+    def gateway_online(self, phone_clients=None, bt_connected=None, telephony_ag_online=None) -> bool:
+        """A gateway phone is reachable: Bluetooth handsfree + telephony up, or a phone app on the WebSocket."""
+        if phone_clients is None:
+            phone_clients = self.phone_client_ips()
+        if bt_connected is None:
+            bt_connected = self.check_bluetooth_connected()
+        if telephony_ag_online is None:
+            telephony_ag_online = self.check_telephony_ag_online()
+        return bool((bt_connected and telephony_ag_online) or len(phone_clients) > 0)
+
     def is_local_ip(self, ip) -> bool:
         """Connections from this machine (e.g. the dashboard in a local browser) are not phones."""
         return ip in ("127.0.0.1", "::1", self.local_ip)
@@ -1182,6 +1271,9 @@ class TelemetryServer:
 
         def _answer():
             time.sleep(0.5)  # 500ms allows 1 ring setup and caller ID capture
+            if dbus is None:
+                print(f"[{format_timestamp()}] ℹ️ Simulated call test (no Bluetooth telephony: --bt-mac not set). Nothing to answer.")
+                return
             bus = dbus.SessionBus()
             answered = False
 
@@ -1239,6 +1331,9 @@ class TelemetryServer:
 
         def _hangup():
             time.sleep(0.4)  # 400ms allows 1 clean ring and caller ID capture
+            if dbus is None:
+                print(f"[{format_timestamp()}] ℹ️ Hangup skipped (no Bluetooth telephony: --bt-mac not set).")
+                return
             bus = dbus.SessionBus()
             hung_up = False
 
@@ -1305,8 +1400,8 @@ class TelemetryServer:
 
     def push_sms_via_bluetooth_map(self, target_number: str, message_text: str = "received call. will get back to you shortly."):
         """Pushes an SMS directly to Phone A via BlueZ MAP to send over cellular SIM."""
-        if IS_MAC:
-            return  # No MAP client on macOS; the Gateway app sends the SMS on CALL_DETECTED.
+        if IS_MAC or dbus is None:
+            return  # No MAP client on macOS / without --bt-mac; the Gateway app sends the SMS on CALL_DETECTED.
         try:
             bus = dbus.SessionBus()
             if not self.map_session_path:
@@ -1637,27 +1732,47 @@ class TelemetryServer:
         glib_loop = GLib.MainLoop()
         glib_loop.run()
 
-    def run_http_server(self):
-        """Runs the standalone Dashboard HTTP Server in a daemon thread."""
+    def make_http_server(self):
+        """The dashboard HTTP server bound to (host, http_port); http_port 0 picks a free port (tests)."""
         server_inst = self
         class BoundHandler(DashboardHandler):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, server_instance=server_inst, **kwargs)
 
         socketserver.ThreadingTCPServer.allow_reuse_address = True
+        httpd = socketserver.ThreadingTCPServer((self.host, self.http_port), BoundHandler)
+        httpd.daemon_threads = True
+        self.http_port = httpd.server_address[1]
+        return httpd
+
+    def run_http_server(self):
+        """Runs the standalone Dashboard HTTP Server in a daemon thread."""
         try:
-            httpd = socketserver.ThreadingTCPServer((self.host, self.http_port), BoundHandler)
+            httpd = self.make_http_server()
             print(f"[{format_timestamp()}] 🖥️ Web Dashboard UI active: \033[1;32mhttp://{self.local_ip}:{self.http_port}/admin\033[0m (landing page at /)")
             httpd.serve_forever()
         except Exception as e:
             print(f"[{format_timestamp()}] HTTP server error: {e}")
+
+    def console_available(self) -> bool:
+        """The interactive console needs a real terminal on stdin (not a service, pipe or /dev/null)."""
+        if not self.console_enabled:
+            return False
+        try:
+            return sys.stdin is not None and sys.stdin.isatty()
+        except (AttributeError, ValueError):
+            return False
 
     async def console_trigger_loop(self):
         """Allows testing in terminal: press Enter to test call, or type 't' to test telemetry."""
         loop = asyncio.get_event_loop()
         reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(reader)
-        await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+        try:
+            await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+        except Exception as e:
+            print(f"[{format_timestamp()}] ℹ️ Console disabled (stdin not readable: {e})", flush=True)
+            return
 
         try:
             while True:
@@ -1810,15 +1925,35 @@ class TelemetryServer:
         print(f"  🔒 Admin token     : \033[1;36m{'on' if self.admin_token else 'off'}\033[0m")
         print(f"  🔔 Notifications   : \033[1;36m{'on (macOS)' if self.notify_enabled else 'off'}\033[0m")
         print("=" * 65)
+        print(f"  📁 Data directory  : \033[1;36m{self.data_dir}\033[0m")
+        print("=" * 65)
         print("  💡 Tip: Open /admin in a browser for the dashboard and live sensors.")
-        print("  💡 Tip: Press [Enter] to simulate a call test.")
-        print("  💡 Tip: Type 't' + [Enter] to simulate sensor telemetry display.")
+        console = self.console_available()
+        if console:
+            print("  💡 Tip: Press [Enter] to simulate a call test.")
+            print("  💡 Tip: Type 't' + [Enter] to simulate sensor telemetry display.")
+        else:
+            print("  ℹ️ Console off (--no-console or stdin is not a terminal); use POST /api/trigger-call to test.")
         print("=" * 65 + "\n", flush=True)
 
+        self.stop_event = asyncio.Event()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                self.loop.add_signal_handler(sig, self.request_stop, sig)
+            except (NotImplementedError, RuntimeError, ValueError):
+                pass  # not supported on this platform/thread: KeyboardInterrupt still stops the server
         async with websockets.serve(self.handle_client, self.host, self.port, process_request=self.ws_process_request):
-            asyncio.create_task(self.console_trigger_loop())
+            if console:
+                asyncio.create_task(self.console_trigger_loop())
             asyncio.create_task(self.stale_monitor())
-            await asyncio.Future()  # run forever
+            await self.stop_event.wait()  # run until SIGTERM / Ctrl-C
+
+    def request_stop(self, sig=None):
+        """Signal handler (event-loop thread): stop the WebSocket server; the daemon threads exit with the process."""
+        if self.stop_event and not self.stop_event.is_set():
+            name = signal.Signals(sig).name if sig is not None else "stop"
+            print(f"\n[{format_timestamp()}] {name} received, shutting down...", flush=True)
+            self.stop_event.set()
 
 def main():
     parser = argparse.ArgumentParser(description="Kaaka Bluetooth Call & Telemetry Server")
@@ -1830,6 +1965,10 @@ def main():
     parser.add_argument("--adb-serial", default=os.environ.get("KAAKA_ADB_SERIAL", ""), help="adb serial of the phone to read SMS from (or KAAKA_ADB_SERIAL); optional")
     parser.add_argument("--public-url", default=os.environ.get("KAAKA_PUBLIC_URL", ""), help="Public https URL of this server (or KAAKA_PUBLIC_URL); shown for reference, the gateway app builds the links")
     parser.add_argument("--no-notify", action="store_true", help="Disable macOS notifications (or KAAKA_NOTIFY=0)")
+    parser.add_argument("--no-console", action="store_true",
+                        help="Disable the interactive console (also off automatically when stdin is not a terminal, or KAAKA_CONSOLE=0)")
+    parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR,
+                        help="Directory for events.jsonl, responders.json and other runtime data (or KAAKA_DATA_DIR; default: the server directory)")
     parser.add_argument("--allow-unprotected-public", action="store_true",
                         help="Allow a public URL without KAAKA_ADMIN_TOKEN (not recommended)")
     args = parser.parse_args()
@@ -1842,11 +1981,14 @@ def main():
     server = TelemetryServer(host=args.host, port=args.port, http_port=args.http_port, bt_mac=args.bt_mac,
                              client_number=args.client_number, adb_serial=args.adb_serial,
                              admin_token=os.environ.get("KAAKA_ADMIN_TOKEN", ""), public_url=args.public_url,
-                             notify=not args.no_notify and os.environ.get("KAAKA_NOTIFY", "1") != "0")
+                             notify=not args.no_notify and os.environ.get("KAAKA_NOTIFY", "1") != "0",
+                             data_dir=args.data_dir,
+                             console=not args.no_console and os.environ.get("KAAKA_CONSOLE", "1") != "0")
     try:
         asyncio.run(server.start())
     except KeyboardInterrupt:
-        print("\nServer stopped.")
+        pass
+    print("Server stopped.", flush=True)
 
 if __name__ == "__main__":
     main()
