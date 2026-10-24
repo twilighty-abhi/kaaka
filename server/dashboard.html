@@ -543,6 +543,44 @@
     .bar-row:hover .bar-fill, .bar-row:focus .bar-fill { filter: brightness(1.25); }
     .bar-row:focus { outline: 1px solid var(--border-strong); }
 
+    /* Pages (hash navigation) */
+    .page-nav { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .page-nav a {
+      font-size: 0.78rem; font-weight: 500; color: var(--text-mid); text-decoration: none;
+      padding: 0.35rem 0.7rem; border: 1px solid var(--border-mid); background: var(--bg-panel);
+    }
+    .page-nav a:hover { border-color: var(--border-active); color: var(--text-bright); }
+    .page-nav a[aria-current="page"] { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); font-weight: 600; }
+    .page-nav .nav-count:empty { display: none; }
+    .page { display: flex; flex-direction: column; gap: 1.25rem; }
+    .page:not(.active) { display: none; }
+    .map-slot { display: flex; flex-direction: column; }
+    .history-list { max-height: none; overflow: visible; }
+    #history-form select, #history-form input[type="date"] {
+      font: inherit; font-size: 0.74rem; padding: 0.3rem 0.4rem;
+      background: var(--bg-input); color: var(--text-bright); border: 1px solid var(--border-mid); color-scheme: dark;
+    }
+    .incident-item a.incident-link { color: var(--text-bright); font-weight: 600; text-decoration: none; }
+    .incident-item a.incident-link:hover { text-decoration: underline; }
+    .timeline { list-style: none; display: flex; flex-direction: column; gap: 0.3rem; max-height: 420px; overflow-y: auto; }
+    .timeline li {
+      display: grid; grid-template-columns: 8.4rem 1fr; gap: 0.5rem; font-size: 0.72rem;
+      padding: 0.35rem 0.5rem; background: var(--bg-box); border: 1px solid var(--border-dim);
+      border-left-width: 3px; word-break: break-word;
+    }
+    .timeline li.contact { border-left-color: var(--border-active); }
+    .timeline li.response { border-left-color: #2bb3ff; }
+    .timeline li.closed { border-left-color: var(--ok, #4cc28a); }
+    .timeline .tl-time { color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .timeline a { color: var(--text-bright); }
+    #detail-map { height: 360px; background: var(--bg-box); border: 1px solid var(--border-dim); }
+    .responder-activity { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0.6rem; }
+    .ra-card { background: var(--bg-box); border: 1px solid var(--border-dim); padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.72rem; }
+    .ra-head { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; color: var(--text-bright); }
+    .ra-row { display: flex; justify-content: space-between; gap: 0.5rem; color: var(--text-mid); }
+    .ra-row a { color: var(--text-bright); }
+    .ra-row .stream-time { white-space: nowrap; flex-shrink: 0; }
+
     /* Footer */
     footer {
       max-width: 1200px;
@@ -577,238 +615,331 @@
     </div>
   </header>
 
-  <!-- Incidents: calls, alerts, shared locations and acknowledgements grouped by caller -->
-  <section class="panel" id="incidents-panel">
-    <div class="panel-label-row">
-      <span class="panel-label">// incidents</span>
-      <span class="incident-actions">
-        <span class="panel-meta" id="incidents-meta">loading…</span>
-        <button type="button" class="action-btn" id="hide-resolved-btn" onclick="toggleHideResolved()">[hide resolved]</button>
-        <a class="action-btn" id="csv-link" href="/api/incidents.csv" download>[download csv]</a>
-      </span>
-    </div>
-    <div class="incident-list" id="incident-list">
-      <div class="stream-item"><span>no incidents yet</span></div>
-    </div>
-  </section>
+  <!-- Pages (hash navigation: #live, #history, #analytics, #responders, #system, #incident/<key>) -->
+  <nav class="page-nav" id="page-nav" aria-label="pages">
+    <a href="#live" data-page="live">live <span class="nav-count" id="nav-live"></span></a>
+    <a href="#history" data-page="history">history <span class="nav-count" id="nav-history"></span></a>
+    <a href="#analytics" data-page="analytics">analytics</a>
+    <a href="#responders" data-page="responders">responders <span class="nav-count" id="nav-responders"></span></a>
+    <a href="#system" data-page="system">system</a>
+  </nav>
 
-  <!-- Analytics (GET /api/analytics): one range filter scopes every tile, chart and table below it -->
-  <section class="panel analytics" id="analytics-panel">
-    <div class="panel-label-row">
-      <span class="panel-label">// analytics</span>
-      <span class="panel-meta" id="analytics-meta">loading…</span>
-    </div>
-    <div class="viz-filters" role="group" aria-label="time range">
-      <button type="button" class="action-btn" data-range="24h" aria-pressed="false">[24h]</button>
-      <button type="button" class="action-btn" data-range="7d" aria-pressed="true">[7d]</button>
-      <button type="button" class="action-btn" data-range="30d" aria-pressed="false">[30d]</button>
-      <button type="button" class="action-btn" data-range="all" aria-pressed="false">[all]</button>
-    </div>
-    <div class="viz-body">
-      <div class="kpi-grid" id="kpi-grid"></div>
-    </div>
-    <div class="viz-body viz-grid">
-      <div class="viz-card" id="card-contacts">
-        <div class="viz-card-head">
-          <span class="viz-title" id="contacts-title">contacts per day by channel</span>
-          <button type="button" class="action-btn" data-table-toggle="contacts">[table]</button>
-        </div>
-        <div class="viz-legend" id="contacts-legend"></div>
-        <div class="viz-chart" id="contacts-chart"></div>
-        <div class="viz-table-wrap" id="contacts-table" hidden></div>
-      </div>
-      <div class="viz-card" id="card-hours">
-        <div class="viz-card-head">
-          <span class="viz-title">contacts by hour of day</span>
-          <button type="button" class="action-btn" data-table-toggle="hours">[table]</button>
-        </div>
-        <div class="viz-chart" id="hours-chart"></div>
-        <div class="viz-table-wrap" id="hours-table" hidden></div>
-      </div>
-    </div>
-    <div class="viz-body viz-grid">
-      <div class="viz-card" id="card-outcomes">
-        <div class="viz-card-head">
-          <span class="viz-title">incident outcomes</span>
-          <button type="button" class="action-btn" data-table-toggle="outcomes">[table]</button>
-        </div>
-        <div class="bar-list" id="outcomes-chart"></div>
-        <div class="viz-table-wrap" id="outcomes-table" hidden></div>
-      </div>
-      <div class="viz-card" id="card-responders">
-        <div class="viz-card-head">
-          <span class="viz-title">responder leaderboard</span>
-          <span class="viz-note">acks matched by number</span>
-        </div>
-        <div class="viz-table-wrap" id="leaderboard"></div>
-      </div>
-    </div>
-    <div class="viz-tooltip" id="viz-tooltip" role="tooltip"></div>
-  </section>
-
-  <!-- Map of incidents' latest locations (OpenStreetMap tiles; needs internet) -->
-  <section class="panel" id="map-panel">
-    <div class="panel-label-row">
-      <span class="panel-label">// incident map</span>
-      <span class="incident-actions">
-        <span class="panel-meta map-message" id="map-message">loading map…</span>
-        <span class="panel-meta" id="hotspot-meta" hidden></span>
-        <button type="button" class="action-btn" id="hotspot-btn" aria-pressed="false" onclick="toggleHotspots()">[hotspots: off]</button>
-      </span>
-    </div>
-    <div id="incident-map"></div>
-  </section>
-
-  <!-- Responders: volunteers with a home position; the server dispatches the nearest ones to each incident -->
-  <section class="panel" id="responders-panel">
-    <div class="panel-label-row">
-      <span class="panel-label">// responders</span>
-      <span class="panel-meta" id="responders-meta">none registered</span>
-    </div>
-    <div class="responder-list" id="responder-list"></div>
-    <form class="responder-form" id="responder-form" onsubmit="addResponder(event)">
-      <input id="resp-name" placeholder="name" maxlength="80" required>
-      <input id="resp-number" placeholder="+91XXXXXXXXXX" required>
-      <input id="resp-coords" placeholder="lat, lon" required>
-      <button type="button" class="action-btn" id="pick-btn" onclick="togglePick()">[pick on map]</button>
-      <button type="submit" class="action-btn">[add responder]</button>
-    </form>
-  </section>
-
-  <!-- Emergency Alert Priority Section -->
-  <section class="panel" id="alert-panel">
-    <div class="panel-label-row">
-      <div style="display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap;">
-        <span class="panel-label">// emergency alert payload</span>
-        <span class="status-tag" id="beacon-loop-tag">beacon: [standby]</span>
-        <span class="panel-meta" id="alert-count-meta">updates: [0]</span>
-      </div>
-      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-        <span class="panel-meta" id="alert-source-meta">source: [waiting for alert]</span>
-        <span class="panel-meta" id="alert-time-meta"></span>
-        <span class="panel-meta" id="alert-age-meta" style="color: var(--text-bright); font-weight: 500;"></span>
-        <button type="button" class="action-btn" onclick="copyAlertText()">[copy payload]</button>
-      </div>
-    </div>
-
-    <div class="alert-terminal-box" id="raw-telemetry-box">kaaka alert: standby mode
-
-awaiting emergency trigger from client or gateway...</div>
-  </section>
-
-  <!-- Live 5-Sensor Telemetry Grid -->
-  <section class="panel">
-    <div class="panel-label-row">
-      <span class="panel-label">// live sensor & gps telemetry</span>
-      <span class="panel-meta">precision hardware readouts</span>
-    </div>
-
-    <div class="sensor-grid">
-      <!-- 1. Pedometer -->
-      <div class="sensor-tile">
-        <span class="tile-label">// 01 pedometer</span>
-        <div class="tile-val-row">
-          <span class="tile-value" id="val-steps">0</span>
-          <span class="tile-unit">steps</span>
-        </div>
-        <span class="tile-sub" id="val-distance">dist: 0.00 km</span>
-      </div>
-
-      <!-- 2. Ambient Light -->
-      <div class="sensor-tile">
-        <span class="tile-label">// 02 light meter</span>
-        <div class="tile-val-row">
-          <span class="tile-value" id="val-lux">0</span>
-          <span class="tile-unit">lx</span>
-        </div>
-        <span class="tile-sub" id="val-light-state">ambient lux</span>
-      </div>
-
-      <!-- 3. Accelerometer -->
-      <div class="sensor-tile">
-        <span class="tile-label">// 03 accelerometer</span>
-        <div class="tile-val-row">
-          <span class="tile-value" id="val-accel">0.0</span>
-          <span class="tile-unit">m/s²</span>
-        </div>
-        <span class="tile-sub">magnitude vector</span>
-      </div>
-
-      <!-- 4. Gyroscope -->
-      <div class="sensor-tile">
-        <span class="tile-label">// 04 gyroscope</span>
-        <div class="tile-val-row">
-          <span class="tile-value" id="val-gyro">0.0</span>
-          <span class="tile-unit">rad/s</span>
-        </div>
-        <span class="tile-sub">angular rotation</span>
-      </div>
-
-      <!-- 5. Magnetometer & Compass -->
-      <div class="sensor-tile">
-        <span class="tile-label">// 05 magnetometer</span>
-        <div class="compass-display">
-          <div class="compass-ring">
-            <div class="compass-pointer" id="compass-needle"></div>
-          </div>
-          <div>
-            <div class="tile-val-row">
-              <span class="tile-value" id="val-heading">0</span>
-              <span class="tile-unit">°</span>
-              <span class="tile-unit" id="val-cardinal">N</span>
-            </div>
-            <span class="tile-sub">azimuth bearing</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 6. GPS Location Coords -->
-      <div class="sensor-tile">
-        <span class="tile-label">// 06 gps coordinates</span>
-        <div class="tile-val-row" style="margin-top: 0.2rem;">
-          <span class="tile-value" id="val-coords" style="font-size: 1.05rem; letter-spacing: -0.5px;">—</span>
-        </div>
-        <span class="tile-sub">
-          <a id="link-maps" href="#" target="_blank" style="color: var(--brutal-yellow); text-decoration: underline;">view in maps ↗</a>
+  <div class="page" data-page="live">
+    <!-- Live incidents (open or acknowledged): calls, alerts, shared locations and acknowledgements grouped by caller -->
+    <section class="panel" id="incidents-panel">
+      <div class="panel-label-row">
+        <span class="panel-label">// live incidents</span>
+        <span class="incident-actions">
+          <span class="panel-meta" id="incidents-meta">loading…</span>
+          <a class="action-btn" href="#history">[resolved &amp; past → history]</a>
         </span>
       </div>
-    </div>
-  </section>
+      <div class="incident-list" id="incident-list">
+        <div class="stream-item"><span>no incidents yet</span></div>
+      </div>
+    </section>
 
-  <!-- Real-Time AI Audio Conversation Bridge (10s Audio Loop) -->
-  <section class="panel" id="audio-bridge-panel">
-    <div class="panel-label-row">
-      <div style="display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap;">
-        <span class="panel-label">// real-time ai voice conversation</span>
-        <span class="status-tag" id="audio-bridge-tag">bridge: [standby]</span>
-        <span class="panel-meta" id="audio-chunks-meta">chunks: [0]</span>
-        <span class="status-tag active" id="call-mode-tag">mode: [auto-answer]</span>
-      </div>
-      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-        <span class="panel-meta" id="audio-status-meta">status: [idle]</span>
-        <button type="button" class="action-btn solid" id="audio-toggle-btn" onclick="toggleAudioBridge()">[start ai audio loop]</button>
-        <button type="button" class="action-btn" id="call-mode-btn" onclick="toggleCallMode()">[switch to 1-ring mode]</button>
-      </div>
+    <div class="map-slot" id="map-slot-live">
+      <!-- Map of incidents' latest locations (OpenStreetMap tiles; needs internet) -->
+      <section class="panel" id="map-panel">
+        <div class="panel-label-row">
+          <span class="panel-label">// incident map</span>
+          <span class="incident-actions">
+            <span class="panel-meta map-message" id="map-message">loading map…</span>
+            <span class="panel-meta" id="hotspot-meta" hidden></span>
+            <button type="button" class="action-btn" id="hotspot-btn" aria-pressed="false" onclick="toggleHotspots()">[hotspots: off]</button>
+          </span>
+        </div>
+        <div id="incident-map"></div>
+      </section>
     </div>
 
-    <div class="key-value-list" style="margin-bottom: 0.25rem;">
-      <div class="kv-item">
-        <span class="kv-key">webhook target</span>
-        <span class="kv-val" id="webhook-url">not configured</span>
+    <!-- Activity Stream -->
+    <section class="panel">
+      <div class="panel-label-row">
+        <span class="panel-label">// system activity log</span>
+        <span class="panel-meta">realtime event stream</span>
       </div>
-      <div class="kv-item">
-        <span class="kv-key">pipeline</span>
-        <span class="kv-val">10s chunk &bull; ffmpeg mp3 &bull; multipart post &bull; laptop &amp; caller playback</span>
-      </div>
-      <div class="kv-item">
-        <span class="kv-key">latest ai voice reply</span>
-        <span class="kv-val" id="latest-ai-reply" style="color: #6ee7b7; font-weight: 500;">none yet</span>
-      </div>
-    </div>
-  </section>
 
-  <!-- Lower Section: Controls & Telephony + Stream -->
-  <div class="grid-2col">
+      <div class="stream-list" id="feed-list">
+        <div class="stream-item">
+          <span>system initialized • waiting for events</span>
+          <span class="stream-time">boot</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="page" data-page="history">
+    <!-- History: resolved and older incidents with search, outcome/date filters, paging and CSV -->
+    <section class="panel" id="history-panel">
+      <div class="panel-label-row">
+        <span class="panel-label">// incident history</span>
+        <span class="incident-actions">
+          <span class="panel-meta" id="history-meta">loading…</span>
+          <a class="action-btn" id="history-csv" href="/api/incidents.csv?status=resolved" download>[download csv]</a>
+        </span>
+      </div>
+      <form class="responder-form" id="history-form" onsubmit="event.preventDefault(); loadHistory(true);">
+        <input id="history-q" placeholder="phone number digits" maxlength="40" inputmode="tel" aria-label="search by phone number">
+        <select id="history-outcome" aria-label="outcome">
+          <option value="resolved">all resolved</option>
+          <option value="resolved_by_responder">resolved by responder</option>
+          <option value="closed_by_caller">closed by caller (safe)</option>
+          <option value="all">all incidents (incl. open)</option>
+        </select>
+        <label class="panel-meta">from <input type="date" id="history-from"></label>
+        <label class="panel-meta">to <input type="date" id="history-to"></label>
+        <button type="submit" class="action-btn">[search]</button>
+        <button type="button" class="action-btn" onclick="resetHistory()">[reset]</button>
+      </form>
+      <div class="incident-list history-list" id="history-list"></div>
+      <button type="button" class="action-btn" id="history-more" onclick="loadHistory(false)" hidden>[load more]</button>
+    </section>
+  </div>
+
+  <div class="page" data-page="incident">
+    <!-- Incident detail (#incident/<key>): full timeline, trail map, resolve -->
+    <section class="panel" id="detail-panel">
+      <div class="panel-label-row">
+        <span class="panel-label" id="detail-title">// incident</span>
+        <span class="incident-actions">
+          <span class="panel-meta" id="detail-meta"></span>
+          <button type="button" class="action-btn" onclick="history.length > 1 ? history.back() : (location.hash = '#live')">[← back]</button>
+        </span>
+      </div>
+      <div id="detail-summary"></div>
+      <div class="grid-2col detail-grid">
+        <div>
+          <div class="panel-meta" style="margin-bottom: 0.4rem;">timeline (server time, oldest first)</div>
+          <ol class="timeline" id="detail-timeline"></ol>
+        </div>
+        <div>
+          <div class="panel-meta map-message" id="detail-map-message" style="margin-bottom: 0.4rem;">trail</div>
+          <div id="detail-map"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="page" data-page="analytics">
+    <!-- Analytics (GET /api/analytics): one range filter scopes every tile, chart and table below it -->
+    <section class="panel analytics" id="analytics-panel">
+      <div class="panel-label-row">
+        <span class="panel-label">// analytics</span>
+        <span class="panel-meta" id="analytics-meta">loading…</span>
+      </div>
+      <div class="viz-filters" role="group" aria-label="time range">
+        <button type="button" class="action-btn" data-range="24h" aria-pressed="false">[24h]</button>
+        <button type="button" class="action-btn" data-range="7d" aria-pressed="true">[7d]</button>
+        <button type="button" class="action-btn" data-range="30d" aria-pressed="false">[30d]</button>
+        <button type="button" class="action-btn" data-range="all" aria-pressed="false">[all]</button>
+      </div>
+      <div class="viz-body">
+        <div class="kpi-grid" id="kpi-grid"></div>
+      </div>
+      <div class="viz-body viz-grid">
+        <div class="viz-card" id="card-contacts">
+          <div class="viz-card-head">
+            <span class="viz-title" id="contacts-title">contacts per day by channel</span>
+            <button type="button" class="action-btn" data-table-toggle="contacts">[table]</button>
+          </div>
+          <div class="viz-legend" id="contacts-legend"></div>
+          <div class="viz-chart" id="contacts-chart"></div>
+          <div class="viz-table-wrap" id="contacts-table" hidden></div>
+        </div>
+        <div class="viz-card" id="card-hours">
+          <div class="viz-card-head">
+            <span class="viz-title">contacts by hour of day</span>
+            <button type="button" class="action-btn" data-table-toggle="hours">[table]</button>
+          </div>
+          <div class="viz-chart" id="hours-chart"></div>
+          <div class="viz-table-wrap" id="hours-table" hidden></div>
+        </div>
+      </div>
+      <div class="viz-body viz-grid">
+        <div class="viz-card" id="card-outcomes">
+          <div class="viz-card-head">
+            <span class="viz-title">incident outcomes</span>
+            <button type="button" class="action-btn" data-table-toggle="outcomes">[table]</button>
+          </div>
+          <div class="bar-list" id="outcomes-chart"></div>
+          <div class="viz-table-wrap" id="outcomes-table" hidden></div>
+        </div>
+        <div class="viz-card" id="card-responders">
+          <div class="viz-card-head">
+            <span class="viz-title">responder leaderboard</span>
+            <span class="viz-note">acks matched by number</span>
+          </div>
+          <div class="viz-table-wrap" id="leaderboard"></div>
+        </div>
+      </div>
+      <div class="viz-tooltip" id="viz-tooltip" role="tooltip"></div>
+    </section>
+  </div>
+
+  <div class="page" data-page="responders">
+    <!-- Responders: volunteers with a home position; the server dispatches the nearest ones to each incident -->
+    <section class="panel" id="responders-panel">
+      <div class="panel-label-row">
+        <span class="panel-label">// responders</span>
+        <span class="panel-meta" id="responders-meta">none registered</span>
+      </div>
+      <div class="responder-list" id="responder-list"></div>
+      <form class="responder-form" id="responder-form" onsubmit="addResponder(event)">
+        <input id="resp-name" placeholder="name" maxlength="80" required>
+        <input id="resp-number" placeholder="+91XXXXXXXXXX" required>
+        <input id="resp-coords" placeholder="lat, lon" required>
+        <button type="button" class="action-btn" id="pick-btn" onclick="togglePick()">[pick on map]</button>
+        <button type="submit" class="action-btn">[add responder]</button>
+      </form>
+    </section>
+
+    <div class="map-slot" id="map-slot-responders"></div>
+
+    <!-- Each responder's dispatches and ACKs (GET /api/responders/activity) -->
+    <section class="panel" id="responder-activity-panel">
+      <div class="panel-label-row">
+        <span class="panel-label">// dispatch &amp; ack history</span>
+        <span class="panel-meta" id="responder-activity-meta">loading…</span>
+      </div>
+      <div class="responder-activity" id="responder-activity"></div>
+    </section>
+  </div>
+
+  <div class="page" data-page="system">
+    <!-- Emergency Alert Priority Section -->
+    <section class="panel" id="alert-panel">
+      <div class="panel-label-row">
+        <div style="display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap;">
+          <span class="panel-label">// emergency alert payload</span>
+          <span class="status-tag" id="beacon-loop-tag">beacon: [standby]</span>
+          <span class="panel-meta" id="alert-count-meta">updates: [0]</span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <span class="panel-meta" id="alert-source-meta">source: [waiting for alert]</span>
+          <span class="panel-meta" id="alert-time-meta"></span>
+          <span class="panel-meta" id="alert-age-meta" style="color: var(--text-bright); font-weight: 500;"></span>
+          <button type="button" class="action-btn" onclick="copyAlertText()">[copy payload]</button>
+        </div>
+      </div>
+
+      <div class="alert-terminal-box" id="raw-telemetry-box">kaaka alert: standby mode
+
+  awaiting emergency trigger from client or gateway...</div>
+    </section>
+
+    <!-- Live 5-Sensor Telemetry Grid -->
+    <section class="panel">
+      <div class="panel-label-row">
+        <span class="panel-label">// live sensor & gps telemetry</span>
+        <span class="panel-meta">precision hardware readouts</span>
+      </div>
+
+      <div class="sensor-grid">
+        <!-- 1. Pedometer -->
+        <div class="sensor-tile">
+          <span class="tile-label">// 01 pedometer</span>
+          <div class="tile-val-row">
+            <span class="tile-value" id="val-steps">0</span>
+            <span class="tile-unit">steps</span>
+          </div>
+          <span class="tile-sub" id="val-distance">dist: 0.00 km</span>
+        </div>
+
+        <!-- 2. Ambient Light -->
+        <div class="sensor-tile">
+          <span class="tile-label">// 02 light meter</span>
+          <div class="tile-val-row">
+            <span class="tile-value" id="val-lux">0</span>
+            <span class="tile-unit">lx</span>
+          </div>
+          <span class="tile-sub" id="val-light-state">ambient lux</span>
+        </div>
+
+        <!-- 3. Accelerometer -->
+        <div class="sensor-tile">
+          <span class="tile-label">// 03 accelerometer</span>
+          <div class="tile-val-row">
+            <span class="tile-value" id="val-accel">0.0</span>
+            <span class="tile-unit">m/s²</span>
+          </div>
+          <span class="tile-sub">magnitude vector</span>
+        </div>
+
+        <!-- 4. Gyroscope -->
+        <div class="sensor-tile">
+          <span class="tile-label">// 04 gyroscope</span>
+          <div class="tile-val-row">
+            <span class="tile-value" id="val-gyro">0.0</span>
+            <span class="tile-unit">rad/s</span>
+          </div>
+          <span class="tile-sub">angular rotation</span>
+        </div>
+
+        <!-- 5. Magnetometer & Compass -->
+        <div class="sensor-tile">
+          <span class="tile-label">// 05 magnetometer</span>
+          <div class="compass-display">
+            <div class="compass-ring">
+              <div class="compass-pointer" id="compass-needle"></div>
+            </div>
+            <div>
+              <div class="tile-val-row">
+                <span class="tile-value" id="val-heading">0</span>
+                <span class="tile-unit">°</span>
+                <span class="tile-unit" id="val-cardinal">N</span>
+              </div>
+              <span class="tile-sub">azimuth bearing</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. GPS Location Coords -->
+        <div class="sensor-tile">
+          <span class="tile-label">// 06 gps coordinates</span>
+          <div class="tile-val-row" style="margin-top: 0.2rem;">
+            <span class="tile-value" id="val-coords" style="font-size: 1.05rem; letter-spacing: -0.5px;">—</span>
+          </div>
+          <span class="tile-sub">
+            <a id="link-maps" href="#" target="_blank" style="color: var(--brutal-yellow); text-decoration: underline;">view in maps ↗</a>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real-Time AI Audio Conversation Bridge (10s Audio Loop) -->
+    <section class="panel" id="audio-bridge-panel">
+      <div class="panel-label-row">
+        <div style="display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap;">
+          <span class="panel-label">// real-time ai voice conversation</span>
+          <span class="status-tag" id="audio-bridge-tag">bridge: [standby]</span>
+          <span class="panel-meta" id="audio-chunks-meta">chunks: [0]</span>
+          <span class="status-tag active" id="call-mode-tag">mode: [auto-answer]</span>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <span class="panel-meta" id="audio-status-meta">status: [idle]</span>
+          <button type="button" class="action-btn solid" id="audio-toggle-btn" onclick="toggleAudioBridge()">[start ai audio loop]</button>
+          <button type="button" class="action-btn" id="call-mode-btn" onclick="toggleCallMode()">[switch to 1-ring mode]</button>
+        </div>
+      </div>
+
+      <div class="key-value-list" style="margin-bottom: 0.25rem;">
+        <div class="kv-item">
+          <span class="kv-key">webhook target</span>
+          <span class="kv-val" id="webhook-url">not configured</span>
+        </div>
+        <div class="kv-item">
+          <span class="kv-key">pipeline</span>
+          <span class="kv-val">10s chunk &bull; ffmpeg mp3 &bull; multipart post &bull; laptop &amp; caller playback</span>
+        </div>
+        <div class="kv-item">
+          <span class="kv-key">latest ai voice reply</span>
+          <span class="kv-val" id="latest-ai-reply" style="color: #6ee7b7; font-weight: 500;">none yet</span>
+        </div>
+      </div>
+    </section>
+
     <!-- Telephony & Actions -->
     <section class="panel">
       <div class="panel-label-row">
@@ -845,21 +976,6 @@ awaiting emergency trigger from client or gateway...</div>
         <button type="button" class="action-btn" onclick="clearFeed()">
           [clear log]
         </button>
-      </div>
-    </section>
-
-    <!-- Activity Stream -->
-    <section class="panel">
-      <div class="panel-label-row">
-        <span class="panel-label">// system activity log</span>
-        <span class="panel-meta">realtime event stream</span>
-      </div>
-
-      <div class="stream-list" id="feed-list">
-        <div class="stream-item">
-          <span>system initialized • waiting for events</span>
-          <span class="stream-time">boot</span>
-        </div>
       </div>
     </section>
   </div>
@@ -1344,14 +1460,17 @@ awaiting emergency trigger from client or gateway...</div>
     return node;
   }
 
-  function renderIncident(inc) {
+  function renderIncident(inc, opts = {}) {
     const status = inc.status || (inc.acknowledged ? 'acknowledged' : 'open');
     const item = el('div', 'incident-item' + (status === 'open' ? ' awaiting' : '') + (status === 'resolved' ? ' resolved' : ''));
 
     const head = el('div', 'incident-head');
     const title = el('span', 'incident-actions');
     const badgeText = inc.closed_by_caller ? 'safe' : status;
-    title.append(el('span', 'badge ' + status + (inc.closed_by_caller ? ' safe' : ''), badgeText), el('span', '', inc.number || 'hidden number'));
+    const numberLink = el('a', 'incident-link', inc.number || 'hidden number');
+    numberLink.href = '#incident/' + encodeURIComponent(inc.key);
+    numberLink.title = 'open the incident timeline';
+    title.append(el('span', 'badge ' + status + (inc.closed_by_caller ? ' safe' : ''), badgeText), numberLink);
     head.append(title, el('span', 'incident-meta', 'last activity ' + inc.last_seen));
     item.append(head);
 
@@ -1383,13 +1502,14 @@ awaiting emergency trigger from client or gateway...</div>
     }
     item.append(locRow);
 
-    const nearest = (inc.nearest_responders || [])[0];
+    // Nearest responders matter only while the incident is still active.
+    const nearest = status === 'resolved' ? null : (inc.nearest_responders || [])[0];
     if (nearest) {
       const dispatchedNames = (inc.dispatched || []).map((d) => d.name).filter(Boolean);
       item.append(el('div', 'incident-nearest',
         'Nearest: ' + nearest.name + ' (' + nearest.distance_km + ' km, ~' + nearest.eta_min + ' min)' +
         (dispatchedNames.length ? ' · dispatched: ' + dispatchedNames.join(', ') : ' · not dispatched yet')));
-    } else if (loc) {
+    } else if (loc && status !== 'resolved') {
       item.append(el('div', 'incident-nearest', 'Nearest: no available responder registered'));
     }
 
@@ -1405,6 +1525,11 @@ awaiting emergency trigger from client or gateway...</div>
       state = 'awaiting acknowledgement';
     }
     footer.append(el('span', 'incident-ack', state));
+    if (!opts.noDetailsLink) {
+      const details = el('a', 'action-btn', '[timeline →]');
+      details.href = '#incident/' + encodeURIComponent(inc.key);
+      footer.append(details);
+    }
     if (status !== 'resolved' && inc.number && inc.number !== 'hidden') {
       const btn = el('button', 'action-btn', '[resolve]');
       btn.type = 'button';
@@ -1431,12 +1556,6 @@ awaiting emergency trigger from client or gateway...</div>
     refreshIncidents();
   }
 
-  let hideResolved = false;
-  function toggleHideResolved() {
-    hideResolved = !hideResolved;
-    document.getElementById('hide-resolved-btn').textContent = hideResolved ? '[show resolved]' : '[hide resolved]';
-    refreshIncidents();
-  }
 
   // Incident map (Leaflet + OpenStreetMap); degrades to a message when offline.
   let incidentMap = null;
@@ -1487,6 +1606,7 @@ awaiting emergency trigger from client or gateway...</div>
       list.append(item);
     });
     const available = responders.filter((r) => r.available).length;
+    document.getElementById('nav-responders').textContent = '(' + responders.length + ')';
     document.getElementById('responders-meta').textContent = responders.length
       ? responders.length + ' registered · ' + available + ' available' : 'none registered';
   }
@@ -1587,20 +1707,25 @@ awaiting emergency trigger from client or gateway...</div>
     if (points.length) incidentMap.fitBounds(points, { maxZoom: 15, padding: [30, 30] });
   }
 
+  // Live page: open and acknowledged incidents only; resolved ones are on the History page.
   async function refreshIncidents() {
     try {
-      const res = await api('/api/incidents');
+      const res = await api('/api/incidents?status=open&limit=500');
       if (!res.ok) return;
-      const incidents = (await res.json()).incidents || [];
-      const shown = hideResolved ? incidents.filter((inc) => inc.status !== 'resolved') : incidents;
+      const data = await res.json();
+      const incidents = data.incidents || [];
       const list = document.getElementById('incident-list');
       list.replaceChildren();
-      if (!shown.length) list.append(el('div', 'stream-item', 'no incidents' + (hideResolved ? ' (resolved hidden)' : ' yet')));
-      shown.forEach((inc) => list.append(renderIncident(inc)));
-      const open = incidents.filter((inc) => inc.status === 'open').length;
-      document.getElementById('incidents-meta').textContent = shown.length + ' shown · ' + open + ' open';
-      updateMap(shown);
+      if (!incidents.length) list.append(el('div', 'stream-item', 'no open incidents · resolved ones are under history'));
+      incidents.forEach((inc) => list.append(renderIncident(inc)));
+      const c = data.counts || {};
+      document.getElementById('incidents-meta').textContent = (c.open || 0) + ' awaiting ack · ' + (c.acknowledged || 0) + ' acknowledged';
+      document.getElementById('nav-live').textContent = '(' + data.total + ')';
+      document.getElementById('nav-history').textContent = '(' + (c.resolved || 0) + ')';
+      updateMap(incidents);
     } catch (e) {}
+    if (currentPage === 'incident' && currentIncidentKey) loadDetail(currentIncidentKey, true);
+    if (currentPage === 'responders') refreshResponderActivity();
   }
 
   // ---- Analytics (GET /api/analytics) --------------------------------------------------------
@@ -1722,7 +1847,7 @@ awaiting emergency trigger from client or gateway...</div>
       svg.append(t);
     }
     const cross = svgEl('line', { y1: m.t, y2: m.t + ph, stroke: 'var(--border-strong)', 'stroke-width': 1, visibility: 'hidden' });
-    svg.append(cross);
+    svg.insertBefore(cross, cols);  // behind the columns, so it never cuts through the hovered stack
     const hit = svgEl('rect', { x: m.l, y: m.t, width: pw, height: ph + m.b, fill: 'transparent' });
     svg.append(hit);
     let active = -1;
@@ -1963,10 +2088,241 @@ awaiting emergency trigger from client or gateway...</div>
     window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAnalytics, 150); });
   }
 
+  // ---- Pages: #live (default), #history, #analytics, #responders, #system, #incident/<key> ----------
+  const PAGES = ['live', 'history', 'analytics', 'responders', 'system', 'incident'];
+  let currentPage = null;
+  let currentIncidentKey = null;
+  let historyLoaded = false;
+
+  function route() {
+    const hash = decodeURIComponent(location.hash.replace(/^#/, ''));
+    let page = hash || 'live';
+    let key = null;
+    if (page.startsWith('incident/')) { key = page.slice('incident/'.length); page = 'incident'; }
+    if (!PAGES.includes(page) || (page === 'incident' && !key)) page = 'live';
+    const changed = page !== currentPage || key !== currentIncidentKey;
+    currentPage = page;
+    currentIncidentKey = key;
+    document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.dataset.page === page));
+    document.querySelectorAll('#page-nav a').forEach((a) => {
+      if (a.dataset.page === page) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    // One incident map, shown on Live and on Responders (for "pick on map").
+    const slot = document.getElementById(page === 'responders' ? 'map-slot-responders' : 'map-slot-live');
+    const mapPanel = document.getElementById('map-panel');
+    if (mapPanel.parentElement !== slot) slot.append(mapPanel);
+    if (incidentMap) setTimeout(() => incidentMap.invalidateSize(), 0);
+    if (page === 'history' && !historyLoaded) loadHistory(true);
+    if (page === 'analytics') renderAnalytics();  // charts size themselves to the now-visible width
+    if (page === 'responders') refreshResponderActivity();
+    if (page === 'incident') loadDetail(key, false);
+    if (changed) window.scrollTo(0, 0);
+    document.title = 'kaaka / ' + (page === 'incident' ? 'incident ' + key : page);
+  }
+
+  // History page: GET /api/incidents with filters, 20 at a time.
+  const HISTORY_PAGE = 20;
+  let historyOffset = 0;
+
+  function historyParams() {
+    const params = new URLSearchParams();
+    const outcome = document.getElementById('history-outcome').value;
+    params.set('status', outcome === 'all' ? 'all' : 'resolved');
+    if (outcome === 'resolved_by_responder' || outcome === 'closed_by_caller') params.set('outcome', outcome);
+    const q = document.getElementById('history-q').value.trim();
+    if (q) params.set('q', q);
+    const from = document.getElementById('history-from').value;
+    const to = document.getElementById('history-to').value;
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    return params;
+  }
+
+  async function loadHistory(reset) {
+    historyLoaded = true;
+    const list = document.getElementById('history-list');
+    const params = historyParams();
+    if (reset) historyOffset = 0;
+    const csv = new URLSearchParams(params);
+    if (adminToken) csv.set('token', adminToken);
+    document.getElementById('history-csv').href = '/api/incidents.csv?' + csv.toString();
+    params.set('limit', HISTORY_PAGE);
+    params.set('offset', historyOffset);
+    const meta = document.getElementById('history-meta');
+    try {
+      const res = await api('/api/incidents?' + params.toString());
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { meta.textContent = 'could not load: ' + (data.error || 'HTTP ' + res.status); return; }
+      if (reset) list.replaceChildren();
+      data.incidents.forEach((inc) => list.append(renderIncident(inc)));
+      historyOffset += data.incidents.length;
+      if (!data.total) list.replaceChildren(el('div', 'stream-item', 'no incidents match these filters'));
+      meta.textContent = 'showing ' + historyOffset + ' of ' + data.total + ' · newest first';
+      document.getElementById('history-more').hidden = historyOffset >= data.total;
+    } catch (e) {
+      meta.textContent = 'could not load history';
+    }
+  }
+
+  function resetHistory() {
+    document.getElementById('history-form').reset();
+    loadHistory(true);
+  }
+
+  // Incident detail page: GET /api/incidents/<key>
+  let detailMap = null;
+  let detailLayer = null;
+
+  // "2026-10-25 03:46:02" -> "10/25 03:46:02"
+  function shortTime(ts) {
+    return String(ts).slice(5, 10).replace('-', '/') + ' ' + String(ts).slice(11);
+  }
+
+  function coordsLink(lat, lon) {
+    const a = el('a', '', Number(lat).toFixed(5) + ', ' + Number(lon).toFixed(5));
+    a.href = 'https://maps.google.com/?q=' + Number(lat).toFixed(6) + ',' + Number(lon).toFixed(6);
+    a.target = '_blank';
+    a.rel = 'noopener';
+    return a;
+  }
+
+  function responderName(number) {
+    const key = String(number || '').replace(/\D/g, '').slice(-10);
+    const r = responders.find((x) => String(x.number).replace(/\D/g, '').slice(-10) === key && key);
+    return r ? r.name + ' (' + number + ')' : (number || 'a responder');
+  }
+
+  function timelineItem(t) {
+    const li = el('li');
+    const text = el('span');
+    const reply = { sent: 'auto-reply sent', failed: 'auto-reply FAILED', skipped: 'no auto-reply' };
+    let cls = 'contact';
+    if (t.kind === 'call' && t.state === 'sms') {
+      text.append('help sms' + (t.message ? ': “' + t.message + '”' : '') + ' — ' + (reply[t.sms] || t.sms));
+    } else if (t.kind === 'call') {
+      text.append('call ' + t.state + ' — ' + (reply[t.sms] || t.sms) + (t.location_link ? ' · location link sent' : ''));
+    } else if (t.kind === 'alert') {
+      text.append('app alert' + (t.source ? ' (' + t.source + ')' : ''));
+      if (t.lat != null) { text.append(' at '); text.append(coordsLink(t.lat, t.lon)); }
+      const firstLine = String(t.text || '').split('\n')[0];
+      if (firstLine) text.append(el('div', 'incident-meta', firstLine));
+    } else if (t.kind === 'location') {
+      text.append('location shared via link: ');
+      text.append(coordsLink(t.lat, t.lon));
+      if (t.accuracy != null) text.append(' ±' + Math.round(t.accuracy) + ' m');
+    } else if (t.kind === 'dispatch') {
+      cls = 'response';
+      text.append('dispatched: ' + (t.responders || []).map((r) => r.name + ' (' + r.distance_km + ' km, ~' + r.eta_min + ' min)').join(', '));
+    } else if (t.kind === 'ack') {
+      cls = 'response';
+      text.append('acknowledged by ' + responderName(t.responder));
+    } else if (t.kind === 'resolve') {
+      cls = 'closed';
+      text.append(t.by === 'caller' ? 'caller reported safe — incident closed' : 'resolved by ' + (t.by || 'someone') + (t.note ? ': ' + t.note : ''));
+    } else {
+      text.append(t.kind);
+    }
+    li.className = cls;
+    li.append(el('span', 'tl-time', shortTime(t.timestamp)), text);
+    return li;
+  }
+
+  async function loadDetail(key, quiet) {
+    const meta = document.getElementById('detail-meta');
+    if (!quiet) {
+      document.getElementById('detail-title').textContent = '// incident ' + key;
+      meta.textContent = 'loading…';
+    }
+    try {
+      const res = await api('/api/incidents/' + encodeURIComponent(key));
+      if (key !== currentIncidentKey) return;  // navigated away meanwhile
+      if (!res.ok) {
+        document.getElementById('detail-summary').replaceChildren(el('div', 'stream-item', res.status === 404 ? 'no incident for ' + key : 'could not load: HTTP ' + res.status));
+        document.getElementById('detail-timeline').replaceChildren();
+        meta.textContent = '';
+        return;
+      }
+      const inc = (await res.json()).incident;
+      document.getElementById('detail-title').textContent = '// incident ' + (inc.number || key);
+      meta.textContent = inc.timeline.length + ' events · first ' + inc.first_seen;
+      document.getElementById('detail-summary').replaceChildren(renderIncident(inc, { noDetailsLink: true }));
+      document.getElementById('detail-timeline').replaceChildren(...inc.timeline.map(timelineItem));
+      drawDetailMap(inc);
+    } catch (e) {
+      meta.textContent = 'could not load incident';
+    }
+  }
+
+  function drawDetailMap(inc) {
+    const message = document.getElementById('detail-map-message');
+    if (!window.L) { message.textContent = 'map unavailable: Leaflet could not load (needs internet)'; return; }
+    if (!detailMap) {
+      detailMap = L.map('detail-map').setView([10.0, 76.3], 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(detailMap);
+      detailLayer = L.layerGroup().addTo(detailMap);
+    }
+    detailMap.invalidateSize();
+    detailLayer.clearLayers();
+    const trail = inc.timeline.filter((t) => t.lat != null && t.lon != null).map((t) => [Number(t.lat), Number(t.lon)]);
+    if (!trail.length) { message.textContent = 'no location shared for this incident'; return; }
+    message.textContent = 'trail · ' + trail.length + ' position' + (trail.length === 1 ? '' : 's') + ', oldest → newest';
+    if (trail.length > 1) L.polyline(trail, { color: '#ff3b30', weight: 4, opacity: 0.85 }).addTo(detailLayer);
+    trail.forEach((pt, i) => L.circleMarker(pt, { radius: i === trail.length - 1 ? 7 : 4, color: '#ff3b30', fillOpacity: 1 }).addTo(detailLayer));
+    L.marker(trail[trail.length - 1]).addTo(detailLayer);
+    detailMap.fitBounds(trail, { maxZoom: 16, padding: [30, 30] });
+  }
+
+  // Responders page: each responder's dispatches and ACKs (GET /api/responders/activity).
+  async function refreshResponderActivity() {
+    const box = document.getElementById('responder-activity');
+    const meta = document.getElementById('responder-activity-meta');
+    try {
+      const res = await api('/api/responders/activity');
+      if (!res.ok) { meta.textContent = 'could not load: HTTP ' + res.status; return; }
+      const activity = (await res.json()).activity || [];
+      const key = (n) => String(n || '').replace(/\D/g, '').slice(-10) || String(n || '');
+      const groups = new Map();
+      responders.forEach((r) => groups.set(key(r.number), { name: r.name, number: r.number, items: [] }));
+      activity.forEach((a) => {
+        const k = key(a.responder_number);
+        if (!groups.has(k)) groups.set(k, { name: a.responder_name || a.responder_number, number: a.responder_number, items: [] });
+        groups.get(k).items.push(a);
+      });
+      box.replaceChildren();
+      groups.forEach((g) => {
+        const card = el('div', 'ra-card');
+        const dispatches = g.items.filter((a) => a.kind === 'dispatch').length;
+        const acks = g.items.filter((a) => a.kind === 'ack').length;
+        const head = el('div', 'ra-head');
+        head.append(el('span', '', g.name + ' · ' + g.number), el('span', 'incident-meta', dispatches + ' dispatched · ' + acks + ' acked'));
+        card.append(head);
+        if (!g.items.length) card.append(el('div', 'incident-meta', 'no dispatches or acks yet'));
+        g.items.slice(0, 8).forEach((a) => {
+          const row = el('div', 'ra-row');
+          const what = el('span');
+          what.append(a.kind === 'dispatch' ? 'dispatched to ' : 'ack for ');
+          const link = el('a', '', a.caller || 'hidden');
+          link.href = '#incident/' + encodeURIComponent(key(a.caller));
+          what.append(link);
+          if (a.kind === 'dispatch' && a.distance_km != null) what.append(' · ' + a.distance_km + ' km');
+          row.append(what, el('span', 'stream-time', shortTime(a.timestamp)));
+          card.append(row);
+        });
+        if (g.items.length > 8) card.append(el('div', 'incident-meta', '+ ' + (g.items.length - 8) + ' older'));
+        box.append(card);
+      });
+      if (!groups.size) box.append(el('div', 'stream-item', 'no responders registered or dispatched yet'));
+      meta.textContent = activity.length + ' dispatch/ack event' + (activity.length === 1 ? '' : 's');
+    } catch (e) {
+      meta.textContent = 'could not load activity';
+    }
+  }
+
   window.addEventListener('load', async () => {
-    if (adminToken) document.getElementById('csv-link').href = '/api/incidents.csv?token=' + encodeURIComponent(adminToken);
     initMap();
     initAnalytics();
+    window.addEventListener('hashchange', route);
+    route();
     await updateServerStatus();  // learns the WebSocket port first
     connectWebSocket();
     await refreshResponders();
