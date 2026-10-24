@@ -135,7 +135,10 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             bt_connected = self.server_instance.check_bluetooth_connected()
             telephony_ag_online = self.server_instance.check_telephony_ag_online()
             gateway_online = (bt_connected and telephony_ag_online) or (len(phone_clients) > 0)
-            gateway_mode = "cellular_hfp" if (bt_connected and telephony_ag_online) else ("app_only" if len(phone_clients) > 0 else "offline")
+            if not self.server_instance.bt_enabled:
+                gateway_mode = "gateway_app"
+            else:
+                gateway_mode = "cellular_hfp" if (bt_connected and telephony_ag_online) else ("app_only" if len(phone_clients) > 0 else "offline")
 
             status_data = {
                 "server": "Kaaka Telemetry Server",
@@ -147,6 +150,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 "telephony_ag_online": telephony_ag_online,
                 "gateway_online": gateway_online,
                 "gateway_mode": gateway_mode,
+                "bluetooth_enabled": self.server_instance.bt_enabled,
+                "last_gateway_event": self.server_instance.last_gateway_event,
                 "phone_app_connected": len(phone_clients) > 0,
                 "gateway_ips": phone_clients,
                 "clients_count": len(self.server_instance.connected_clients),
@@ -242,6 +247,35 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path == "/api/call-event":
+            status, result = 200, {"success": True}
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                event = json.loads(self.rfile.read(length).decode("utf-8") or "null")
+                if not isinstance(event, dict):
+                    raise ValueError("body must be a JSON object")
+                number = event.get("number", "")
+                state = event.get("state")
+                sms = event.get("sms")
+                timestamp = event.get("timestamp", "")
+                if not isinstance(number, str):
+                    raise ValueError('"number" must be a string ("" if hidden)')
+                if state not in ("rejected", "allowed"):
+                    raise ValueError('"state" must be "rejected" or "allowed"')
+                if sms not in ("sent", "failed", "skipped"):
+                    raise ValueError('"sms" must be "sent", "failed" or "skipped"')
+                if not isinstance(timestamp, str):
+                    raise ValueError('"timestamp" must be an ISO-8601 string')
+                self.server_instance.on_call_event(number.strip(), state, sms, timestamp)
+            except (ValueError, UnicodeDecodeError) as e:  # json.JSONDecodeError is a ValueError
+                status, result = 400, {"success": False, "error": str(e)}
+            body = json.dumps(result).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         elif self.path == "/api/telemetry":
             try:
                 length = int(self.headers.get("Content-Length", 0))
@@ -317,8 +351,11 @@ class TelemetryServer:
         if not IS_MAC:
             ensure_audio_sinks()
         self.audio_bridge = AudioConversationBridge(on_event=self.on_audio_bridge_event)
+        # Without --bt-mac the phone's gateway app handles calls and reports them via /api/call-event.
+        self.bt_enabled = bool(bt_mac)
+        self.last_gateway_event = None
         self.hfp = None
-        if IS_MAC:
+        if IS_MAC and self.bt_enabled:
             self.hfp = HfpBridgeClient(
                 bt_mac,
                 on_incoming_call=self.on_mac_incoming_call,
@@ -341,6 +378,8 @@ class TelemetryServer:
 
     def check_bluetooth_connected(self) -> bool:
         """Check if Phone A (bt_mac) is connected to BlueZ."""
+        if not self.bt_enabled:
+            return False
         if IS_MAC:
             return bool(self.hfp and self.hfp.connected)
         try:
@@ -353,6 +392,8 @@ class TelemetryServer:
 
     def check_telephony_ag_online(self) -> bool:
         """Check if PipeWire Telephony Handsfree Audio Gateway service is online."""
+        if not self.bt_enabled:
+            return False
         if IS_MAC:
             return bool(self.hfp and self.hfp.connected)
         try:
@@ -447,6 +488,28 @@ class TelemetryServer:
                 dead_clients.add(client)
         self.connected_clients -= dead_clients
 
+    def save_last_caller(self, number, name=""):
+        """Remember the last real caller across restarts (server/last_call.json, not committed)."""
+        self.last_detected_number = number
+        try:
+            with open(self.last_call_file, "w") as f:
+                json.dump({"number": number, "name": str(name), "timestamp": format_timestamp()}, f)
+        except Exception:
+            pass
+
+    def on_call_event(self, number, state, sms, timestamp):
+        """A call the gateway app already handled (POST /api/call-event). Never hangs up or sends SMS here."""
+        self.last_gateway_event = format_timestamp()
+        if number:
+            self.save_last_caller(number)
+        sms_text = {"sent": "auto-reply sent", "failed": "auto-reply FAILED", "skipped": "no auto-reply"}[sms]
+        print(f"[{format_timestamp()}] 📞 Gateway app call: {number or 'unknown (no caller ID)'} — {state}, {sms_text} (phone time {timestamp})", flush=True)
+        if self.loop:
+            # Separate type from CALL_DETECTED so gateway apps don't treat it as a request to send another SMS.
+            payload = {"type": "CALL_EVENT", "number": number, "name": "", "state": state, "sms": sms,
+                       "source": "gateway_app", "timestamp": timestamp or format_timestamp()}
+            asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+
     def is_local_ip(self, ip) -> bool:
         """Connections from this machine (e.g. the dashboard in a local browser) are not phones."""
         return ip in ("127.0.0.1", "::1", self.local_ip)
@@ -473,12 +536,7 @@ class TelemetryServer:
         self.last_call_time = now
         self.last_call_number = clean_num
         if clean_num:
-            self.last_detected_number = clean_num
-            try:
-                with open(self.last_call_file, "w") as f:
-                    json.dump({"number": clean_num, "name": str(name), "timestamp": format_timestamp()}, f)
-            except Exception:
-                pass
+            self.save_last_caller(clean_num, name)
         self.pending_call_trigger = {
             "number": clean_num,
             "name": str(name),
@@ -1119,7 +1177,9 @@ class TelemetryServer:
     async def start(self):
         self.loop = asyncio.get_running_loop()
 
-        if IS_MAC:
+        if not self.bt_enabled:
+            print(f"[{format_timestamp()}] ℹ️ Bluetooth call handling off: calls are reported by the gateway app.")
+        elif IS_MAC:
             # macOS: Swift hfp-bridge (IOBluetooth) replaces the D-Bus telephony listener + HFP watchdog
             self.hfp.start()
             print(f"[{format_timestamp()}] ℹ️ PipeWire/oFono D-Bus telephony listener is Linux-only (replaced by hfp-bridge).")
@@ -1139,7 +1199,7 @@ class TelemetryServer:
         http_thread.start()
 
         # Thread 4: Bluetooth Handsfree Profile Watchdog
-        if not IS_MAC:
+        if self.bt_enabled and not IS_MAC:
             watchdog_thread = threading.Thread(target=self.run_bluetooth_handsfree_watchdog, daemon=True)
             watchdog_thread.start()
 
@@ -1153,7 +1213,7 @@ class TelemetryServer:
         print(f"  🌐 Local Wi-Fi IP  : \033[1;36m{self.local_ip}\033[0m")
         print(f"  🔌 WebSocket Port  : \033[1;36m{self.port}\033[0m  (\033[1;32mws://{self.local_ip}:{self.port}\033[0m)")
         print(f"  🖥️ Web Dashboard UI: \033[1;36m{self.http_port}\033[0m  (\033[1;32mhttp://{self.local_ip}:{self.http_port}\033[0m)")
-        print(f"  📶 Gateway BLE MAC : \033[1;36m{self.bt_mac}\033[0m")
+        print(f"  📶 Gateway BLE MAC : \033[1;36m{self.bt_mac or 'off (gateway app mode)'}\033[0m")
         print("=" * 65)
         print("  💡 Tip: Open the dashboard in browser to view live visual sensors.")
         print("  💡 Tip: Press [Enter] to simulate a call test.")
@@ -1169,12 +1229,10 @@ def main():
     parser.add_argument("--port", "-p", type=int, default=8765, help="WebSocket port (default: 8765)")
     parser.add_argument("--http-port", type=int, default=8080, help="Web Dashboard HTTP port (default: 8080)")
     parser.add_argument("--host", default="0.0.0.0", help="Host interface (default: 0.0.0.0)")
-    parser.add_argument("--bt-mac", default=os.environ.get("KAAKA_BT_MAC", ""), help="Gateway phone Bluetooth address (or KAAKA_BT_MAC)")
+    parser.add_argument("--bt-mac", default=os.environ.get("KAAKA_BT_MAC", ""), help="Gateway phone Bluetooth address (or KAAKA_BT_MAC); optional — without it the gateway app reports calls")
     parser.add_argument("--client-number", default=os.environ.get("KAAKA_CLIENT_NUMBER", ""), help="Client (sensor) phone number whose SMS are telemetry (or KAAKA_CLIENT_NUMBER); optional")
     parser.add_argument("--adb-serial", default=os.environ.get("KAAKA_ADB_SERIAL", ""), help="adb serial of the phone to read SMS from (or KAAKA_ADB_SERIAL); optional")
     args = parser.parse_args()
-    if not args.bt_mac:
-        parser.error("--bt-mac (or KAAKA_BT_MAC) is required: the gateway phone's Bluetooth address")
 
     server = TelemetryServer(host=args.host, port=args.port, http_port=args.http_port, bt_mac=args.bt_mac,
                              client_number=args.client_number, adb_serial=args.adb_serial)

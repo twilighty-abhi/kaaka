@@ -11,6 +11,13 @@ Record each meaningful project change during the event, newest first. Update thi
 - Validation: Python compile check. Not yet verified against the running server, which must be restarted to pick this up.
 - Limitations: SMS-delivered telemetry can take up to 30 s to reach the dashboard; the client app's direct WebSocket copy is unaffected. If the client app runs on the same phone the server reads, a report can appear twice (WebSocket, then the SMS copy).
 
+## 2026-10-24T22:25:00+05:30 — Server as an optional dashboard for the S23 gateway (Mac + S23 setup)
+
+- Changed: `--bt-mac`/`KAAKA_BT_MAC` is optional in `server/server.py`; without it no Bluetooth/telephony listeners start and `/api/status` reports `gateway_mode: gateway_app`. New `POST /api/call-event` (`number`, `state` rejected|allowed, `sms` sent|failed|skipped, `timestamp`) records calls handled by the gateway app, updates the last caller, and broadcasts a `CALL_EVENT` WebSocket message; it never answers, hangs up or sends SMS. Dashboard shows these events with the auto-reply result and labels Bluetooth as off in this mode. README has a "Unified setup: Mac + S23" section; the Mac Bluetooth mode is documented as an alternative that must not be combined with S23 call screening.
+- Why: The S23 now handles calls itself; the Mac only needs to show what happened.
+- Validation: `py_compile`; server run without `--bt-mac` on spare ports: no hfp-bridge started; call-event 200 and `CALL_EVENT` received over WebSocket; bad JSON and invalid state return 400; hidden number accepted with "no auto-reply"; `/api/telemetry` still 200; `/api/status` mode correct.
+- Limitations: Dashboard rendering and real posts from the S23 not yet tested; Bluetooth mode not re-run after this change.
+
 ## 2026-10-24T22:20:00+05:30 — Start the client beacon only for the configured gateway number
 
 - Changed: The Kaaka Sensors app starts its emergency beacon only when an SMS arrives from the configured gateway phone number (digits compared on the last 10), enforced in both `SmsReceiver.java` and `defaultSmsService.svelte.ts`; reports always go to the configured gateway number, never to the SMS sender. Keyword triggers ("call", "alert", "emergency", "kaaka") removed. Settings wording marks the computer dashboard and live stream as optional. `client/README.md` rewritten for the unified Mac + S23 flow. Rebuilt `client/KaakaSensors.apk`.

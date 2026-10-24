@@ -664,6 +664,13 @@ awaiting emergency trigger from client or gateway...</div>
       document.getElementById('last-call-num').textContent = msg.number || 'unknown (no caller ID)';
       addFeedItem(`call detected from ${msg.number} (${msg.state || 'active'})`, true);
       playBeep(640, 0.2);
+    } else if (msg.type === 'CALL_EVENT') {
+      // Call already handled on the phone by the gateway app (POST /api/call-event)
+      const who = msg.number || 'unknown (no caller ID)';
+      const smsText = { sent: 'auto-reply sent', failed: 'auto-reply FAILED', skipped: 'no auto-reply' }[msg.sms] || msg.sms;
+      if (msg.number) document.getElementById('last-call-num').textContent = msg.number;
+      addFeedItem(`call from ${who} — ${msg.state}, ${smsText}`, true);
+      playBeep(640, 0.2);
     } else if (msg.type === 'SERVER_READY') {
       if (msg.last_number) {
         document.getElementById('last-call-num').textContent = msg.last_number;
@@ -912,6 +919,10 @@ awaiting emergency trigger from client or gateway...</div>
             } else {
               tag.textContent = 'gateway: [online]';
             }
+          } else if (data.gateway_mode === 'gateway_app') {
+            // The gateway app reports calls over HTTP, so no open connection is expected.
+            tag.className = 'status-tag active';
+            tag.textContent = 'gateway: [app mode' + (data.last_gateway_event ? ', last event ' + data.last_gateway_event : '') + ']';
           } else {
             tag.className = 'status-tag warn';
             tag.textContent = 'gateway: [disconnected]';
@@ -930,6 +941,9 @@ awaiting emergency trigger from client or gateway...</div>
           const mac = data.bt_mac.toLowerCase();
           document.getElementById('ble-tag').textContent = `ble: [${mac}]`;
           document.getElementById('gateway-device').textContent = `gateway phone (${mac})`;
+        } else {
+          document.getElementById('ble-tag').textContent = 'ble: [off (gateway app mode)]';
+          document.getElementById('gateway-device').textContent = 'off (gateway app mode)';
         }
         document.getElementById('webhook-url').textContent = data.webhook_url || 'not configured (KAAKA_WEBHOOK_URL)';
         if (data.latest_telemetry && data.latest_telemetry.content) {

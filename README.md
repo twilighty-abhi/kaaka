@@ -2,6 +2,36 @@
 
 > **Abstract**: An edge-aware emergency telemetry and rapid-response system combining real-time physical sensor detection with automated telephony gateways and localized speech microservices. Built with Capacitor 7, Svelte 5 (runes mode), Node.js, Linux PipeWire D-Bus telephony monitors, and Malayalam voice AI (TTS/ASR), the platform bridges on-device incident detection with automated dispatch and base-station notification channels for reliable emergency intervention.
 
+## Unified setup: Mac + S23
+
+The whole system is two devices. Callers are outside people using their own phones.
+
+| Device | Role | What runs |
+|---|---|---|
+| **Galaxy S23** (the gateway number) | Telephony | **Kaaka Call** gateway app: screens incoming calls, rejects them, sends the caller an auto-reply SMS, and receives "Kaaka Alert" SMS reports |
+| **Mac** | Dashboard / server | `server/server.py` **without `--bt-mac`**: receives the S23's events over Wi-Fi and shows them on the dashboard |
+
+Flow:
+
+1. A caller rings the S23's number.
+2. The gateway app on the S23 screens the call, rejects it and sends an auto-reply SMS (no SMS when the caller ID is hidden).
+3. The S23 reports the call to the Mac: `POST http://<mac-ip>:8080/api/call-event` with `{"number", "state": "rejected"|"allowed", "sms": "sent"|"failed"|"skipped", "timestamp"}`. The dashboard feed shows e.g. "call from … — rejected, auto-reply sent".
+4. If a caller uses the optional **Kaaka Sensors** app, it sends "Kaaka Alert" SMS reports to the S23; the gateway app logs them and forwards them to the Mac (`POST /api/telemetry`).
+
+Start the dashboard server on the Mac (no Bluetooth):
+
+```bash
+.venv-mac/bin/python server/server.py
+```
+
+Then, in the gateway app on the S23, set **Dashboard server** to `http://<mac-ip>:8080` (the server prints its IP on startup). Both devices must be on the same Wi-Fi.
+
+**Do not combine this with the Bluetooth mode.** In this mode the server runs without `--bt-mac`. If the Mac were also connected to the S23 as a Bluetooth hands-free unit, both the Mac and the S23's own call screening would hang up the same call and handle it twice. The macOS Bluetooth section below describes an alternative mode, not an add-on.
+
+**Kaaka Sensors (`client/`) is optional.** It is only for callers who choose to install it on their own phones; the S23 gateway does not need it.
+
+---
+
 ## Project Description
 
 **kaaka** establishes an integrated emergency response loop split across three specialized components:
@@ -192,7 +222,9 @@ python3 server/server.py
 
 ---
 
-## Running the server on macOS
+## Optional alternative: Mac as a Bluetooth hands-free unit (macOS)
+
+> Alternative to the unified Mac + S23 setup above, not to be combined with it: here the Mac detects and hangs up calls over Bluetooth (`--bt-mac`) and the gateway app only sends the SMS.
 
 The server side also runs on an Apple Silicon Mac (tested on macOS 27). The Linux PipeWire/oFono telephony layer is replaced by `mac/hfp-bridge`, a small Swift helper that connects to the phone as a Bluetooth hands-free unit through Apple's IOBluetooth framework. `server/server.py` starts it automatically and talks to it over stdin/stdout. All Linux code paths are unchanged.
 
@@ -222,7 +254,7 @@ Run all commands from the repository root (`kaaka/`).
 
    | Option | Environment variable | Purpose |
    |---|---|---|
-   | `--bt-mac` (required) | `KAAKA_BT_MAC` | Gateway phone's Bluetooth address |
+   | `--bt-mac` (this mode only) | `KAAKA_BT_MAC` | Gateway phone's Bluetooth address; omit it for the unified Mac + S23 setup |
    | `--client-number` | `KAAKA_CLIENT_NUMBER` | Client (sensor) phone number; its SMS are read as telemetry (otherwise only "Kaaka Alert" texts match) |
    | `--adb-serial` | `KAAKA_ADB_SERIAL` | adb device to read SMS from (default: the only attached device) |
    | — | `KAAKA_WEBHOOK_URL`, `KAAKA_WEBHOOK_FALLBACK_URL` | n8n voice-AI webhook (Linux audio bridge; off when unset) |

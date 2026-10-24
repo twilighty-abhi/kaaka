@@ -14,6 +14,7 @@ Use Codex during the hackathon and briefly document its actual contribution here
 | 2026-10-24T21:55:00+05:30 | Claude Code (Claude Opus 5.5), sub-agent | Configurable app settings; rebuild APKs | Replaced hardcoded numbers/IPs in `client/` and `gateway/` with settings, rebuilt both APKs, installed the gateway app on the S23 | Requested by Abhiram N J; on-device check pending | svelte-check clean; Gradle builds succeeded; `adb install` Success |
 | 2026-10-24T22:05:00+05:30 | Claude Code (Claude Opus 5.5) | Fix live telemetry not reaching the dashboard | Diagnosed on-device settings and client sync code; server sensor-stream ingest + CORS preflight; client sync default and rebuild | Reported by Abhiram N J | Preflight, sample POST and WebSocket broadcast verified; APK installed |
 | 2026-10-24T22:20:00+05:30 | Claude Code (Claude Opus 5.5), sub-agent | Restrict client beacon trigger | Changed native and JS SMS trigger to gateway-number-only, settings wording, client README, rebuilt APK | Security issue flagged to Abhiram N J; fix requested as part of the unified setup | svelte-check clean; APK built; on-device test pending |
+| 2026-10-24T22:25:00+05:30 | Claude Code (Claude Opus 5.5), sub-agent | Server dashboard mode for S23 gateway | Optional Bluetooth, `/api/call-event`, dashboard event display, README unified setup | Mac + S23 design chosen by Abhiram N J | Spare-port server tests passed; device test pending |
 
 ## Template preparation
 
