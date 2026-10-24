@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-24T23:55:00+05:30 — Responder alerts, 112 reply text, heartbeat and battery exemption on the S23
+
+- Changed: Gateway app (`gateway/`): new "responder numbers" setting; every call and every Kaaka alert is texted to each responder (never to the caller/sender), with counts in the local event log. Default reply is now "Kaaka received your call. Help is being arranged. If in immediate danger, call 112." (the old default is treated as unset). WorkManager heartbeat (`Heartbeat.java`, `HeartbeatWorker.java`) posts `/api/heartbeat` every 15 minutes and on settings save when a dashboard is set. New "battery optimisation" row requests the exemption; status reports `batteryExempt`. Shared `GatewayStore.sendSms`. Rebuilt `gateway/Kaaka.apk` (adds `androidx.work`).
+- Why: Alerts must reach a person even when nobody watches the dashboard; callers must be told to use 112 in immediate danger; the phone must stay awake and report that it is alive.
+- Validation: `svelte-check` 0 errors/0 warnings; web build, `cap sync`, `assembleDebug`; installed on the Galaxy S23: launched without crash, call-screening role and settings kept, heartbeat job registered.
+- Limitations: Heartbeat delivery to the Mac, responder SMS, the battery prompt and the new reply on a real call are not yet tested on the device; Samsung may delay the 15-minute job without the battery exemption.
+
 ## 2026-10-24T23:40:00+05:30 — Gateway heartbeat and "last seen" on the dashboard
 
 - Changed: `server/server.py` adds `POST /api/heartbeat` (`timestamp`, `battery`, `charging`, `screeningRole`, `smsGranted`, `contactCalls`; 400 on bad input), stores the last heartbeat, reports `last_heartbeat` and `gateway_stale` (no heartbeat for 20 minutes) in `/api/status`, broadcasts `GATEWAY_HEARTBEAT`, and warns in the console when a permission is missing or the battery is low. The dashboard shows "s23: last seen …" with battery and setup state, highlighted when stale or degraded. `docs/PLAN.md` records the verified contact-call test; README mentions the heartbeat.

@@ -12,12 +12,14 @@
     sendSms: boolean;
     receiveSms: boolean;
     contactCalls: boolean;
+    batteryExempt: boolean;
   }
 
   interface GatewaySettings {
     rejectCalls: boolean;
     replyMessage: string;
     dashboardUrl: string;
+    responderNumbers: string;
   }
 
   interface GatewayEvent {
@@ -27,6 +29,8 @@
     state?: string;
     sms?: string;
     via?: string;
+    responders?: number;
+    respondersFailed?: number;
     sender?: string;
     text?: string;
   }
@@ -36,6 +40,7 @@
     requestScreeningRole(): Promise<GatewayStatus>;
     requestSmsPermissions(): Promise<GatewayStatus>;
     requestCallPermissions(): Promise<GatewayStatus>;
+    requestBatteryExemption(): Promise<GatewayStatus>;
     getSettings(): Promise<GatewaySettings>;
     saveSettings(options: GatewaySettings): Promise<void>;
     getEvents(): Promise<{ events: GatewayEvent[] }>;
@@ -47,7 +52,8 @@
   const isNative = Capacitor.isNativePlatform();
 
   const SETTINGS_KEY = 'kaaka_gateway_settings';
-  const defaultReply = 'received call. will get back to you shortly.';
+  const defaultReply = 'Kaaka received your call. Help is being arranged. If in immediate danger, call 112.';
+  const oldDefaultReply = 'received call. will get back to you shortly.';
   const numberPlaceholder = '+91XXXXXXXXXX';
   const dashboardPlaceholder = 'http://<mac-ip>:8080 (optional)';
 
@@ -58,7 +64,18 @@
   let rejectCalls = $state(true);
   let replyMessage = $state(defaultReply);
   let dashboardUrl = $state('');
+  let responderNumbers = $state('');
   let showSettings = $state(false);
+
+  // Same rule as native GatewayStore.responderNumbers: comma or new line separated, digits and +.
+  const responderCount = $derived(
+    new Set(
+      responderNumbers
+        .split(/[,\n]/)
+        .map((n) => n.trim().replace(/[^0-9+]/g, ''))
+        .filter((n) => n.replace('+', ''))
+    ).size
+  );
 
   // Recent events written by native code
   let events = $state<GatewayEvent[]>([]);
@@ -113,6 +130,15 @@
     }
   }
 
+  async function requestBattery() {
+    try {
+      status = await Gateway.requestBatteryExemption();
+      if (!status.batteryExempt) statusMessage = { text: 'not exempt: android may delay calls and alerts while the phone sleeps', type: 'error' };
+    } catch (err) {
+      statusMessage = { text: errorText(err), type: 'error' };
+    }
+  }
+
   async function loadSettings() {
     let saved: Partial<GatewaySettings> = {};
     try {
@@ -121,8 +147,9 @@
       saved = {};
     }
     rejectCalls = saved.rejectCalls ?? true;
-    replyMessage = saved.replyMessage || defaultReply;
+    replyMessage = !saved.replyMessage || saved.replyMessage === oldDefaultReply ? defaultReply : saved.replyMessage;
     dashboardUrl = saved.dashboardUrl ?? '';
+    responderNumbers = saved.responderNumbers ?? '';
   }
 
   async function handleSaveSettings(e: Event) {
@@ -136,6 +163,7 @@
       rejectCalls,
       replyMessage: replyMessage.trim() || defaultReply,
       dashboardUrl: url,
+      responderNumbers: responderNumbers.trim(),
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     try {
@@ -188,6 +216,12 @@
   function handleManualSend(e: Event) {
     e.preventDefault();
     sendSmsMessage(phoneNumber, message);
+  }
+
+  function respondersText(ev: GatewayEvent) {
+    if (ev.responders === undefined) return '';
+    const failed = ev.respondersFailed ? ` (${ev.respondersFailed} failed)` : '';
+    return ` · ${ev.responders} responders texted${failed}`;
   }
 
   function formatTime(iso: string) {
@@ -261,6 +295,14 @@
             <button type="button" class="field-text-btn" onclick={requestCallPerms}>[allow]</button>
           {/if}
         </div>
+        <div class="setup-row">
+          <span class="field-label">battery optimisation</span>
+          {#if status.batteryExempt}
+            <span class="setup-state ok">exempt</span>
+          {:else}
+            <button type="button" class="field-text-btn" onclick={requestBattery}>[exempt]</button>
+          {/if}
+        </div>
       </section>
     {:else if !isNative}
       <div class="status-banner error" role="status">
@@ -277,6 +319,16 @@
         </label>
         <label class="field-label" for="reply-input">auto-reply message</label>
         <textarea id="reply-input" rows={2} bind:value={replyMessage} class="tech-textarea"></textarea>
+        <label class="field-label" for="responders-input">
+          responder numbers ({responderCount} set) — texted on every call and alert
+        </label>
+        <textarea
+          id="responders-input"
+          rows={2}
+          bind:value={responderNumbers}
+          placeholder="+91XXXXXXXXXX, +91XXXXXXXXXX (comma or new line)"
+          class="tech-textarea"
+        ></textarea>
         <label class="field-label" for="dashboard-input">dashboard server</label>
         <div class="config-input-group">
           <input
@@ -307,9 +359,9 @@
             <li class="event-item">
               <span class="event-time">{formatTime(ev.timestamp)}</span>
               {#if ev.type === 'call'}
-                <span>call {ev.number || 'hidden number'}{ev.via === 'phone_state' ? ' (contact)' : ''} · {ev.state} · sms {ev.sms}</span>
+                <span>call {ev.number || 'hidden number'}{ev.via === 'phone_state' ? ' (contact)' : ''} · {ev.state} · sms {ev.sms}{respondersText(ev)}</span>
               {:else}
-                <span>alert from {ev.sender || 'unknown'}</span>
+                <span>alert from {ev.sender || 'unknown'}{respondersText(ev)}</span>
                 <span class="event-text">{ev.text}</span>
               {/if}
             </li>

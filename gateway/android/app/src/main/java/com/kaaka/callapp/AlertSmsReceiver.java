@@ -10,7 +10,7 @@ import org.json.JSONObject;
 
 /**
  * Listens for incoming SMS (this app is not the default SMS app, so it only reads them).
- * Messages that look like Kaaka sensor alerts are logged and forwarded to the optional dashboard.
+ * Messages that look like Kaaka sensor alerts are logged, texted to the responders and forwarded to the optional dashboard.
  */
 public class AlertSmsReceiver extends BroadcastReceiver {
 
@@ -38,6 +38,7 @@ public class AlertSmsReceiver extends BroadcastReceiver {
                 event.put("sender", from);
                 event.put("text", text);
                 event.put("timestamp", GatewayStore.nowIso());
+                GatewayStore.notifyResponders(appContext, responderMessage(from, text), from, event);
                 GatewayStore.appendEvent(appContext, event);
 
                 JSONObject payload = new JSONObject();
@@ -49,5 +50,23 @@ public class AlertSmsReceiver extends BroadcastReceiver {
                 pending.finish();
             }
         }).start();
+    }
+
+    /** Short responder text: the alert's first line plus its Maps link when present. */
+    private static String responderMessage(String sender, String text) {
+        String[] lines = text.split("\\n");
+        StringBuilder msg = new StringBuilder("Kaaka alert from ").append(sender.isEmpty() ? "unknown" : sender).append(": ");
+        msg.append(lines[0].trim());
+        String maps = null;
+        for (String line : lines) {
+            if (line.contains("Maps:")) maps = line.trim();
+        }
+        if (maps != null) {
+            msg.append("\n").append(maps);
+        } else if (text.length() > lines[0].length()) {
+            String rest = text.substring(lines[0].length()).trim();
+            msg.append("\n").append(rest.length() > 200 ? rest.substring(0, 200) + "…" : rest);
+        }
+        return msg.toString();
     }
 }

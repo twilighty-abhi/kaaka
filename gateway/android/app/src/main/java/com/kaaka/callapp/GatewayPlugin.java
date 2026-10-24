@@ -4,7 +4,9 @@ import android.Manifest;
 import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import androidx.activity.result.ActivityResult;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -32,6 +34,11 @@ import org.json.JSONException;
 )
 public class GatewayPlugin extends Plugin {
 
+    @Override
+    public void load() {
+        Heartbeat.schedule(getContext());
+    }
+
     private RoleManager roleManager() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null;
         return getContext().getSystemService(RoleManager.class);
@@ -46,6 +53,7 @@ public class GatewayPlugin extends Plugin {
         result.put("sendSms", getContext().checkSelfPermission(Manifest.permission.SEND_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED);
         result.put("receiveSms", getContext().checkSelfPermission(Manifest.permission.RECEIVE_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED);
         result.put("contactCalls", getPermissionState("calls") == PermissionState.GRANTED);
+        result.put("batteryExempt", Heartbeat.batteryExempt(getContext()));
         return result;
     }
 
@@ -71,6 +79,7 @@ public class GatewayPlugin extends Plugin {
 
     @ActivityCallback
     private void roleResult(PluginCall call, ActivityResult result) {
+        Heartbeat.schedule(getContext());
         call.resolve(status());
     }
 
@@ -85,6 +94,7 @@ public class GatewayPlugin extends Plugin {
 
     @PermissionCallback
     private void smsPermsCallback(PluginCall call) {
+        Heartbeat.schedule(getContext());
         call.resolve(status());
     }
 
@@ -99,6 +109,23 @@ public class GatewayPlugin extends Plugin {
 
     @PermissionCallback
     private void callPermsCallback(PluginCall call) {
+        Heartbeat.schedule(getContext());
+        call.resolve(status());
+    }
+
+    /** Opens Android's "stop optimising battery" prompt so the gateway is not put to sleep. */
+    @PluginMethod
+    public void requestBatteryExemption(PluginCall call) {
+        if (Heartbeat.batteryExempt(getContext())) {
+            call.resolve(status());
+            return;
+        }
+        Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getContext().getPackageName()));
+        startActivityForResult(call, intent, "batteryResult");
+    }
+
+    @ActivityCallback
+    private void batteryResult(PluginCall call, ActivityResult result) {
         call.resolve(status());
     }
 
@@ -109,6 +136,7 @@ public class GatewayPlugin extends Plugin {
         result.put("rejectCalls", GatewayStore.rejectCalls(context));
         result.put("replyMessage", GatewayStore.replyMessage(context));
         result.put("dashboardUrl", GatewayStore.dashboardUrl(context));
+        result.put("responderNumbers", GatewayStore.responderText(context));
         call.resolve(result);
     }
 
@@ -118,8 +146,11 @@ public class GatewayPlugin extends Plugin {
             getContext(),
             call.getBoolean("rejectCalls", true),
             call.getString("replyMessage", GatewayStore.DEFAULT_REPLY),
-            call.getString("dashboardUrl", "")
+            call.getString("dashboardUrl", ""),
+            call.getString("responderNumbers", "")
         );
+        Heartbeat.schedule(getContext());
+        Heartbeat.sendNow(getContext());
         call.resolve();
     }
 
