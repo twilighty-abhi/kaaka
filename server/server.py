@@ -1732,16 +1732,23 @@ class TelemetryServer:
         glib_loop = GLib.MainLoop()
         glib_loop.run()
 
-    def run_http_server(self):
-        """Runs the standalone Dashboard HTTP Server in a daemon thread."""
+    def make_http_server(self):
+        """The dashboard HTTP server bound to (host, http_port); http_port 0 picks a free port (tests)."""
         server_inst = self
         class BoundHandler(DashboardHandler):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, server_instance=server_inst, **kwargs)
 
         socketserver.ThreadingTCPServer.allow_reuse_address = True
+        httpd = socketserver.ThreadingTCPServer((self.host, self.http_port), BoundHandler)
+        httpd.daemon_threads = True
+        self.http_port = httpd.server_address[1]
+        return httpd
+
+    def run_http_server(self):
+        """Runs the standalone Dashboard HTTP Server in a daemon thread."""
         try:
-            httpd = socketserver.ThreadingTCPServer((self.host, self.http_port), BoundHandler)
+            httpd = self.make_http_server()
             print(f"[{format_timestamp()}] 🖥️ Web Dashboard UI active: \033[1;32mhttp://{self.local_ip}:{self.http_port}/admin\033[0m (landing page at /)")
             httpd.serve_forever()
         except Exception as e:
