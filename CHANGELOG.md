@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:05:00+05:30 — SOS button, fall detection and beacon duration in Kaaka Sensors
+
+- Changed: Client app (`client/`): new SOS card (`SosCard.svelte`) that sends a report to the gateway number at once and starts the beacon; optional "Auto SOS on fall" (`emergencyService.svelte.ts`, off by default): impact above ~2.5 g followed by ~2 s of stillness starts a 15-second cancellable countdown, then SOS. Reports always carry `• Coords:`/`• Maps:` or `• Location: unavailable`, plus `• Trigger:` (sos/fall/gateway reply/manual); the first report waits at most 5 s for GPS. Beacon stops after a configurable duration (default 30 minutes) and shows trigger, count, last sent and time left. README updated, including foreground-only limits. Rebuilt `client/KaakaSensors.apk`.
+- Why: A person in distress must be able to raise an alert without calling, and a fall should raise one even if they cannot.
+- Validation: `npx svelte-check` 0 errors/0 warnings; web build, `cap sync`, `assembleDebug` succeeded; APK contains the new strings.
+- Limitations: Not run on a device. Fall thresholds are untuned heuristics; detection and the beacon only run while the app is in the foreground.
+
 ## 2026-10-24T23:55:00+05:30 — Responder alerts, 112 reply text, heartbeat and battery exemption on the S23
 
 - Changed: Gateway app (`gateway/`): new "responder numbers" setting; every call and every Kaaka alert is texted to each responder (never to the caller/sender), with counts in the local event log. Default reply is now "Kaaka received your call. Help is being arranged. If in immediate danger, call 112." (the old default is treated as unset). WorkManager heartbeat (`Heartbeat.java`, `HeartbeatWorker.java`) posts `/api/heartbeat` every 15 minutes and on settings save when a dashboard is set. New "battery optimisation" row requests the exemption; status reports `batteryExempt`. Shared `GatewayStore.sendSms`. Rebuilt `gateway/Kaaka.apk` (adds `androidx.work`).
