@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:15:22+05:30 — Help by SMS, escalation, rate limiting, responder commands and Malayalam reply on the S23
+
+- Changed: Gateway app: an SMS containing HELP, SOS or KAAKA (whole word) or "സഹായം" is handled like a call (auto-reply, responders, dashboard event `state: "sms"` with the message); Kaaka's own messages never count. Unacknowledged incidents trigger one "Kaaka UNACKNOWLEDGED" reminder to responders after N minutes (default 5, WorkManager `EscalationWorker`). At most N replies per number per hour (default 3); extra contacts are logged and posted with `sms: "skipped"`. Responder commands `STATUS` and `RESOLVE [number] [note]` (posts `/api/resolve`). Reply language English / Malayalam / both (custom text overrides; Malayalam text needs native-speaker review). Event log keeps 200 events. Rebuilt `gateway/Kaaka.apk`.
+- Why: People who cannot speak or have no credit can text; unanswered incidents must escalate; SMS credit needs protection; responders manage incidents from any phone; Malayalam-speaking callers.
+- Validation: `svelte-check` 0 errors/0 warnings; `./gradlew testDebugUnitTest assembleDebug`: GatewayTextTest 11/11 (keywords, own-message exclusion, STATUS/RESOLVE/ACK parsing, reply languages, rate-limit window, open incidents, escalation check).
+- Limitations: Not installed or tested on the S23; escalation timing on a sleeping phone and Malayalam SMS length untested.
+
 ## 2026-10-25T00:15:22+05:30 — Correct changelog timestamps
 
 - Changed: Changelog headings and AI usage rows now use the time of the commit that added each entry (from `git log`); several earlier headings had estimated times up to about 50 minutes ahead of the real clock. Entries re-created during the 2026-10-24 history rewrite carry the rewrite time.

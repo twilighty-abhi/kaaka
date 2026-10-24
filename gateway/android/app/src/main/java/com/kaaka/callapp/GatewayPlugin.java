@@ -134,7 +134,11 @@ public class GatewayPlugin extends Plugin {
         Context context = getContext();
         JSObject result = new JSObject();
         result.put("rejectCalls", GatewayStore.rejectCalls(context));
-        result.put("replyMessage", GatewayStore.replyMessage(context));
+        // "" means the default reply for the chosen language is used.
+        result.put("replyMessage", GatewayStore.customReply(context));
+        result.put("replyLanguage", GatewayStore.replyLanguage(context));
+        result.put("escalateMinutes", GatewayStore.escalateMinutes(context));
+        result.put("maxRepliesPerHour", GatewayStore.maxRepliesPerHour(context));
         result.put("dashboardUrl", GatewayStore.dashboardUrl(context));
         result.put("responderNumbers", GatewayStore.responderText(context));
         result.put("publicUrl", GatewayStore.publicUrl(context));
@@ -147,11 +151,14 @@ public class GatewayPlugin extends Plugin {
         GatewayStore.saveSettings(
             getContext(),
             call.getBoolean("rejectCalls", true),
-            call.getString("replyMessage", GatewayStore.DEFAULT_REPLY),
+            call.getString("replyMessage", ""),
             call.getString("dashboardUrl", ""),
             call.getString("responderNumbers", ""),
             call.getString("publicUrl", ""),
-            call.getString("dashboardToken", "")
+            call.getString("dashboardToken", ""),
+            call.getInt("escalateMinutes", 5),
+            call.getInt("maxRepliesPerHour", 3),
+            call.getString("replyLanguage", "en")
         );
         Heartbeat.schedule(getContext());
         Heartbeat.sendNow(getContext());

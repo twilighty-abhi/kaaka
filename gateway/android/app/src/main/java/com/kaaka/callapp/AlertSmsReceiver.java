@@ -9,9 +9,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Listens for incoming SMS (this app is not the default SMS app, so it only reads them).
- * "ACK" from a responder acknowledges an incident; messages that look like Kaaka sensor alerts are logged,
- * texted to the responders and forwarded to the optional dashboard.
+ * Listens for incoming SMS (this app is not the default SMS app, so it only reads them), in this order:
+ * responder commands (ACK, STATUS, RESOLVE), Kaaka sensor alerts (logged, texted to responders, forwarded),
+ * other responder texts (ignored), and help requests (HELP / SOS / KAAKA / സഹായം), handled like a call.
  */
 public class AlertSmsReceiver extends BroadcastReceiver {
 
@@ -30,20 +30,32 @@ public class AlertSmsReceiver extends BroadcastReceiver {
         final String from = sender == null ? "" : sender;
         final Context appContext = context.getApplicationContext();
 
-        String ackTarget = GatewayText.parseAck(text);
-        if (ackTarget != null && GatewayStore.isResponder(appContext, from)) {
-            final PendingResult pending = goAsync();
-            new Thread(() -> {
-                try {
-                    handleAck(appContext, from, ackTarget);
-                } finally {
-                    pending.finish();
-                }
-            }).start();
-            return;
+        boolean responder = GatewayStore.isResponder(appContext, from);
+        if (responder) {
+            String ackTarget = GatewayText.parseAck(text);
+            String[] resolve = GatewayText.parseResolve(text);
+            if (ackTarget != null) {
+                runAsync(() -> handleAck(appContext, from, ackTarget));
+                return;
+            }
+            if (GatewayText.isStatus(text)) {
+                runAsync(() -> GatewayStore.sendSms(appContext, from,
+                    GatewayText.statusMessage(GatewayText.openIncidents(GatewayStore.eventList(appContext), System.currentTimeMillis()))));
+                return;
+            }
+            if (resolve != null) {
+                runAsync(() -> handleResolve(appContext, from, resolve[0], resolve[1]));
+                return;
+            }
         }
 
-        if (!text.contains("Kaaka Alert") && !text.contains("Live Sensors")) return;
+        if (!text.contains("Kaaka Alert") && !text.contains("Live Sensors")) {
+            // Responders' other texts are never treated as help requests.
+            if (!responder && !from.isEmpty() && GatewayText.isHelpRequest(text)) {
+                runAsync(() -> CallHandler.handleHelpSms(appContext, from, text));
+            }
+            return;
+        }
 
         final PendingResult pending = goAsync();
         new Thread(() -> {
@@ -65,6 +77,46 @@ public class AlertSmsReceiver extends BroadcastReceiver {
                 pending.finish();
             }
         }).start();
+    }
+
+    /** Runs work off the main thread while keeping the broadcast alive until it finishes. */
+    private void runAsync(Runnable work) {
+        final PendingResult pending = goAsync();
+        new Thread(() -> {
+            try {
+                work.run();
+            } finally {
+                pending.finish();
+            }
+        }).start();
+    }
+
+    /** A responder sent "RESOLVE [number] [note]": log it, report it to the dashboard and confirm. */
+    private static void handleResolve(Context context, String responder, String target, String note) {
+        String number = target.isEmpty() ? GatewayStore.lastIncidentNumber(context) : target;
+        if (number.isEmpty()) {
+            GatewayStore.sendSms(context, responder, "Kaaka: no recent incident to resolve");
+            return;
+        }
+        String timestamp = GatewayStore.nowIso();
+        try {
+            JSONObject event = new JSONObject();
+            event.put("type", "resolve");
+            event.put("number", number);
+            event.put("responder", responder);
+            if (!note.isEmpty()) event.put("note", note);
+            event.put("timestamp", timestamp);
+            GatewayStore.appendEvent(context, event);
+
+            JSONObject payload = new JSONObject();
+            payload.put("number", number);
+            payload.put("by", responder);
+            payload.put("note", note);
+            payload.put("timestamp", timestamp);
+            GatewayStore.postToDashboard(context, "/api/resolve", payload);
+        } catch (JSONException ignored) {
+        }
+        GatewayStore.sendSms(context, responder, "Kaaka: resolved " + number);
     }
 
     /**

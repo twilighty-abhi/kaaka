@@ -22,10 +22,15 @@
     responderNumbers: string;
     publicUrl: string;
     dashboardToken: string;
+    escalateMinutes: number;
+    maxRepliesPerHour: number;
+    replyLanguage: ReplyLanguage;
   }
 
+  type ReplyLanguage = 'en' | 'ml' | 'both';
+
   interface GatewayEvent {
-    type: 'call' | 'alert' | 'ack';
+    type: 'call' | 'alert' | 'ack' | 'escalation' | 'resolve';
     timestamp: string;
     number?: string;
     state?: string;
@@ -39,6 +44,10 @@
     respondersFailed?: number;
     sender?: string;
     text?: string;
+    message?: string;
+    rateLimited?: boolean;
+    kind?: string;
+    note?: string;
   }
 
   interface GatewayPlugin {
@@ -59,6 +68,14 @@
 
   const SETTINGS_KEY = 'kaaka_gateway_settings';
   const defaultReply = 'Kaaka received your call. Help is being arranged. If in immediate danger, call 112.';
+  // Same texts as native GatewayText; the Malayalam text should be checked by a native speaker.
+  const defaultReplyMl =
+    'കാക്ക നിങ്ങളുടെ സന്ദേശം സ്വീകരിച്ചു. സഹായം ഏർപ്പാടാക്കുന്നു. അടിയന്തര അപകടത്തിലാണെങ്കിൽ 112-ൽ വിളിക്കുക.';
+  const languageDefaults: Record<ReplyLanguage, string> = {
+    en: defaultReply,
+    ml: defaultReplyMl,
+    both: `${defaultReply}\n${defaultReplyMl}`,
+  };
   const oldDefaultReply = 'received call. will get back to you shortly.';
   const numberPlaceholder = '+91XXXXXXXXXX';
   const dashboardPlaceholder = 'http://<mac-ip>:8080 (optional)';
@@ -68,7 +85,11 @@
 
   // Settings used by the native call screening service
   let rejectCalls = $state(true);
-  let replyMessage = $state(defaultReply);
+  // Empty = use the default reply for the chosen language.
+  let replyMessage = $state('');
+  let replyLanguage = $state<ReplyLanguage>('en');
+  let escalateMinutes = $state(5);
+  let maxRepliesPerHour = $state(3);
   let dashboardUrl = $state('');
   let responderNumbers = $state('');
   let publicUrl = $state('');
@@ -157,7 +178,11 @@
       saved = {};
     }
     rejectCalls = saved.rejectCalls ?? true;
-    replyMessage = !saved.replyMessage || saved.replyMessage === oldDefaultReply ? defaultReply : saved.replyMessage;
+    const savedReply = (saved.replyMessage ?? '').trim();
+    replyMessage = savedReply === oldDefaultReply || Object.values(languageDefaults).includes(savedReply) ? '' : savedReply;
+    replyLanguage = saved.replyLanguage === 'ml' || saved.replyLanguage === 'both' ? saved.replyLanguage : 'en';
+    escalateMinutes = Number.isFinite(saved.escalateMinutes) ? Number(saved.escalateMinutes) : 5;
+    maxRepliesPerHour = Number.isFinite(saved.maxRepliesPerHour) ? Number(saved.maxRepliesPerHour) : 3;
     dashboardUrl = saved.dashboardUrl ?? '';
     responderNumbers = saved.responderNumbers ?? '';
     publicUrl = saved.publicUrl ?? '';
@@ -176,9 +201,18 @@
       statusMessage = { text: 'public link url must start with https://', type: 'error' };
       return;
     }
+    const escalate = Math.floor(Number(escalateMinutes));
+    const maxReplies = Math.floor(Number(maxRepliesPerHour));
+    if (!Number.isFinite(escalate) || escalate < 0 || !Number.isFinite(maxReplies) || maxReplies < 0) {
+      statusMessage = { text: 'escalation minutes and reply limit must be 0 or more', type: 'error' };
+      return;
+    }
     const settings: GatewaySettings = {
       rejectCalls,
-      replyMessage: replyMessage.trim() || defaultReply,
+      replyMessage: replyMessage.trim(),
+      replyLanguage,
+      escalateMinutes: escalate,
+      maxRepliesPerHour: maxReplies,
       dashboardUrl: url,
       responderNumbers: responderNumbers.trim(),
       publicUrl: link,
@@ -337,8 +371,24 @@
           <input id="reject-toggle" type="checkbox" bind:checked={rejectCalls} class="raw-checkbox" />
           <span class="control-label">reject incoming calls</span>
         </label>
-        <label class="field-label" for="reply-input">auto-reply message</label>
-        <textarea id="reply-input" rows={2} bind:value={replyMessage} class="tech-textarea"></textarea>
+        <label class="field-label" for="language-input">reply language</label>
+        <select id="language-input" bind:value={replyLanguage} class="config-input">
+          <option value="en">english</option>
+          <option value="ml">malayalam</option>
+          <option value="both">both</option>
+        </select>
+        <label class="field-label" for="reply-input">custom auto-reply (empty = default for the language)</label>
+        <textarea
+          id="reply-input"
+          rows={2}
+          bind:value={replyMessage}
+          placeholder={languageDefaults[replyLanguage]}
+          class="tech-textarea"
+        ></textarea>
+        <label class="field-label" for="escalate-input">remind responders if not acknowledged after (minutes, 0 = off)</label>
+        <input id="escalate-input" type="number" min="0" step="1" bind:value={escalateMinutes} class="config-input" />
+        <label class="field-label" for="limit-input">max replies per number per hour (0 = no limit)</label>
+        <input id="limit-input" type="number" min="0" step="1" bind:value={maxRepliesPerHour} class="config-input" />
         <label class="field-label" for="responders-input">
           responder numbers ({responderCount} set) — texted on every call and alert
         </label>
@@ -400,10 +450,17 @@
           {#each events as ev, i (i)}
             <li class="event-item">
               <span class="event-time">{formatTime(ev.timestamp)}</span>
-              {#if ev.type === 'call'}
-                <span>call {ev.number || 'hidden number'}{ev.via === 'phone_state' ? ' (contact)' : ''} · {ev.state} · sms {ev.sms}{ev.locationLink ? ' + location link' : ''}{respondersText(ev)}</span>
+              {#if ev.type === 'call' && ev.state === 'sms'}
+                <span>help sms {ev.number} · sms {ev.sms}{ev.rateLimited ? ' · rate-limited' : ''}{ev.locationLink ? ' + location link' : ''}{respondersText(ev)}</span>
+                <span class="event-text">{ev.message}</span>
+              {:else if ev.type === 'call'}
+                <span>call {ev.number || 'hidden number'}{ev.via === 'phone_state' ? ' (contact)' : ''} · {ev.state} · sms {ev.sms}{ev.rateLimited ? ' · rate-limited' : ''}{ev.locationLink ? ' + location link' : ''}{respondersText(ev)}</span>
               {:else if ev.type === 'ack'}
                 <span>ack {ev.number} by {ev.responder} · caller sms {ev.smsToCaller}</span>
+              {:else if ev.type === 'escalation'}
+                <span>reminder: {ev.kind || 'call'} {ev.number} unacknowledged{respondersText(ev)}</span>
+              {:else if ev.type === 'resolve'}
+                <span>resolved {ev.number} by {ev.responder}{ev.note ? ` · ${ev.note}` : ''}</span>
               {:else}
                 <span>alert from {ev.sender || 'unknown'}{respondersText(ev)}</span>
                 <span class="event-text">{ev.text}</span>
