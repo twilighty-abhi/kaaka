@@ -1,0 +1,25 @@
+FROM ghcr.io/ggerganov/whisper.cpp:main
+
+WORKDIR /app
+
+# Ensure whisper-server binary is present and linked to /app/whisper-server
+RUN if [ -f /app/build/bin/whisper-server ]; then \
+      ln -sf /app/build/bin/whisper-server /app/whisper-server; \
+    elif [ -f /app/build/bin/server ]; then \
+      ln -sf /app/build/bin/server /app/whisper-server; \
+    elif [ -f /app/server ] && [ ! -d /app/server ]; then \
+      ln -sf /app/server /app/whisper-server; \
+    else \
+      cmake -B build -DWHISPER_BUILD_SERVER=ON && \
+      cmake --build build -j$(nproc) --target whisper-server && \
+      ln -sf /app/build/bin/whisper-server /app/whisper-server; \
+    fi
+
+# Copy the custom web interface
+COPY public /app/public
+
+# Expose the server port
+EXPOSE 8080
+
+ENTRYPOINT ["/app/whisper-server"]
+CMD ["-m", "/models/ggml-base.bin", "--host", "0.0.0.0", "--port", "8080", "--public", "/app/public", "-t", "4", "--convert"]

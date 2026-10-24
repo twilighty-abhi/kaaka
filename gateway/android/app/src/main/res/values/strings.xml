@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kaaka Call</string>
+    <string name="title_activity_main">Kaaka Call</string>
+    <string name="package_name">com.kaaka.callapp</string>
+    <string name="custom_url_scheme">com.kaaka.callapp</string>
+</resources>

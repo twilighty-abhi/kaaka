@@ -1,0 +1,17 @@
+{
+  "name": "kaaka",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo workspace for kaaka: client, gateway, and server",
+  "scripts": {
+    "dev:client": "npm --prefix client run dev",
+    "dev:gateway": "npm --prefix gateway run dev",
+    "dev:server": "npm --prefix server/backend run dev",
+    "asr": "python3 server/services/malayalam-voice-asr/run.py",
+    "tts": "/home/athira/iccc/dynamic/backend/venv/bin/python server/services/malayalam-tts/run.py",
+    "build:client": "npm --prefix client run build",
+    "build:gateway": "npm --prefix gateway run build",
+    "build:server": "npm --prefix server/backend run build",
+    "build": "npm run build:client && npm run build:server"
+  }
+}

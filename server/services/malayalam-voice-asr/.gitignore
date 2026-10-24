@@ -1,0 +1,4 @@
+models/
+bin/
+.DS_Store
+*.log

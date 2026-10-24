@@ -36,3 +36,6 @@ Thumbs.db
 # Local Python env for the macOS server and runtime data (contains GPS/phone numbers)
 .venv-mac/
 server/latest_telemetry.json
+
+# Local sample builds
+sample_app.apk
