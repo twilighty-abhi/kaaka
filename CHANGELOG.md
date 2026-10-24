@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:23:02+05:30 — Show "safe" events in the gateway app
+
+- Changed: Kaaka Call's recent-events list shows `safe <number> · incident closed · caller sms <result>` plus the responder count.
+- Why: The gateway operator should see when a caller closed their own incident.
+- Validation: `svelte-check` (gateway) 0 errors / 0 warnings.
+- Limitations: UI only.
+
 ## 2026-10-25T03:22:13+05:30 — SAFE by SMS closes the caller's incident on the S23
 
 - Changed: `AlertSmsReceiver` handles a SAFE text from a number with an open incident (checked before help keywords, after responder commands): replies "Kaaka: glad you are safe. Your alert is closed. If you need help again, call or text this number.", texts each responder "Kaaka: <caller> reported safe at HH:mm. Incident closed.", logs a `safe` event and posts `/api/resolve {number, by: "caller", note: "Caller reported safe"}`. A SAFE from a number without an open incident is ignored. Kaaka's own safe notices are excluded from help/safe matching so two gateways never answer each other.

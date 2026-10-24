@@ -30,7 +30,7 @@
   type ReplyLanguage = 'en' | 'ml' | 'both';
 
   interface GatewayEvent {
-    type: 'call' | 'alert' | 'ack' | 'escalation' | 'resolve';
+    type: 'call' | 'alert' | 'ack' | 'escalation' | 'resolve' | 'safe';
     timestamp: string;
     number?: string;
     state?: string;
@@ -459,6 +459,8 @@
                 <span>ack {ev.number} by {ev.responder} · caller sms {ev.smsToCaller}</span>
               {:else if ev.type === 'escalation'}
                 <span>reminder: {ev.kind || 'call'} {ev.number} unacknowledged{respondersText(ev)}</span>
+              {:else if ev.type === 'safe'}
+                <span>safe {ev.number} · incident closed · caller sms {ev.smsToCaller ?? '?'}{respondersText(ev)}</span>
               {:else if ev.type === 'resolve'}
                 <span>resolved {ev.number} by {ev.responder}{ev.note ? ` · ${ev.note}` : ''}</span>
               {:else}
