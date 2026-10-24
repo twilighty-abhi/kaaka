@@ -12,6 +12,8 @@ import type {
 	LocationData
 } from "#lib/types/sensor.js";
 
+const UI_UPDATE_MS = 200;
+
 // Native plugin interface
 interface KaakaSensorsNativePlugin {
 	getSensorStatus(): Promise<{
@@ -328,8 +330,22 @@ export class SensorManager {
 	/** Optional per-sample hook (used by fall detection): accel magnitude m/s², gyro rate rad/s. */
 	onSample: ((accelMagnitude: number, gyroRate: number, timeMs: number) => void) | null = null;
 
+	private lastUiUpdate = 0;
+
 	private handleSensorData(data: FullSensorPayload) {
+		// Fall detection sees every native sample (~16/s) so short impact spikes are not missed.
 		this.onSample?.(data.accelerometer.magnitude, data.gyroscope.rate, Date.now());
+		this.updateCount++;
+		if (data.location && data.location.hasCoords) {
+			this.location = data.location;
+		}
+
+		// The screen only needs ~5 updates per second; re-rendering every card and sparkline
+		// on every sample made the UI unresponsive on some phones.
+		const now = Date.now();
+		if (now - this.lastUiUpdate < UI_UPDATE_MS) return;
+		this.lastUiUpdate = now;
+
 		this.accelerometer = data.accelerometer;
 		this.gyroscope = data.gyroscope;
 		this.magnetometer = data.magnetometer;
@@ -338,18 +354,12 @@ export class SensorManager {
 		this.lastUpdateTimestamp = data.timestamp;
 		this.isListening = data.isListening;
 
-		if (data.location && data.location.hasCoords) {
-			this.location = data.location;
-		}
-
 		// Append to history buffers with immutable slice to pair with $state.raw for ultra-fast render cycles
 		this.accelHistory = this.pushHistory(this.accelHistory, data.accelerometer.magnitude);
 		this.gyroHistory = this.pushHistory(this.gyroHistory, data.gyroscope.rate);
 		this.magHistory = this.pushHistory(this.magHistory, data.magnetometer.fieldStrength);
 		this.lightHistory = this.pushHistory(this.lightHistory, data.ambientLight.lux);
 		this.stepHistory = this.pushHistory(this.stepHistory, data.pedometer.steps);
-
-		this.updateCount++;
 	}
 
 	private pushHistory(arr: number[], val: number): number[] {

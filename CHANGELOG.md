@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:39:05+05:30 — Fix Kaaka Sensors freezing on the second phone
+
+- Changed: `client/capacitor.config.ts` sets `loggingBehavior: 'none'`; `sensorManager.svelte.ts` passes every native sample to fall detection but updates the on-screen state at most every 200 ms. Rebuilt `client/KaakaSensors.apk`.
+- Why: On a Xiaomi (Android 13) the app stopped responding to touches: Capacitor's debug bridge logged every sensor event (~16/s, full JSON) on the UI thread and every card and sparkline re-rendered per sample.
+- Validation: `svelte-check` 0 errors/0 warnings; installed on the Xiaomi; Capacitor console lines in 6 s dropped from ~90 to 0.
+- Limitations: Responsiveness to be confirmed by hand on the device.
+
 ## 2026-10-25T00:16:53+05:30 — Round 3 integration check and test checklist
 
 - Changed: `docs/TESTING.md` adds round-3 device checks (help SMS, escalation, rate limit, STATUS/RESOLVE, dashboard resolve, Malayalam reply, silent-S23 alert, map/CSV, safety timer). Live dashboard restarted on round-3 code with notifications on.
