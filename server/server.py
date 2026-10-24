@@ -272,7 +272,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, f"Error loading dashboard: {e}")
         elif path == "/api/incidents":
-            self.send_json(200, {"incidents": self.server_instance.incidents.incidents()})
+            self.send_json(200, {"incidents": self.server_instance.incidents_with_nearest()})
         elif path == "/api/responders":
             self.send_json(200, {"responders": self.server_instance.responders.list()})
         elif path == "/api/incidents.csv":
@@ -781,6 +781,16 @@ class TelemetryServer:
                 "update_count": self.telemetry_count
             }
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+
+    def incidents_with_nearest(self):
+        """Incidents plus, for each one with a location, the 3 nearest available responders (distance, ETA)."""
+        result = self.incidents.incidents()
+        for inc in result:
+            loc = inc.get("latest_location")
+            inc["nearest_responders"] = (
+                self.responders.nearest(loc["lat"], loc["lon"], limit=3) if loc else []
+            )
+        return result
 
     async def broadcast(self, payload):
         """Send JSON message to all connected clients."""

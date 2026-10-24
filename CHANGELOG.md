@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:21:22+05:30 — Distance and ETA to the nearest responders
+
+- Changed: `server/responders.py` adds `haversine_km`, `eta_minutes` (assumes 25 km/h average city travel; a planning estimate, not a promise) and `ResponderRegistry.nearest`. `GET /api/incidents` adds `nearest_responders` per incident: the 3 nearest available responders to its latest location with `distance_km` and `eta_min`.
+- Why: Show who can reach a caller soonest.
+- Validation: Pure-function checks: Jain University Kochi → Bharata Mata College straight-line 4.14 km; zero distance for the same point; ETA 1 min minimum, 25 km → 60 min; ordering Near/Mid/Far with an unavailable responder excluded; registry reloads from disk. `py_compile`.
+- Limitations: Straight-line distance, not road distance.
+
 ## 2026-10-25T03:20:45+05:30 — Responder registry on the server
 
 - Changed: New `server/responders.py` (`ResponderRegistry`, persisted in `server/responders.json`, ignored by Git) and endpoints `GET/POST /api/responders`, `PATCH/DELETE /api/responders/<id>` with fields name, number, lat, lon, available; values are validated (name ≤ 80 chars, number ≥ 6 digits, lat/lon ranges, available boolean) and the same admin-token rule applies as to other APIs. CORS preflight now lists PATCH and DELETE.
