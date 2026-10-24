@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:16:53+05:30 — Round 3 integration check and test checklist
+
+- Changed: `docs/TESTING.md` adds round-3 device checks (help SMS, escalation, rate limit, STATUS/RESOLVE, dashboard resolve, Malayalam reply, silent-S23 alert, map/CSV, safety timer). Live dashboard restarted on round-3 code with notifications on.
+- Why: Repeatable device test pass for the new features.
+- Validation: Gateway payload fields checked against the server; spare-port simulation with the gateway's exact payloads: help SMS (message with quotes/commas) → open, RESOLVE by responder → resolved, new call → reopened, CSV row correct. Runtime files restored afterwards. Live server answers `/api/incidents.csv`.
+- Limitations: Device tests pending.
+
 ## 2026-10-25T00:15:22+05:30 — Incident lifecycle, help SMS, Mac notifications, map and CSV on the server
 
 - Changed: `/api/call-event` accepts `state: "sms"` with `message` (≤ 500). New `POST /api/resolve {number, by, note, timestamp}` (404 for unknown incident); incidents have `status` open/acknowledged/resolved, `resolved` and `help_sms`; a later call, help SMS or alert reopens them. `GET /api/incidents.csv`. Background stale check broadcasts `GATEWAY_STALE` on transitions (`KAAKA_STALE_SECONDS`, default 1200, start-up grace period). Native macOS notifications via `osascript` (caller text passed as an argument, never as script) for new/reopened incidents, ACK, resolve and S23 silent/recovered; off with `--no-notify`/`KAAKA_NOTIFY=0`. Dashboard: status badges, resolve button with note, hide resolved, CSV download, Leaflet 1.9.4 (cdnjs) + OpenStreetMap map of latest locations with offline fallback. README updated.
