@@ -51,9 +51,11 @@ except ImportError:
 try:
     from server.incidents import IncidentStore, TOKEN_RE, number_key
     from server.responders import ResponderRegistry
+    from server import analytics
 except ImportError:
     from incidents import IncidentStore, TOKEN_RE, number_key
     from responders import ResponderRegistry
+    import analytics
 
 if IS_MAC:
     try:
@@ -79,6 +81,38 @@ def incidents_csv(incidents) -> str:
                          ack.get("responder", ""), ack.get("timestamp", ""), res.get("by", ""),
                          res.get("timestamp", ""), res.get("note", "")])
     return out.getvalue()
+
+
+INCIDENT_QUERY_PARAMS = ("status", "q", "from", "to", "outcome", "limit", "offset")
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def parse_incident_query(query, default_limit=50):
+    """Keyword arguments for IncidentStore.query from /api/incidents query parameters; raises ValueError."""
+    def one(name, default=""):
+        return (query.get(name) or [default])[0].strip()
+    status = one("status", "all")
+    if status not in ("open", "resolved", "all"):
+        raise ValueError('"status" must be open, resolved or all')
+    outcome = one("outcome")
+    if outcome not in ("", "closed_by_caller", "resolved_by_responder"):
+        raise ValueError('"outcome" must be closed_by_caller or resolved_by_responder')
+    q = one("q")
+    if len(q) > 40:
+        raise ValueError('"q" must be at most 40 characters')
+    date_from, date_to = one("from"), one("to")
+    for name, value in (("from", date_from), ("to", date_to)):
+        if value and not DATE_RE.match(value):
+            raise ValueError(f'"{name}" must be a date YYYY-MM-DD')
+    try:
+        limit = int(one("limit", str(default_limit)))
+        offset = int(one("offset", "0"))
+    except ValueError:
+        raise ValueError('"limit" and "offset" must be integers')
+    if not 0 <= limit <= max(500, default_limit) or offset < 0:
+        raise ValueError('"limit" must be 0-500 and "offset" at least 0')
+    return {"status": status, "q": q, "date_from": date_from, "date_to": date_to, "outcome": outcome,
+            "limit": limit, "offset": offset}
 
 
 def notify_mac(text):
@@ -275,11 +309,48 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, f"Error loading dashboard: {e}")
         elif path == "/api/incidents":
-            self.send_json(200, {"incidents": self.server_instance.incidents_with_nearest()})
+            if not any(k in query for k in INCIDENT_QUERY_PARAMS):
+                # Unchanged default (gateway and other callers): the 50 most recent incidents.
+                self.send_json(200, {"incidents": self.server_instance.incidents_with_nearest()})
+                return
+            try:
+                params = parse_incident_query(query)
+            except ValueError as e:
+                self.send_json(400, {"success": False, "error": str(e)})
+                return
+            result = self.server_instance.incidents.query(**params)
+            self.server_instance.add_nearest(result["incidents"])
+            self.send_json(200, {**result, "limit": params["limit"], "offset": params["offset"]})
+        elif path.startswith("/api/incidents/") and path != "/api/incidents.csv":
+            inc = self.server_instance.incidents.detail(unquote(path[len("/api/incidents/"):]))
+            if inc is None:
+                self.send_json(404, {"success": False, "error": "no incident with this key"})
+                return
+            self.server_instance.add_nearest([inc])
+            self.send_json(200, {"incident": inc})
+        elif path == "/api/responders/activity":
+            self.send_json(200, {"activity": self.server_instance.incidents.responder_activity()})
         elif path == "/api/responders":
             self.send_json(200, {"responders": self.server_instance.responders.list()})
+        elif path == "/api/analytics":
+            range_key = (query.get("range") or [analytics.DEFAULT_RANGE])[0]
+            if range_key not in analytics.RANGES:
+                self.send_json(400, {"success": False, "error": f'range must be one of {", ".join(analytics.RANGES)}'})
+                return
+            self.send_json(200, analytics.compute(self.server_instance.incidents.events_snapshot(),
+                                                  self.server_instance.responders.list(), range_key, time.time()))
         elif path == "/api/incidents.csv":
-            body = incidents_csv(self.server_instance.incidents.incidents()).encode("utf-8")
+            if any(k in query for k in INCIDENT_QUERY_PARAMS):
+                # Same filters as /api/incidents (History page), without the 50-incident cap.
+                try:
+                    params = parse_incident_query(query, default_limit=100000)
+                except ValueError as e:
+                    self.send_json(400, {"success": False, "error": str(e)})
+                    return
+                rows = self.server_instance.incidents.query(**params)["incidents"]
+            else:
+                rows = self.server_instance.incidents.incidents()
+            body = incidents_csv(rows).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/csv; charset=utf-8")
             self.send_header("Content-Disposition", 'attachment; filename="kaaka-incidents.csv"')
@@ -821,13 +892,15 @@ class TelemetryServer:
 
     def incidents_with_nearest(self):
         """Incidents plus, for each one with a location, the 3 nearest available responders (distance, ETA)."""
-        result = self.incidents.incidents()
-        for inc in result:
+        return self.add_nearest(self.incidents.incidents())
+
+    def add_nearest(self, incidents):
+        for inc in incidents:
             loc = inc.get("latest_location")
             inc["nearest_responders"] = (
                 self.responders.nearest(loc["lat"], loc["lon"], limit=3) if loc else []
             )
-        return result
+        return incidents
 
     async def broadcast(self, payload):
         """Send JSON message to all connected clients."""

@@ -4,6 +4,62 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:56:26+05:30 — Document dashboard pages; analytics and pages validation summary
+
+- Changed: README: a "Dashboard pages" bullet (live, history, incident, analytics, responders, system; hash URLs; counts), status/CSV/analytics bullets updated for the pages, and API table rows for the `/api/incidents` filters, `GET /api/incidents/<key>` and `GET /api/responders/activity`. `AI_USAGE.md` row for this work.
+- Why: Keep the documentation in line with the new dashboard layout and endpoints.
+- Validation: Re-read the README bullets and table rows (escaped `|` keeps four columns). Overall checks for this branch are listed in the entries above: `unittest` 6/6, `py_compile`, spare-port API checks, headless-Chrome screenshots of every page, DevTools navigation and tooltip checks.
+- Limitations: Not tested with real gateway traffic or on a phone-sized screen; seeded data could not be backdated, so multi-day charts showed only today.
+
+## 2026-10-25T03:55:25+05:30 — Dashboard: pages for live, history, incident detail, analytics, responders and system
+
+- Changed: `server/dashboard.html` is split into hash-routed pages with a nav bar under the header showing counts (live (open + acknowledged), history (resolved), responders (registered)); back/forward and reload keep the page. **Live** (default, `#live`): open and acknowledged incidents only, the incident map (trails, nearest-responder lines, hotspots toggle) and the activity log; the header with the S23 heartbeat and gateway tags stays on every page. **History** (`#history`): resolved incidents (or all), search by number digits, outcome (resolved by responder / closed by caller), from/to dates, newest first, 20 at a time with [load more], and a CSV link that carries the same filters. **Incident detail** (`#incident/<key>`, from the number or [timeline →] on any card): the incident card with [resolve] while still active, a time-ordered timeline of calls with reply result, help SMS text, alerts with coordinates, location shares, dispatches, ACKs (with responder name) and resolution/safe, and a map of that caller's trail. **Analytics** (`#analytics`). **Responders** (`#responders`): the registry panel, the same map (so "pick on map" still works) and per-responder dispatch/ACK history linking to each incident. **System** (`#system`): alert payload, live sensor tiles, voice bridge and telephony/trigger panels. Resolved cards no longer show "nearest … not dispatched yet". The chart crosshair now sits behind the columns.
+- Why: Resolved and old incidents cluttered the live view; technical panels were mixed in with the incident panels.
+- Validation: Script passes `node --check`; spare-port server with the seeded data; headless Chrome screenshots of all six pages, checked by eye. Fixed and re-checked: responder-history and timeline times wrapped onto two lines. Driven through the Chrome DevTools protocol: nav click → `#history` (3 of 3), incident click → `#incident/9447000006` (6 timeline events), back → history, forward → incident, reload keeps the incident page; outcome filter "closed by caller" → 1 of 1 and CSV link `status=resolved&outcome=closed_by_caller`; search `0004` in all → 1; hover on the contacts chart shows "13 total / 6 call / 2 help sms / 5 app alert"; 24h range → 24 table rows; hotspots toggle → "4 hotspot cells"; a second location share draws a 2-position trail.
+- Limitations: The History list does not refresh on its own (it refreshes on search, reset or opening the page). The old [hide resolved] toggle is gone because Live now shows only active incidents and History shows resolved ones. Only tested at 1280 px wide.
+
+## 2026-10-25T03:51:07+05:30 — Server: incident history queries, incident detail and responder activity
+
+- Changed: `GET /api/incidents` accepts `status=open|resolved|all` (open includes acknowledged), `q` (digits in the number), `from`/`to` (`YYYY-MM-DD`, date of last activity), `outcome=closed_by_caller|resolved_by_responder`, `limit` (0–500, default 50) and `offset`. With any of these it returns `{incidents, total, counts: {open, acknowledged, resolved}, limit, offset}` over all incidents in memory, without the 50-incident cap; with none, the response is unchanged. `/api/incidents.csv` takes the same filters. New `GET /api/incidents/<key>` (key = last 10 digits) returns the incident with a time-ordered `timeline` of its calls, help SMS, alerts, location shares, dispatches, ACKs and resolutions (the location-link token is left out). New `GET /api/responders/activity` lists dispatches and ACKs, newest first. All use the admin-token rule.
+- Why: The dashboard's History, incident-detail and Responders pages need filtered, paged and per-incident data.
+- Validation: `py_compile`; spare-port server with the seeded data: the default response still has only `incidents` (8); `status=open` gives 5 (counts 4 open / 1 acknowledged / 3 resolved); `outcome=closed_by_caller` 1 and `resolved_by_responder` 2; `q=0006` finds one; `limit=3&offset=3` pages; `from` tomorrow gives 0; `status=x`, `from=26-10-2026`, `limit=999` and `offset=-1` give 400; detail of `9447000001` lists call, alert, dispatch, ack, resolve in order; an unknown key gives 404; activity lists 16 entries; the filtered CSV has the 2 resolved rows.
+- Limitations: History covers the newest 5000 events kept in memory (the store's existing cap). Incidents are grouped per caller number as before, so a reopened incident shows its whole history in one entry.
+
+## 2026-10-25T03:49:36+05:30 — Document analytics
+
+- Changed: README (Mac + S23 section): an "Analytics" bullet covering the range filter, KPI definitions, charts, table toggles, refresh triggers, the map's hotspots toggle and how incidents are counted; the API table gains `GET /api/analytics` with its full response shape.
+- Why: Keep the dashboard and API documentation complete.
+- Validation: Re-read the README bullet and table row; the escaped `|` in the range list keeps the table to four columns.
+- Limitations: None identified.
+
+## 2026-10-25T03:49:17+05:30 — Map: hotspots toggle
+
+- Changed: The incident map gets a [hotspots: off/on] toggle (off by default) that draws the analytics hotspot cells (about 500 m) as circles sized by incident count (10–26 px radius, area grows with count) and shaded on a four-step sequential blue ramp, with a 2 px white ring and a "N incidents" tooltip. The hotspots follow the analytics range filter, and the meta line says "N hotspot cells (7d, darker = more)".
+- Why: Show where incidents cluster without reading coordinates.
+- Validation: The ramp `#6da7ec,#3987e5,#1c5cab,#0d366b` passes `validate_palette.js --ordinal` against the OpenStreetMap land colour `#f2efe9` and `#fcfcfb` (monotone lightness, adjacent ΔL ≥ 0.06, light end 2.18:1, single hue). The reference ramp's lightest ordinal step `#86b6ef` failed against the tiles (1.84:1), so the ramp starts one step darker. Headless Chrome render with the toggle forced on (temporary local edit, reverted): the 3-incident cell shows larger and darker than the single-incident cells. The first try used geographic 275 m circles, which were hidden under the markers at city zoom, so they were changed to screen-sized circles.
+- Limitations: Tooltips were not hovered in the headless run. Circles sit under the incident pins, so a pin covers the centre of its own cell.
+
+## 2026-10-25T03:48:11+05:30 — Dashboard: analytics section
+
+- Changed: `server/dashboard.html` gets an "analytics" panel between incidents and the map: one range filter row (24h / 7d / 30d / all) above everything, seven KPI tiles ("—" plus a reason such as "no acknowledgements yet" when the API returns `null`), stacked columns of contacts per day (per hour for 24h) by channel with legend, a direct label on the peak only, crosshair and a tooltip listing all three channels and the total, peak-hours columns, an outcomes bar list and a responder leaderboard table. Every chart has a [table] toggle. Inline SVG and vanilla JS, no new libraries; columns ≤ 24 px with 4 px rounded tops, 2 px surface gaps between stacked segments, hairline grid. Charts accept arrow keys for the same tooltip. Refreshes on the existing 10 s refresh and on `CALL_EVENT`, `TELEMETRY_RECEIVED` (not the live stream), `INCIDENT_ACK` and `INCIDENT_RESOLVED`; while refetching, the previous render stays in place, dimmed. Names and numbers are inserted with `textContent`.
+- Why: Show the operator response times, the busiest hours and channels, outcomes and who responds, all for the same chosen range.
+- Validation: Channel colours (reference palette slots 1–3) run through the dataviz skill's `validate_palette.js`: dark steps `#3987e5,#d95926,#199e70` on the panel surface `#0a0a0a` pass every check (worst adjacent CVD ΔE 9.4, normal-vision 26.5, all ≥ 3:1), also with `--pairs all`; light steps `#2a78d6,#eb6834,#1baf7a` on `#fcfcfb` pass with a contrast WARN for aqua (2.74:1), which the legend, tooltip and table view cover. Spare-port server seeded through the real APIs (8 callers around Kochi, 4 responders, ACKs, dashboard and caller resolutions, one reopened incident); `/api/analytics` matched a hand calculation (9 incidents, 5 open, median ACK 0.5 min, p90 0.7 min, median close 0.9 min, located 66.7 %, reply sent 85.7 %, hotspot of 3 in one cell). Headless Chrome screenshot at 1280 px: no overlaps or clipped labels.
+- Limitations: The dashboard is dark-only, so only the dark steps are used. Seeded data could not be backdated, so the per-day chart showed only today. Tooltips were not exercised in the headless run.
+
+## 2026-10-25T03:43:06+05:30 — Unit checks for the analytics helpers
+
+- Changed: `server/test_analytics.py` (stdlib `unittest`): a hand-built event list with three callers, a reopened incident, an ACK with no incident and a contact outside the 7-day window; checks KPIs (median/p90 ACK, median close, located %, reply-sent %), outcomes, daily/hourly buckets, the `all` range start, `null`s on an empty log, the bad-range error, responder matching by last 10 digits and the hotspot cell centre.
+- Why: Every analytics number should be checkable by hand.
+- Validation: `python3 -m unittest server/test_analytics.py`: 6 tests OK.
+- Limitations: Uses the machine's local time zone, like the server.
+
+## 2026-10-25T03:43:06+05:30 — Analytics API: GET /api/analytics
+
+- Changed: New `server/analytics.py` with pure functions over the incident event log (range windows with hourly or daily buckets, incident episodes, linear-interpolated percentiles, responder dispatch/ACK stats, 0.005° hotspot grid). `server/server.py` serves `GET /api/analytics?range=24h|7d|30d|all` (default `7d`, 400 on another value, same admin-token rule as `/api/incidents`). `IncidentStore.events_snapshot()` gives a copy of the event list.
+- Why: The dashboard needs response-time, channel, outcome, responder and hotspot numbers without the browser re-deriving them from the 50 newest incidents.
+- Validation: `py_compile` of the server modules; spare-port server: `range=1y` returns 400, one seeded call shows up in `range=24h` (24 hourly buckets, `reply_sent_pct` 100, ack/close medians `null`), default range returns 7 daily buckets.
+- Limitations: Each reopening of a resolved incident counts as a new incident (episode). The store keeps the newest 5000 events in memory, so `all` covers at most those. Server receive time is used for all timestamps, not the phone's.
+
 ## 2026-10-25T03:32:47+05:30 — Rebuild both apps with SAFE, location links and nearest-responder dispatch
 
 - Changed: `gateway/Kaaka.apk` and `client/KaakaSensors.apk` rebuilt from the integrated branch (feat/im-safe + feat/location-link + feat/nearest-responder on top of the beacon-interval/trail work). Merge conflicts were all additive and resolved by keeping both sides.
