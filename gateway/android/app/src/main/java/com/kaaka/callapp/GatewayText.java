@@ -97,7 +97,7 @@ final class GatewayText {
 
     /** Exact starts of the texts this app sends (replies, responder notifications, command answers). */
     private static final Pattern OWN_MESSAGE = Pattern.compile(
-        "^(Kaaka received|Kaaka UNACKNOWLEDGED|A Kaaka responder|Kaaka alert from|Kaaka: glad you are safe|കാക്ക നിങ്ങളുടെ"
+        "^(Kaaka received|Kaaka UNACKNOWLEDGED|A Kaaka responder|Kaaka alert from|Kaaka: glad you are safe|Kaaka: [+0-9][0-9 ()-]* reported safe|കാക്ക നിങ്ങളുടെ"
             + "|Kaaka: (call from|help SMS from|ACK recorded|resolved|no recent incident|no open incidents|\\d+ open))");
 
     private static boolean isOwnMessage(String text) {

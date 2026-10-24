@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:22:13+05:30 — SAFE by SMS closes the caller's incident on the S23
+
+- Changed: `AlertSmsReceiver` handles a SAFE text from a number with an open incident (checked before help keywords, after responder commands): replies "Kaaka: glad you are safe. Your alert is closed. If you need help again, call or text this number.", texts each responder "Kaaka: <caller> reported safe at HH:mm. Incident closed.", logs a `safe` event and posts `/api/resolve {number, by: "caller", note: "Caller reported safe"}`. A SAFE from a number without an open incident is ignored. Kaaka's own safe notices are excluded from help/safe matching so two gateways never answer each other.
+- Why: Let the person who asked for help close the loop themselves.
+- Validation: `./gradlew testDebugUnitTest assembleDebug`: GatewayTextTest 13/13 (own-message exclusions added); debug APK builds.
+- Limitations: Not exercised with a real SMS; APK not committed.
+
 ## 2026-10-25T03:21:04+05:30 — Recognise "SAFE" texts from callers (gateway rules)
 
 - Changed: `GatewayText.isSafeReport` matches SAFE, I'm safe, im safe, I am safe (any case, trailing punctuation allowed) and the Malayalam word സുരക്ഷിതം; Kaaka's own messages never match. `hasOpenIncident` says whether a number has a call, help SMS or alert in the last 24 h with no later resolve or safe (an ACK alone keeps it open); `handledSince` treats a logged "safe" like a resolve so the escalation reminder stays quiet. `GatewayStore.eventList` now reads the caller of alert events from their `sender` field.

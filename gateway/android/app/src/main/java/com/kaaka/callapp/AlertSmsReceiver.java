@@ -11,7 +11,8 @@ import org.json.JSONObject;
 /**
  * Listens for incoming SMS (this app is not the default SMS app, so it only reads them), in this order:
  * responder commands (ACK, STATUS, RESOLVE), Kaaka sensor alerts (logged, texted to responders, forwarded),
- * other responder texts (ignored), and help requests (HELP / SOS / KAAKA / സഹായം), handled like a call.
+ * SAFE from a caller with an open incident (closes it), other responder texts (ignored), and help requests
+ * (HELP / SOS / KAAKA / സഹായം), handled like a call.
  */
 public class AlertSmsReceiver extends BroadcastReceiver {
 
@@ -50,6 +51,11 @@ public class AlertSmsReceiver extends BroadcastReceiver {
         }
 
         if (!text.contains("Kaaka Alert") && !text.contains("Live Sensors")) {
+            // A caller with an open incident says they are safe: close it (checked before help keywords).
+            if (!from.isEmpty() && GatewayText.isSafeReport(text)) {
+                runAsync(() -> handleSafe(appContext, from));
+                return;
+            }
             // Responders' other texts are never treated as help requests.
             if (!responder && !from.isEmpty() && GatewayText.isHelpRequest(text)) {
                 runAsync(() -> CallHandler.handleHelpSms(appContext, from, text));
@@ -89,6 +95,35 @@ public class AlertSmsReceiver extends BroadcastReceiver {
                 pending.finish();
             }
         }).start();
+    }
+
+    /**
+     * The caller texted SAFE: close their open incident, confirm to them, tell responders, report it.
+     * A SAFE from a number without an open incident is ignored (no reply, nothing logged).
+     */
+    private static void handleSafe(Context context, String caller) {
+        if (!GatewayText.hasOpenIncident(GatewayStore.eventList(context), caller, System.currentTimeMillis())) return;
+        String timestamp = GatewayStore.nowIso();
+        boolean toCaller = GatewayStore.sendSms(context, caller,
+            "Kaaka: glad you are safe. Your alert is closed. If you need help again, call or text this number.");
+        try {
+            JSONObject event = new JSONObject();
+            event.put("type", "safe");
+            event.put("number", caller);
+            event.put("smsToCaller", toCaller ? "sent" : "failed");
+            event.put("timestamp", timestamp);
+            GatewayStore.notifyResponders(context,
+                "Kaaka: " + caller + " reported safe at " + GatewayStore.timeOfDay() + ". Incident closed.", caller, event);
+            GatewayStore.appendEvent(context, event);
+
+            JSONObject payload = new JSONObject();
+            payload.put("number", caller);
+            payload.put("by", "caller");
+            payload.put("note", "Caller reported safe");
+            payload.put("timestamp", timestamp);
+            GatewayStore.postToDashboard(context, "/api/resolve", payload);
+        } catch (JSONException ignored) {
+        }
     }
 
     /** A responder sent "RESOLVE [number] [note]": log it, report it to the dashboard and confirm. */

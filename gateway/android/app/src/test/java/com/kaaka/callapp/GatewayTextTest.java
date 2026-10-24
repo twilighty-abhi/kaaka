@@ -145,8 +145,10 @@ public class GatewayTextTest {
         for (String s : new String[] { "not safe", "safe house", "SAFE HELP", "Kaaka: glad you are safe. Your alert is closed.", "", null }) {
             assertFalse(String.valueOf(s), GatewayText.isSafeReport(s));
         }
-        // A safe report is not a help request.
+        // A safe report is not a help request, and Kaaka's own safe notices are neither.
         assertFalse(GatewayText.isHelpRequest("I'm safe"));
+        assertFalse(GatewayText.isHelpRequest("Kaaka: +919876543210 reported safe at 10:42. Incident closed."));
+        assertFalse(GatewayText.isHelpRequest("Kaaka: glad you are safe. Your alert is closed. If you need help again, call or text this number."));
     }
 
     @Test
