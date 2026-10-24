@@ -9,6 +9,8 @@ Use Codex during the hackathon and briefly document its actual contribution here
 | 2026-10-24T21:20:00+05:30 | Claude Code (Claude Opus 5.5) | Build HFP feasibility tool | Wrote `tools/hfptest` (IOBluetooth HF client, CoreAudio listing, WAV recording) and ran device tests | Reviewed and directed by Abhiram N J; corrected class choice (HandsFreeDevice, not AudioGateway) after reading SDK headers | Live S23 tests: connect/incoming/answer pass, SCO unsupported |
 | 2026-10-24T21:50:00+05:30 | Claude Code (Claude Opus 5.5) | Rename imported code to Kaaka | Scripted name/app-ID replacement and Java package moves during import | Scope chosen by Abhiram N J | Diff against source shows only rename changes; build checks in the following commit |
 | 2026-10-24T21:40:00+05:30 | Claude Code (Claude Opus 5.5), two parallel sub-agents | Port server to macOS | Planned the port; sub-agents wrote `mac/hfp-bridge` and the macOS changes in `server/server.py`, `server/audio_bridge.py`, `server/mac_telephony.py`, README section | Reviewed by Abhiram N J during live call tests | Stub-bridge tests and a live S23 call: number captured, hangup worked |
+| 2026-10-24T21:28:00+05:30 | Claude Code (Claude Opus 5.5), sub-agent | Fix slow first HFP connect | Diagnosed run-loop timing issue and fixed `mac/hfp-bridge`; neutral wording in server logs; README path updates | Requested by Abhiram N J | Three timed S23 connections on first attempt |
+| 2026-10-24T21:36:00+05:30 | Claude Code (Claude Opus 5.5) | Remove hardcoded values from server | Made numbers, addresses, adb serial, webhook and audio devices configurable in `server/`, dashboard, scripts and README | Requested by Abhiram N J | Compile checks, repo grep, live server status check |
 
 ## Template preparation
 

@@ -8,7 +8,8 @@ import os
 import sys
 from pathlib import Path
 
-VENV_PYTHON = Path("/home/athira/iccc/dynamic/backend/venv/bin/python")
+# Optional: a Python with piper-tts installed; the script re-execs itself with it if piper is missing.
+VENV_PYTHON = Path(os.environ.get("KAAKA_TTS_PYTHON", sys.executable))
 if VENV_PYTHON.exists() and sys.executable != str(VENV_PYTHON):
     try:
         import piper

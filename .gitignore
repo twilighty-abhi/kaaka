@@ -39,3 +39,6 @@ server/latest_telemetry.json
 
 # Local sample builds
 sample_app.apk
+
+# Last detected caller (runtime data)
+server/last_call.json

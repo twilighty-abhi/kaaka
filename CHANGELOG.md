@@ -4,6 +4,20 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-24T21:36:00+05:30 — Remove hardcoded phone numbers, addresses and device IDs from the server
+
+- Changed: `server/server.py` no longer contains phone numbers, Bluetooth addresses or adb serials. `--bt-mac`/`KAAKA_BT_MAC` is required; new optional `--client-number`/`KAAKA_CLIENT_NUMBER` and `--adb-serial`/`KAAKA_ADB_SERIAL`. Calls without caller ID stay "unknown" and never trigger an auto-reply SMS (previously they were relabeled with a fixed number that the gateway app could SMS). "Last caller" shows none until a real call and is kept across restarts in `server/last_call.json` (ignored by Git). Simulated calls/telemetry no longer use real numbers. `server/audio_bridge.py` reads the n8n webhook from `KAAKA_WEBHOOK_URL`/`KAAKA_WEBHOOK_FALLBACK_URL` (bridge stays off without it) and the Linux speaker/mic from `KAAKA_SPEAKER_SINK`/`KAAKA_MIC_SOURCE` or the PipeWire defaults. The dashboard shows the configured Bluetooth address and webhook from `/api/status`. Removed a machine-specific Python path from `package.json` and the TTS service (`KAAKA_TTS_PYTHON`). Device-specific wording replaced with "gateway phone"; README documents all settings.
+- Why: Values from the original test devices were showing as real data (for example an old number as "last caller extracted").
+- Validation: Python compile checks; `git grep` finds none of the old numbers, IPs, MAC or adb serials outside the Android apps (handled separately); restarted the server against the S23: HFP connected, `/api/status` returns `last_call_number: null`, configured `bt_mac`, empty `webhook_url`; dashboard served.
+- Limitations: No real call placed after this change. Hardcoded values in the Android apps are being removed in a separate change.
+
+## 2026-10-24T21:28:00+05:30 — Connect hands-free on the first attempt
+
+- Changed: `mac/hfp-bridge` now creates the hands-free object and calls `connect()` one second later (skipping stale attempts), and logs each connection step.
+- Why: When the phone's link was already up, the SDP query returned from cache within a millisecond and IOBluetooth silently dropped a `connect()` issued in the same run-loop pass, so the first attempt always timed out (about 28 s to connect).
+- Validation: Three bridge runs against the Galaxy S23 connected in 3.4 s, 2.2 s and 2.0 s on attempt 1; server end-to-end run (no calls) connected about 2 s after start.
+- Limitations: Answer/hangup/caller ID not re-tested with a real call after this change.
+
 ## 2026-10-24T21:40:00+05:30 — Run the call server on macOS via hfp-bridge
 
 - Changed: Added `mac/hfp-bridge` (Swift, IOBluetooth Hands-Free client that emits JSON-line events and accepts answer/hangup/status/quit commands, with a reconnect watchdog and caller-ID via CLIP/CLCC) and `server/mac_telephony.py` (subprocess client). `server/server.py` and `server/audio_bridge.py` guard Linux-only imports and, on macOS, use hfp-bridge for call detection, answer and hangup; auto-answer defaults off on macOS. Added `server/requirements-mac.txt` and a macOS section in the README. Also imported `subprocess` in `server.py`, which the ADB telemetry thread needed (it failed silently before, including on Linux).

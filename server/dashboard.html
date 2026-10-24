@@ -376,7 +376,7 @@
 
     <div class="header-controls">
       <span class="status-tag active" id="ws-tag">ws: [127.0.0.1:8765]</span>
-      <span class="status-tag active" id="ble-tag">ble: [08:1c:6e:5f:10:f7]</span>
+      <span class="status-tag active" id="ble-tag">ble: [not set]</span>
       <span class="status-tag warn" id="gateway-tag">gateway: [checking...]</span>
       <button type="button" class="action-btn" id="sound-btn" onclick="toggleAudioAlarm()">
         [sound: on]
@@ -503,7 +503,7 @@ awaiting emergency trigger from client or gateway...</div>
     <div class="key-value-list" style="margin-bottom: 0.25rem;">
       <div class="kv-item">
         <span class="kv-key">webhook target</span>
-        <span class="kv-val">http://192.168.2.69:5678/webhook-test/passive</span>
+        <span class="kv-val" id="webhook-url">not configured</span>
       </div>
       <div class="kv-item">
         <span class="kv-key">pipeline</span>
@@ -532,7 +532,7 @@ awaiting emergency trigger from client or gateway...</div>
         </div>
         <div class="kv-item">
           <span class="kv-key">gateway ble device</span>
-          <span class="kv-val">redmi note 10 (08:1c:6e:5f:10:f7)</span>
+          <span class="kv-val" id="gateway-device">gateway phone (not set)</span>
         </div>
         <div class="kv-item">
           <span class="kv-key">last caller extracted</span>
@@ -661,7 +661,7 @@ awaiting emergency trigger from client or gateway...</div>
       updateTelemetryDisplay(content, sender ? `${sender} via ${source}` : source, msg.update_count);
       playBeep(920, 0.25);
     } else if (msg.type === 'CALL_DETECTED') {
-      document.getElementById('last-call-num').textContent = msg.number;
+      document.getElementById('last-call-num').textContent = msg.number || 'unknown (no caller ID)';
       addFeedItem(`call detected from ${msg.number} (${msg.state || 'active'})`, true);
       playBeep(640, 0.2);
     } else if (msg.type === 'SERVER_READY') {
@@ -926,6 +926,12 @@ awaiting emergency trigger from client or gateway...</div>
         if (data.last_call_number) {
           document.getElementById('last-call-num').textContent = data.last_call_number;
         }
+        if (data.bt_mac) {
+          const mac = data.bt_mac.toLowerCase();
+          document.getElementById('ble-tag').textContent = `ble: [${mac}]`;
+          document.getElementById('gateway-device').textContent = `gateway phone (${mac})`;
+        }
+        document.getElementById('webhook-url').textContent = data.webhook_url || 'not configured (KAAKA_WEBHOOK_URL)';
         if (data.latest_telemetry && data.latest_telemetry.content) {
           const t = data.latest_telemetry;
           const currentText = (document.getElementById('raw-telemetry-box')?.textContent || '').trim();

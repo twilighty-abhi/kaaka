@@ -2,14 +2,14 @@
 """
 Kaaka Real-Time Audio Conversation Bridge
 =============================================
-Records and processes 10-second audio segments ONLY DURING AN ACTIVE CALL on Redmi Note 10.
+Records and processes 10-second audio segments ONLY DURING AN ACTIVE CALL on the gateway phone.
 
 Workflow:
 1. Dormant / Idle when no call is active.
-2. Triggers ONLY when an active call is verified on Redmi Note 10 via D-Bus / PipeWire.
+2. Triggers ONLY when an active call is verified on the gateway phone via D-Bus / PipeWire.
 3. Records 10s audio chunk via ffmpeg from the Bluetooth call stream.
 4. Dispatches to n8n AI webhook:
-   curl -X POST http://192.168.2.69:5678/webhook-test/passive -F "data=@record.mp3"
+   curl -X POST "$KAAKA_WEBHOOK_URL" -F "data=@record.mp3"
    (Falls back to /webhook/passive if test mode is inactive).
 5. Receives AI reply:
    - If MP3 binary: plays directly.
@@ -36,16 +36,25 @@ try:
 except ImportError:
     dbus = None
 
-PRIMARY_WEBHOOK_URL = "http://192.168.2.69:5678/webhook-test/passive"
-FALLBACK_WEBHOOK_URL = "http://192.168.2.69:5678/webhook/passive"
+# n8n voice-AI webhook (e.g. http://<n8n-host>:5678/webhook-test/passive); the bridge stays off without it.
+PRIMARY_WEBHOOK_URL = os.environ.get("KAAKA_WEBHOOK_URL", "")
+FALLBACK_WEBHOOK_URL = os.environ.get("KAAKA_WEBHOOK_FALLBACK_URL", "")
 TEMP_RECORD_PATH = "/tmp/record.mp3"
 TEMP_REPLY_PATH = "/tmp/caller_reply.mp3"
+
+def laptop_sink():
+    """Speaker sink for the operator: KAAKA_SPEAKER_SINK or the PipeWire/Pulse default."""
+    return os.environ.get("KAAKA_SPEAKER_SINK") or subprocess.getoutput("pactl get-default-sink").strip()
+
+def laptop_source():
+    """Microphone source for the operator: KAAKA_MIC_SOURCE or the PipeWire/Pulse default."""
+    return os.environ.get("KAAKA_MIC_SOURCE") or subprocess.getoutput("pactl get-default-source").strip()
 
 def format_timestamp():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def is_call_active():
-    """Checks strictly if a phone call is currently active on Redmi Note 10 via PipeWire / oFono."""
+    """Checks strictly if a phone call is currently active on the gateway phone via PipeWire / oFono."""
     if IS_MAC or dbus is None:
         return False
     # Check 1: D-Bus oFono VoiceCallManager on PipeWire Telephony
@@ -81,7 +90,7 @@ def ensure_audio_sinks():
         
         # Link call_playback monitor to laptop speakers so operator hears all played responses
         for ch in ['FL', 'FR']:
-            subprocess.run(['pw-link', f'call_playback:monitor_{ch}', f'alsa_output.pci-0000_00_1f.3.analog-stereo:playback_{ch}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(['pw-link', f'call_playback:monitor_{ch}', f'{laptop_sink()}:playback_{ch}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
 
@@ -107,13 +116,13 @@ def link_call_audio(max_wait_sec=2.5):
             for p in bluez_in:
                 ch = "FL" if "FL" in p else "FR"
                 subprocess.run(['pw-link', f'call_playback:monitor_{ch}', p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                subprocess.run(['pw-link', f'alsa_input.pci-0000_00_1f.3.analog-stereo:capture_{ch}', p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(['pw-link', f'{laptop_source()}:capture_{ch}', p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
             # 2. Route caller audio to record sink and laptop speakers (Downlink)
             for p in bluez_out:
                 ch = "FL" if "FL" in p else "FR"
                 subprocess.run(['pw-link', p, f'call_record:playback_{ch}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                subprocess.run(['pw-link', p, f'alsa_output.pci-0000_00_1f.3.analog-stereo:playback_{ch}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(['pw-link', p, f'{laptop_sink()}:playback_{ch}'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             linked = True
             break
@@ -193,16 +202,16 @@ class AudioConversationBridge:
                 pass
 
     def notify_call_started(self):
-        """Called by server when a call on Redmi Note 10 starts."""
+        """Called by server when a call on the gateway phone starts."""
         self.call_in_progress = True
-        self.log("📞 Call started on Redmi Note 10 -> Establishing bidirectional audio bridge & starting 10s AI recording loop.")
+        self.log("📞 Call started on the gateway phone -> Establishing bidirectional audio bridge & starting 10s AI recording loop.")
         link_call_audio(max_wait_sec=2.5)
         self.start()
 
     def notify_call_ended(self):
-        """Called by server when a call on Redmi Note 10 ends."""
+        """Called by server when a call on the gateway phone ends."""
         self.call_in_progress = False
-        self.log("📴 Call ended on Redmi Note 10 -> Stopping audio recording immediately.")
+        self.log("📴 Call ended on the gateway phone -> Stopping audio recording immediately.")
         self.stop()
 
     def record_chunk(self, duration=10, output_path=TEMP_RECORD_PATH):
@@ -233,7 +242,7 @@ class AudioConversationBridge:
 
     def send_to_webhook(self, mp3_path=TEMP_RECORD_PATH):
         """Sends MP3 to webhook-test/passive or fallback /webhook/passive."""
-        for url in [self.primary_url, self.fallback_url]:
+        for url in [u for u in (self.primary_url, self.fallback_url) if u]:
             try:
                 self.last_status = f"sending to {url}"
                 with open(mp3_path, "rb") as f:
@@ -309,20 +318,20 @@ class AudioConversationBridge:
             self.log(f"⚠️ Response parsing note: {e}")
 
     def loop(self):
-        self.log("🎙️ Call audio monitor active: strictly checking for active call on Redmi Note 10...")
+        self.log("🎙️ Call audio monitor active: strictly checking for active call on the gateway phone...")
         while self.is_running:
-            # Strictly verify that an active call exists on Redmi Note 10
+            # Strictly verify that an active call exists on the gateway phone
             active = is_call_active()
             if not active:
                 self.is_running = False
                 self.call_in_progress = False
-                self.last_status = "idle (no active call on Redmi Note 10)"
-                self.log("📴 No active call on Redmi Note 10. Audio loop stopped immediately.")
+                self.last_status = "idle (no active call on the gateway phone)"
+                self.log("📴 No active call on the gateway phone. Audio loop stopped immediately.")
                 break
 
             self.chunk_count += 1
             self.last_chunk_time = format_timestamp()
-            self.log(f"\n📞 [Active Call on Redmi Note 10 - Chunk #{self.chunk_count}] Recording 10s audio...")
+            self.log(f"\n📞 [Active Call on the gateway phone - Chunk #{self.chunk_count}] Recording 10s audio...")
             
             ok = self.record_chunk(duration=10)
             if not self.is_running or not is_call_active():
@@ -335,7 +344,7 @@ class AudioConversationBridge:
                 time.sleep(0.5)
                 continue
 
-            self.log("🚀 Dispatched 10s MP3 to AI Webhook (http://192.168.2.69:5678/webhook-test/passive)...")
+            self.log(f"🚀 Dispatched 10s MP3 to AI Webhook ({self.primary_url or self.fallback_url})...")
             resp = self.send_to_webhook()
             if not self.is_running or not is_call_active():
                 self.is_running = False
@@ -352,7 +361,7 @@ class AudioConversationBridge:
             if not is_call_active():
                 self.is_running = False
                 self.call_in_progress = False
-                self.log("📴 Call ended on Redmi Note 10. Stopping audio bridge.")
+                self.log("📴 Call ended on the gateway phone. Stopping audio bridge.")
                 break
 
             time.sleep(0.5)
@@ -365,9 +374,13 @@ class AudioConversationBridge:
             return
         if self.is_running:
             return
+        if not (self.primary_url or self.fallback_url):
+            self.last_status = "no AI webhook configured (set KAAKA_WEBHOOK_URL)"
+            self.log(f"ℹ️ Audio conversation bridge off: {self.last_status}.")
+            return
         if not is_call_active():
-            self.log("ℹ️ No active call detected on Redmi Note 10. Audio bridge staying in standby.")
-            self.last_status = "idle (no active call on Redmi Note 10)"
+            self.log("ℹ️ No active call detected on the gateway phone. Audio bridge staying in standby.")
+            self.last_status = "idle (no active call on the gateway phone)"
             return
         self.is_running = True
         self.thread = threading.Thread(target=self.loop, daemon=True)
@@ -376,7 +389,7 @@ class AudioConversationBridge:
     def stop(self):
         self.is_running = False
         self.call_in_progress = False
-        self.last_status = MAC_UNSUPPORTED_STATUS if IS_MAC else "idle (no active call on Redmi Note 10)"
+        self.last_status = MAC_UNSUPPORTED_STATUS if IS_MAC else "idle (no active call on the gateway phone)"
         if self.record_proc:
             try:
                 self.record_proc.kill()
@@ -390,8 +403,8 @@ if __name__ == "__main__":
     print("=" * 65)
     print(" Kaaka Call-Activated Audio AI Conversation Bridge")
     print("=================================================================")
-    print(" Active: STRICTLY ONLY DURING ACTIVE PHONE CALLS on Redmi Note 10")
-    print(" Target: http://192.168.2.69:5678/webhook-test/passive")
+    print(" Active: STRICTLY ONLY DURING ACTIVE PHONE CALLS on the gateway phone")
+    print(f" Target: {PRIMARY_WEBHOOK_URL or 'not configured (set KAAKA_WEBHOOK_URL)'}")
     print(" Press Ctrl+C to stop.")
     print("=" * 65)
     bridge.start()

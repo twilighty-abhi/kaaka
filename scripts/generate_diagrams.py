@@ -52,7 +52,7 @@ sequenceDiagram
         Server->>Server: Trigger n8n webhook workflow for multi-platform dispatch
     and Direct Cellular Emergency SMS
         Client->>Client: DirectSmsPlugin.sendSms(authorizedTarget, telemetrySnapshot)
-        Client-->>Gateway: Encoded Emergency SMS broadcast (9495364448)
+        Client-->>Gateway: Encoded Emergency SMS broadcast (to gateway number)
     end
 
     Note over Gateway: Gateway / Phone B receives distress telemetry and logs incident
@@ -72,7 +72,7 @@ sequenceDiagram
     Cellular->>AndroidOS: Incoming SMS payload
     AndroidOS->>SmsReceiver: Broadcast intent: SMS_DELIVER (Priority 999)
     SmsReceiver->>AndroidOS: Save SMS to telephony provider inbox
-    SmsReceiver->>SmsReceiver: Verify sender matches target suffix (9495364448)
+    SmsReceiver->>SmsReceiver: Verify sender matches configured gateway number
 
     alt Sender is Authorized Emergency Contact
         SmsReceiver->>SmsReceiver: Acquire PowerManager Full WakeLock (10s)
@@ -92,7 +92,7 @@ def generate_voice_ai_conversation_sequence() -> str:
     return """```mermaid
 sequenceDiagram
     autonumber
-    actor Caller as 📞 Caller (Redmi Note 10)
+    actor Caller as 📞 Caller
     participant PW as 🎧 PipeWire / PulseAudio (HFP Audio)
     participant Bridge as 🎙️ audio_bridge.py
     participant N8N as ⚡ n8n Webhook Workflow
