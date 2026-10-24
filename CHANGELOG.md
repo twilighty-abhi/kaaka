@@ -9,7 +9,8 @@ Record each meaningful project change during the event, newest first. Update thi
 - Changed: New `IncomingCallReceiver` in the gateway app listens for the phone-state broadcast (READ_PHONE_STATE, READ_CALL_LOG for the number) and, for calls Android does not send to call screening, sends the auto-reply SMS, logs the event and reports it to the dashboard; with "reject calls" on and ANSWER_PHONE_CALLS granted it ends the ringing call (`TelecomManager.endCall`). Shared call handling moved to `CallHandler`; `GatewayStore.claimCall` prevents a call seen by both paths from being handled twice (60 s per number). New "calls from contacts" permission row in the UI; events from this path are labelled "(contact)".
 - Why: Test calls from a number saved in the S23's contacts were never passed to Kaaka Call: Telecom's history showed `contact exists` and screening sent only to Samsung's own Phone app, so nothing was rejected, texted or reported.
 - Validation: `svelte-check` 0 errors/0 warnings; `assembleDebug` succeeded; installed on the Galaxy S23; `dumpsys package` shows the PHONE_STATE receiver registered and the call-screening role still held.
-- Limitations: Real-call test pending (permissions must be granted in the app first). `TelecomManager.endCall` is deprecated; if it does not work on the S23, contact calls still get the SMS and dashboard event but keep ringing.
+- Real-call test (2026-10-24 23:16 IST): call from a saved contact to the Galaxy S23 was ended, the caller received the auto-reply SMS, the app logged it as `via phone_state`, `rejected`, `sms sent`, and the Mac dashboard received the call event.
+- Limitations: `TelecomManager.endCall` is deprecated; it works on the S23 today but could stop working in a future Android release (the SMS and dashboard event would still happen).
 
 ## 2026-10-24T23:05:00+05:30 — Remove hackathon template files
 
