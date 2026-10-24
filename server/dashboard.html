@@ -797,8 +797,11 @@ awaiting emergency trigger from client or gateway...</div>
       const source = msg.source || 'bluetooth ble / map';
       const sender = msg.sender || '';
       updateTelemetryDisplay(content, sender ? `${sender} via ${source}` : source, msg.update_count);
-      playBeep(920, 0.25);
-      if (source !== 'Live sensor stream') refreshIncidents();
+      // The live stream arrives about once a second: no beep, and no incident refresh, for it.
+      if (source !== 'Live sensor stream') {
+        playBeep(920, 0.25);
+        refreshIncidents();
+      }
     } else if (msg.type === 'CALL_DETECTED') {
       document.getElementById('last-call-num').textContent = msg.number || 'unknown (no caller ID)';
       addFeedItem(`call detected from ${msg.number} (${msg.state || 'active'})`, true);

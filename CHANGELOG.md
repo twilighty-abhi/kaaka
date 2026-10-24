@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T01:58:19+05:30 — Dashboard: no beep for the live sensor stream
+
+- Changed: `server/dashboard.html` beeps only for alerts, calls and other events, not for "Live sensor stream" telemetry.
+- Why: With a phone streaming sensor readings (about once a second), an open dashboard tab beeped continuously.
+- Validation: Reviewed the handler; stream messages carry source "Live sensor stream".
+- Limitations: Reload open dashboard tabs to pick up the change.
+
 ## 2026-10-25T01:52:02+05:30 — Scripted demo on two emulators; remove leftover sample coordinates
 
 - Changed: New `scripts/demo-emulated.sh` resets two configured emulators and the dashboard, runs the SMS relay and a GPS feed, and performs the scenario (incoming call, reply-triggered location alert, SOS, help SMS, caller stops beacon, dashboard resolve) while `scripts/record-demo.sh` records a captioned side-by-side video. `record-demo.sh` gains an optional caption strip (`CAPTIONS`) and label tag (`DEMO_TAG`). Removed the hardcoded sample coordinates 9.064458, 76.557012 from the dashboard's GPS tile, Maps link and simulated alert and from the server's simulated alerts ("Location: unavailable" instead).
