@@ -21,7 +21,7 @@
   --gutter-r: max(20px, env(safe-area-inset-right, 0px));
 }
 html { scroll-behavior: smooth; background: var(--abyss); }
-body { background: var(--abyss); color: var(--silver); font: 400 16px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: var(--abyss); color: var(--silver); font: 400 16px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
 a { color: inherit; }
 .band { padding-left: var(--gutter-l); padding-right: var(--gutter-r); }
 .inner { max-width: 1240px; margin: 0 auto; }
@@ -127,7 +127,45 @@ footer a:hover { color: var(--platinum); }
   .row { padding: 32px 24px; }
   .well { padding: 80px 24px; }
 }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+/* motion: entrance, scroll reveals, hover, network signals. All off for reduced motion. */
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } }
+@keyframes aurora { to { background-position: 100% 0; } }
+@keyframes flow { to { stroke-dashoffset: -48; } }
+@keyframes ping { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(2.1); opacity: 0; } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.hero .inner > * { animation: rise 1s cubic-bezier(.2, .7, .2, 1) both; }
+.hero .inner > :nth-child(2) { animation-delay: .12s; }
+.hero .inner > :nth-child(3) { animation-delay: .26s; }
+.hero .inner > :nth-child(4) { animation-delay: .4s; }
+.hero canvas { animation: rise 1.6s ease-out both; }
+.reveal { opacity: 0; transform: translateY(32px); transition: opacity .9s cubic-bezier(.2, .7, .2, 1), transform .9s cubic-bezier(.2, .7, .2, 1); transition-delay: var(--d, 0s); }
+.reveal.in { opacity: 1; transform: none; }
+.btn { transition: transform .25s ease, background-color .25s ease; }
+.btn:hover { transform: translateY(-2px); }
+.btn-aurora { background-size: 200% 100%; animation: aurora 5s ease-in-out infinite alternate; }
+.btn-kelp:hover { background: #00463f; }
+.step, .panel { transition: transform .35s ease, background-color .35s ease, border-color .35s ease, opacity .9s cubic-bezier(.2, .7, .2, 1); }
+.step:hover, .panels .panel:hover { transform: translateY(-6px); background: #00423e; }
+.safety .panel:hover { border-color: rgba(255, 255, 255, .3); transform: translateY(-6px); }
+.row { transition: border-color .35s ease, background-color .35s ease, opacity .9s cubic-bezier(.2, .7, .2, 1), transform .9s cubic-bezier(.2, .7, .2, 1); }
+.row:hover { border-color: rgba(255, 255, 255, .3); background: rgba(0, 55, 52, .45); }
+.arrow { transition: transform .3s ease, background-color .3s ease; }
+.step.reveal, .panel.reveal, .row.reveal { transition-delay: var(--d, 0s); }
+.row:hover .arrow { transform: translate(3px, -3px); background: #03514b; }
+.molecule .flow line { stroke: #fde9ff; stroke-width: 1.4; stroke-dasharray: 6 18; animation: flow 1.8s linear infinite; }
+.molecule .ping { transform-box: fill-box; transform-origin: center; animation: ping 2.4s ease-out infinite; }
+.molecule .ping.late { animation-delay: 1.2s; }
+.kinetic .word { background: linear-gradient(90deg, #003734 0%, #003734 40%, #0b6b63 50%, #003734 60%, #003734 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 7s linear infinite; transform: translateX(var(--kx, 0px)); will-change: transform; width: max-content; margin-inline: auto; padding-inline: .06em; }
+.progress { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; height: 2px; width: 100%; background: var(--aurora); transform-origin: 0 50%; transform: scaleX(var(--p, 0)); z-index: 40; pointer-events: none; }
+.nav { transition: border-color .3s ease; border-bottom: 1px solid transparent; }
+.nav.scrolled { border-bottom-color: var(--hairline); }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .reveal { opacity: 1; transform: none; }
+  .molecule .dot, .molecule .ping, .progress { display: none; }
+  .kinetic .word { transform: none; }
+}
 </style>
 </head>
 <body>
@@ -212,8 +250,19 @@ footer a:hover { color: var(--platinum); }
         <g fill="#012624" stroke="#ffffff" stroke-width="1.5">
           <circle cx="210" cy="90" r="30"/><circle cx="90" cy="330" r="22"/><circle cx="330" cy="330" r="22"/><circle cx="340" cy="140" r="16"/><circle cx="210" cy="400" r="26"/>
         </g>
+        <g class="flow" fill="none" aria-hidden="true">
+          <line x1="210" y1="90" x2="210" y2="230"/><line x1="210" y1="230" x2="90" y2="330"/><line x1="210" y1="230" x2="330" y2="330"/><line x1="210" y1="230" x2="340" y2="140"/>
+        </g>
+        <circle class="ping" cx="210" cy="230" r="42" fill="none" stroke="#fde9ff" stroke-width="1"/>
+        <circle class="ping late" cx="210" cy="230" r="42" fill="none" stroke="#fde9ff" stroke-width="1"/>
         <circle cx="210" cy="230" r="42" fill="#003734" stroke="#ffffff" stroke-width="1.5"/>
         <circle cx="210" cy="230" r="10" fill="#fde9ff"/>
+        <g fill="#fde9ff" aria-hidden="true">
+          <circle class="dot" r="3.5"><animateMotion dur="2.6s" repeatCount="indefinite" path="M210 90 L210 230"/></circle>
+          <circle class="dot" r="3"><animateMotion dur="2.6s" begin="1.3s" repeatCount="indefinite" path="M210 230 L90 330 L210 400"/></circle>
+          <circle class="dot" r="3"><animateMotion dur="2.6s" begin="1.3s" repeatCount="indefinite" path="M210 230 L330 330 L210 400"/></circle>
+          <circle class="dot" r="2.5"><animateMotion dur="3.4s" begin=".6s" repeatCount="indefinite" path="M210 230 L340 140"/></circle>
+        </g>
         <g fill="#bbc7c6" font-family="Inter, system-ui, sans-serif" font-size="11" letter-spacing="1.6" text-anchor="middle">
           <text x="210" y="40">CALLER</text><text x="210" y="293">KAAKA NUMBER</text><text x="90" y="372">RESPONDER</text><text x="330" y="372">RESPONDER</text><text x="368" y="114">MAP</text><text x="210" y="448">CONTROL ROOM</text>
         </g>
@@ -303,7 +352,9 @@ footer a:hover { color: var(--platinum); }
     const y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(1 - y * y), t = i * 2.399963229728653;
     pts.push([Math.cos(t) * r, y, Math.sin(t) * r]);
   }
-  let w = 0, h = 0, dpr = 1, angle = 0.6;
+  let w = 0, h = 0, dpr = 1, angle = 0.6, tiltOff = 0, tiltGoal = 0, spinBoost = 0, t = 0;
+  canvas.parentElement.addEventListener('pointermove', e => { const r = canvas.getBoundingClientRect(); tiltGoal = ((e.clientY - r.top) / r.height - 0.5) * 0.6; spinBoost = ((e.clientX - r.left) / r.width - 0.5) * 0.004; });
+  canvas.parentElement.addEventListener('pointerleave', () => { tiltGoal = 0; spinBoost = 0; });
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     w = canvas.clientWidth; h = canvas.clientHeight;
@@ -312,8 +363,8 @@ footer a:hover { color: var(--platinum); }
   }
   function draw() {
     ctx.clearRect(0, 0, w, h);
-    const R = Math.min(w, h) * 0.42, cx = w / 2, cy = h / 2;
-    const ca = Math.cos(angle), sa = Math.sin(angle), tilt = 0.35, ct = Math.cos(tilt), st = Math.sin(tilt);
+    const R = Math.min(w, h) * 0.42 * (1 + Math.sin(t) * 0.012), cx = w / 2, cy = h / 2;
+    const ca = Math.cos(angle), sa = Math.sin(angle), tilt = 0.35 + tiltOff, ct = Math.cos(tilt), st = Math.sin(tilt);
     for (const [x, y, z] of pts) {
       const x1 = x * ca + z * sa, z1 = -x * sa + z * ca;
       const y2 = y * ct - z1 * st, z2 = y * st + z1 * ct;
@@ -325,9 +376,64 @@ footer a:hover { color: var(--platinum); }
       ctx.fillRect(cx + x1 * R, cy + y2 * R, s, s);
     }
   }
-  function tick() { angle += 0.0018; draw(); if (!reduce) requestAnimationFrame(tick); }
+  function tick() { t += 0.01; tiltOff += (tiltGoal - tiltOff) * 0.04; angle += 0.0018 + spinBoost; draw(); if (!reduce) requestAnimationFrame(tick); }
   resize(); window.addEventListener('resize', () => { resize(); draw(); });
   reduce ? draw() : requestAnimationFrame(tick);
+})();
+</script>
+<script>
+// Scroll reveals, stat count-up, kinetic word drift, scroll progress and nav border.
+(() => {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const nav = document.querySelector('.nav');
+  const bar = document.createElement('div'); bar.className = 'progress'; bar.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(bar);
+  const word = document.querySelector('.kinetic .word');
+  let queued = false;
+  function onScroll() {
+    queued = false;
+    const max = document.documentElement.scrollHeight - innerHeight;
+    bar.style.setProperty('--p', max > 0 ? (scrollY / max).toFixed(4) : 0);
+    nav.classList.toggle('scrolled', scrollY > 8);
+    if (word && !reduce) {
+      const r = word.getBoundingClientRect();
+      const t = (innerHeight - r.top) / (innerHeight + r.height); // 0 → 1 while the word crosses the screen
+      word.style.setProperty('--kx', ((0.5 - Math.min(Math.max(t, 0), 1)) * 18).toFixed(2) + 'vw');
+    }
+  }
+  addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(onScroll); } }, { passive: true });
+  onScroll();
+  if (reduce || !('IntersectionObserver' in window)) return;
+
+  const groups = ['.head', '.stat', '.step', '.row', '.molecule', '.panel', '.kinetic .line', '.well'];
+  const targets = [];
+  for (const sel of groups) {
+    document.querySelectorAll(sel).forEach(el => {
+      const sibs = [...el.parentElement.children].filter(c => c.matches(sel));
+      el.style.setProperty('--d', (Math.max(sibs.indexOf(el), 0) % 6 * 0.09) + 's');
+      el.classList.add('reveal'); targets.push(el);
+    });
+  }
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) if (e.isIntersecting) {
+      e.target.classList.add('in'); io.unobserve(e.target);
+      if (e.target.classList.contains('stat')) countUp(e.target.querySelector('.num'));
+    }
+  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+  targets.forEach(el => io.observe(el));
+  // Elements whose reveal transition ended no longer need the delay (hover stays snappy).
+  document.addEventListener('transitionend', e => { if (e.target.classList?.contains('in')) e.target.style.removeProperty('--d'); });
+
+  function countUp(el) {
+    const m = el.textContent.match(/^(\d+)(.*)$/); if (!m) return;
+    const end = +m[1], rest = m[2], t0 = performance.now(), dur = 1200;
+    if (end === 0) return;
+    (function step(now) {
+      const k = Math.min((now - t0) / dur, 1), eased = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(end * eased) + rest;
+      if (k < 1) requestAnimationFrame(step);
+    })(t0);
+  }
 })();
 </script>
 </body>
