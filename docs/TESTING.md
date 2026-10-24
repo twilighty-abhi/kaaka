@@ -5,7 +5,7 @@ Phone numbers below are placeholders; use your own test phones.
 
 ## 0. Setup
 
-- [ ] Mac: dashboard running (`.venv-mac/bin/python server/server.py`, no `--bt-mac`); open `http://<mac-ip>:8080`.
+- [ ] Mac: dashboard running (`.venv-mac/bin/python server/server.py`, no `--bt-mac`); open `http://<mac-ip>:8080/admin`.
 - [ ] S23 connected by USB; install the latest gateway build: `adb install -r gateway/Kaaka.apk`.
 - [ ] S23 on the same Wi-Fi as the Mac.
 - [ ] Kaaka Call setup rows all green: call screening **on**, SMS **granted**, calls from contacts **granted**, battery optimisation **exempt**.

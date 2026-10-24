@@ -51,7 +51,7 @@ Next steps:
 2. In Kaaka Call on the gateway phone: [config] -> dashboard token = the same token -> save.
    The phone picks up the public URL from the dashboard's heartbeat reply within a minute;
    leave "public link url" empty (or set it to $URL to pin it).
-3. Open the dashboard yourself at $URL/?token=$TOKEN
+3. Open the dashboard yourself at $URL/admin?token=$TOKEN
 4. Call the Kaaka number: the reply SMS now ends with "Share your location: $URL/l/<token>".
 
 The tunnel stays open while this script runs. Ctrl-C closes it (the URL stops working).

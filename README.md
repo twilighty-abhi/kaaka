@@ -27,7 +27,7 @@ Start the dashboard server on the Mac (no Bluetooth):
 .venv-mac/bin/python server/server.py
 ```
 
-Then, in the gateway app on the S23, set **Dashboard server** to `http://<mac-ip>:8080` (the server prints its IP on startup). Both devices must be on the same Wi-Fi.
+Open the dashboard at `http://<mac-ip>:8080/admin`. The server address itself, `http://<mac-ip>:8080/`, shows the public landing page from `site/index.html`. Then, in the gateway app on the S23, set **Dashboard server** to `http://<mac-ip>:8080` (the server prints its IP on startup). Both devices must be on the same Wi-Fi.
 
 **Do not combine this with the Bluetooth mode.** In this mode the server runs without `--bt-mac`. If the Mac were also connected to the S23 as a Bluetooth hands-free unit, both the Mac and the S23's own call screening would hang up the same call and handle it twice. The macOS Bluetooth section below describes an alternative mode, not an add-on.
 

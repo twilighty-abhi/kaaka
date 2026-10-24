@@ -246,6 +246,17 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             page = f.read().replace("{{TOKEN}}", token)  # token matched TOKEN_RE, safe to embed
         self.send_html(200, page.encode("utf-8"))
 
+    def serve_landing_page(self):
+        """Public landing page (site/index.html in the repository)."""
+        landing = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site", "index.html")
+        try:
+            with open(landing, "rb") as f:
+                page = f.read()
+        except OSError:
+            page = (b"<!doctype html><meta charset=utf-8><title>Kaaka</title>"
+                    b"<p>Kaaka help line. The control room is at <a href=/admin>/admin</a>.</p>")
+        self.send_html(200, page)
+
     def handle_location(self):
         """POST /api/location (public): a caller shares their location through the SMS link."""
         try:
@@ -283,14 +294,23 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         if path.startswith("/l/"):
             self.serve_locate_page(path[3:])
             return
+        if path in ("/", "/index.html"):
+            self.serve_landing_page()  # public: what Kaaka is; the dashboard lives at /admin
+            return
+        if path == "/admin/":
+            self.send_response(301)
+            self.send_header("Location", "/admin" + (("?" + parsed.query) if parsed.query else ""))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if not self.authorized(query):
-            if path in ("/", "/index.html"):
+            if path == "/admin":
                 self.send_html(401, b"<!doctype html><meta charset=utf-8><title>Kaaka</title>"
-                                    b"<p>Admin token required: open the dashboard as /?token=...</p>")
+                                    b"<p>Admin token required: open the dashboard as /admin?token=...</p>")
             else:
                 self.send_json(401, {"success": False, "error": "admin token required"})
             return
-        if path in ["/", "/index.html"]:
+        if path == "/admin":
             dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
             if not os.path.exists(dashboard_path):
                 self.send_error(404, "dashboard.html not found")
@@ -1627,7 +1647,7 @@ class TelemetryServer:
         socketserver.ThreadingTCPServer.allow_reuse_address = True
         try:
             httpd = socketserver.ThreadingTCPServer((self.host, self.http_port), BoundHandler)
-            print(f"[{format_timestamp()}] 🖥️ Web Dashboard UI active: \033[1;32mhttp://{self.local_ip}:{self.http_port}\033[0m")
+            print(f"[{format_timestamp()}] 🖥️ Web Dashboard UI active: \033[1;32mhttp://{self.local_ip}:{self.http_port}/admin\033[0m (landing page at /)")
             httpd.serve_forever()
         except Exception as e:
             print(f"[{format_timestamp()}] HTTP server error: {e}")
@@ -1783,13 +1803,14 @@ class TelemetryServer:
         print("=" * 65)
         print(f"  🌐 Local Wi-Fi IP  : \033[1;36m{self.local_ip}\033[0m")
         print(f"  🔌 WebSocket Port  : \033[1;36m{self.port}\033[0m  (\033[1;32mws://{self.local_ip}:{self.port}\033[0m)")
-        print(f"  🖥️ Web Dashboard UI: \033[1;36m{self.http_port}\033[0m  (\033[1;32mhttp://{self.local_ip}:{self.http_port}\033[0m)")
+        print(f"  🏠 Landing page    : \033[1;36m{self.http_port}\033[0m  (\033[1;32mhttp://{self.local_ip}:{self.http_port}/\033[0m)")
+        print(f"  🖥️ Web Dashboard UI: \033[1;36m{self.http_port}\033[0m  (\033[1;32mhttp://{self.local_ip}:{self.http_port}/admin\033[0m)")
         print(f"  📶 Gateway BLE MAC : \033[1;36m{self.bt_mac or 'off (gateway app mode)'}\033[0m")
         print(f"  🔗 Public URL      : \033[1;36m{self.public_url or 'not set (location links off)'}\033[0m")
         print(f"  🔒 Admin token     : \033[1;36m{'on' if self.admin_token else 'off'}\033[0m")
         print(f"  🔔 Notifications   : \033[1;36m{'on (macOS)' if self.notify_enabled else 'off'}\033[0m")
         print("=" * 65)
-        print("  💡 Tip: Open the dashboard in browser to view live visual sensors.")
+        print("  💡 Tip: Open /admin in a browser for the dashboard and live sensors.")
         print("  💡 Tip: Press [Enter] to simulate a call test.")
         print("  💡 Tip: Type 't' + [Enter] to simulate sensor telemetry display.")
         print("=" * 65 + "\n", flush=True)

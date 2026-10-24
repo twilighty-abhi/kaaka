@@ -990,7 +990,7 @@
 <script>
   let ws = null;
   let wsPort = 8765;
-  // Optional admin token (KAAKA_ADMIN_TOKEN): open the dashboard once as /?token=...
+  // Optional admin token (KAAKA_ADMIN_TOKEN): open the dashboard once as /admin?token=...
   const adminToken = new URLSearchParams(window.location.search).get('token') || '';
 
   function api(path, options = {}) {

@@ -9,7 +9,7 @@ It works alongside 112, not instead of it: it cannot dispatch police, fire or am
 | Part | Device | Role |
 |---|---|---|
 | Kaaka number | Galaxy S23 with **Kaaka Call** (`gateway/`) | Screens incoming calls, rejects them, sends the auto-reply SMS, receives "Kaaka Alert" reports, keeps an event log. Works with the app closed. |
-| Control room | Mac running `server/server.py` (no Bluetooth) | Dashboard on `http://<mac-ip>:8080` showing calls, auto-reply results, alerts and live telemetry forwarded by the S23 over Wi-Fi. |
+| Control room | Mac running `server/server.py` (no Bluetooth) | Dashboard on `http://<mac-ip>:8080/admin` (landing page at `/`) showing calls, auto-reply results, alerts and live telemetry forwarded by the S23 over Wi-Fi. |
 | Caller | Any phone | Calls the Kaaka number. No app needed. |
 | Registered user | Android phone with **Kaaka Sensors** (`client/`) | When the Kaaka number replies, sends GPS + sensor reports to it every minute. |
 

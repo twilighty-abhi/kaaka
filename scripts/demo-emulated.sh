@@ -68,7 +68,7 @@ GPS=$!
 trap 'kill $RELAY $GPS 2>/dev/null || true' EXIT
 
 # Recording runs in parallel with the scenario below.
-CAPTIONS="$CAPTIONS" "$ROOT/scripts/record-demo.sh" "$G" "$C" "$DURATION" "$DASH" &
+CAPTIONS="$CAPTIONS" "$ROOT/scripts/record-demo.sh" "$G" "$C" "$DURATION" "$DASH/admin" &
 REC=$!
 START=$(date +%s)
 at() { local wait=$(( $1 - ( $(date +%s) - START ) )); [ "$wait" -gt 0 ] && sleep "$wait"; }
