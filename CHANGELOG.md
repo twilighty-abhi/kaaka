@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T04:13:15+05:30 — Landing page at /, dashboard at /admin
+
+- Changed: the server serves `site/index.html` at `/` and `/index.html` without the admin token. The dashboard and its token check move to `/admin`; `/admin/` redirects there with the query string. The landing page footer links to `/admin`. Startup output, README, PLAN, TESTING, `scripts/public-url.sh` and the demo recording scripts use the new address.
+- Why: The server address should show what Kaaka is; the control room is for operators.
+- Validation: `py_compile` and `unittest` pass. On a spare port, without a token: `/` 200 landing page, `/admin` 200 dashboard, `/admin/` 301. With `KAAKA_ADMIN_TOKEN`: `/` 200, `/admin` 401, `/admin?token=` 200 and sets the cookie, `/api/status` 401. Restarted the live server on 8080 and screenshotted both pages; existing incidents still show.
+- Limitations: An old bookmark to `/?token=...` now opens the landing page; use `/admin?token=...`. The gateway app's "Dashboard server" setting is unchanged because it is the API base address.
+
 ## 2026-10-25T04:09:44+05:30 — Landing page
 
 - Added: `site/index.html`, a single-file landing page: hero with a canvas particle sphere, stat strip, the six-step flow, the three parts (Kaaka number, Kaaka Sensors, control room) with a network illustration, the control room pages, safety notes and a call-to-action to the repository. README links to it.
