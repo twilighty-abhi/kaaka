@@ -74,10 +74,13 @@ Most callers will not have Kaaka Sensors. The reply SMS can carry a link that wo
 
 | Setting | Purpose |
 |---|---|
-| `KAAKA_ADMIN_TOKEN` (env) | Optional. When set, the dashboard, `/api/status`, `/api/incidents`, the WebSocket and all gateway `POST` endpoints require the token as header `X-Kaaka-Token`, query `?token=`, or the dashboard cookie (open the dashboard once as `/?token=…`). Use letters and digits. Location links stay public. |
+| `KAAKA_ADMIN_TOKEN` (env) | Optional. When set, the dashboard, `/api/status`, `/api/incidents`, the WebSocket and all gateway `POST` endpoints require the token as header `X-Kaaka-Token`, query `?token=`, or the dashboard cookie (open the dashboard once as `/admin?token=…`). Use letters and digits. Location links stay public. |
 | `--public-url` / `KAAKA_PUBLIC_URL` | Optional public https URL of this server. Returned to the gateway app in the heartbeat reply (it builds the location links from it), shown in the startup banner and `/api/status`. Requires `KAAKA_ADMIN_TOKEN` unless `--allow-unprotected-public` is given. |
 | `--no-notify` / `KAAKA_NOTIFY=0` | Turn off macOS notifications. |
 | `KAAKA_STALE_SECONDS` (env) | Seconds without a heartbeat before the gateway phone counts as silent (default 1200). |
+| `--data-dir` / `KAAKA_DATA_DIR` | Directory for runtime data (`events.jsonl`, `responders.json`, `last_call.json`, `latest_telemetry.json`). Default: `server/`. Created if missing. |
+| `--no-console` / `KAAKA_CONSOLE=0` | Turn off the terminal test console (Enter simulates a call). It is off automatically when stdin is not a terminal, as under systemd or launchd. |
+| `GET /api/health` | Public liveness check, no token: `{"ok": true, "version": "1.0.0", "uptime_seconds": …, "gateway_online": …}`. |
 
 With `KAAKA_ADMIN_TOKEN` set, the client app's live sensor stream and its WebSocket copy (which send no token) are refused; the SMS alert path through the S23 is unaffected. The dashboard's WebSocket uses port 8765 on the same host, so through a tunnel the dashboard falls back to status/incident polling.
 
@@ -291,12 +294,26 @@ npm run build:gateway
 
 ### Server
 ```bash
-# Run telemetry server
-npm run dev:server
-
-# Run Bluetooth telephony listener
-python3 server/server.py
+python3 -m venv .venv-mac && .venv-mac/bin/pip install -r server/requirements.txt
+.venv-mac/bin/python server/server.py
 ```
+Landing page at `http://<ip>:8080/`, dashboard at `http://<ip>:8080/admin`.
+
+## Running in production
+
+The basics for a help line that stays up:
+
+1. **Set an admin token.** `export KAAKA_ADMIN_TOKEN=<long random string>` before starting the server, and enter the same token in Kaaka Call under [config]. Without it, anyone who can reach the server can read callers' numbers and locations. The server refuses a public URL without a token.
+2. **Run it as a service** so it restarts after a crash or reboot:
+   - Linux: `deploy/kaaka.service` (systemd). Copy the repo to `/opt/kaaka`, create the venv there, put the environment in `/etc/kaaka/kaaka.env` (see `deploy/kaaka.env.example`), then `systemctl enable --now kaaka`. Data lives in `/var/lib/kaaka`.
+   - macOS: `deploy/com.kaaka.server.plist` (launchd). Edit the paths and token, copy it to `~/Library/LaunchAgents/`, then `launchctl load ~/Library/LaunchAgents/com.kaaka.server.plist`. Logs go to `~/Library/Logs/kaaka/`.
+3. **Keep the data directory backed up.** `KAAKA_DATA_DIR` holds the incident history and responder registry. It contains phone numbers and locations: restrict access to it.
+4. **Monitor `GET /api/health`.** It needs no token and returns `ok`, the version and whether the gateway phone has sent a heartbeat recently.
+5. **Install the release APKs.** `gateway/Kaaka.apk` and `client/KaakaSensors.apk` are release-signed (version 1.0.0). A phone that still has an earlier debug-signed build must uninstall it first; Android refuses to update an app whose signing key changed. Later releases signed with the same key update in place.
+6. **Guard the signing key.** Release builds read `android/keystore.properties` (gitignored; see `keystore.properties.example` in each app). Back up the keystore it points to. If it is lost, installed apps can never be updated under the same signature.
+7. **Public access.** Put the server behind https (a reverse proxy or `scripts/public-url.sh` for a Cloudflare quick tunnel) and set `--public-url` so location links work from any phone. Through a tunnel the dashboard's WebSocket is not reachable and it falls back to polling.
+
+CI (`.github/workflows/ci.yml`) runs the server tests and both web builds on every push and pull request. Tests: `cd server && python -m unittest -q`.
 
 ---
 
@@ -325,7 +342,7 @@ Run all commands from the repository root (`kaaka/`).
    ```bash
    .venv-mac/bin/python server/server.py --bt-mac AA:BB:CC:DD:EE:FF   # your phone's Bluetooth address (System Settings → Bluetooth)
    ```
-   Leave the terminal input alone while it runs: pressing Enter in the server console simulates a call.
+   When run from a terminal, pressing Enter in the server console simulates a call (off with `--no-console`).
    Set `HFP_BRIDGE_BIN` to use a bridge binary from another location.
 
    Settings (nothing is hardcoded; unset optional settings disable that feature):
