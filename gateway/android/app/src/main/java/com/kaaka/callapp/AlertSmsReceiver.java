@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.provider.Telephony;
 import android.telephony.SmsMessage;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -71,12 +72,53 @@ public class AlertSmsReceiver extends BroadcastReceiver {
                 JSONObject payload = new JSONObject();
                 payload.put("report", text);
                 payload.put("sender", from);
-                GatewayStore.postToDashboard(appContext, "/api/telemetry", payload);
+                String response = GatewayStore.postToDashboardForResponse(appContext, "/api/telemetry", payload);
+                dispatchResponders(appContext, from, response);
             } catch (JSONException ignored) {
             } finally {
                 pending.finish();
             }
         }).start();
+    }
+
+    /**
+     * The dashboard answers an alert with the nearest available responders ("dispatch"); text each one.
+     * Nothing happens without a dashboard, without responders registered there, or for later reports of
+     * an incident the dashboard already dispatched (it then returns an empty list).
+     */
+    private static void dispatchResponders(Context context, String caller, String response) {
+        if (response == null) return;
+        JSONArray dispatch;
+        try {
+            dispatch = new JSONObject(response).optJSONArray("dispatch");
+        } catch (JSONException e) {
+            return;
+        }
+        if (dispatch == null || dispatch.length() == 0) return;
+        JSONArray texted = new JSONArray();
+        int failed = 0;
+        for (int i = 0; i < dispatch.length(); i++) {
+            JSONObject r = dispatch.optJSONObject(i);
+            if (r == null || r.optString("number").isEmpty()) continue;
+            String message = GatewayText.dispatchMessage(caller, r.optDouble("distance_km", 0), r.optInt("eta_min", 1),
+                r.optString("maps_url"));
+            if (GatewayStore.sendSms(context, r.optString("number"), message)) {
+                texted.put(r.optString("name", r.optString("number")));
+            } else {
+                failed++;
+            }
+        }
+        try {
+            JSONObject event = new JSONObject();
+            event.put("type", "dispatch");
+            event.put("number", caller);
+            event.put("responderNames", texted);
+            event.put("responders", texted.length());
+            if (failed > 0) event.put("respondersFailed", failed);
+            event.put("timestamp", GatewayStore.nowIso());
+            GatewayStore.appendEvent(context, event);
+        } catch (JSONException ignored) {
+        }
     }
 
     /** Runs work off the main thread while keeping the broadcast alive until it finishes. */

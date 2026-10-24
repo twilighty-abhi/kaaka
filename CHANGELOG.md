@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:25:32+05:30 — Gateway: text the dispatched responders
+
+- Changed: After forwarding a Kaaka Alert to the dashboard, `AlertSmsReceiver` reads the `dispatch` list in the reply and texts each responder with `GatewayText.dispatchMessage` (distance, ETA, Maps link, "Reply ACK <caller>"), then logs a local `dispatch` event (names texted, failures). The event list shows "dispatch for <caller>: <names>". Later reports of an already-dispatched incident get an empty list from the dashboard, so nobody is texted twice.
+- Why: Close the loop from "nearest responder known" to "nearest responder told".
+- Validation: `svelte-check` 0 errors; web build, `cap sync`, `./gradlew testDebugUnitTest assembleDebug` (GatewayTextTest 12/12).
+- Limitations: Not run on a device; the dashboard must be reachable at alert time, otherwise no dispatch SMS goes out (the alert itself still reaches responders through the normal notification).
+
 ## 2026-10-25T03:25:32+05:30 — Gateway: read the dashboard's reply to a post
 
 - Changed: `GatewayStore.postToDashboardForResponse` posts JSON and returns the response body (null without a dashboard, on error or when unreachable; body capped at 64 KB); `postToDashboard` now wraps it, so existing callers are unchanged.

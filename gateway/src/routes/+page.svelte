@@ -30,7 +30,7 @@
   type ReplyLanguage = 'en' | 'ml' | 'both';
 
   interface GatewayEvent {
-    type: 'call' | 'alert' | 'ack' | 'escalation' | 'resolve';
+    type: 'call' | 'alert' | 'ack' | 'escalation' | 'resolve' | 'dispatch';
     timestamp: string;
     number?: string;
     state?: string;
@@ -38,6 +38,7 @@
     via?: string;
     token?: string;
     locationLink?: boolean;
+    responderNames?: string[];
     responder?: string;
     smsToCaller?: string;
     responders?: number;
@@ -461,6 +462,8 @@
                 <span>reminder: {ev.kind || 'call'} {ev.number} unacknowledged{respondersText(ev)}</span>
               {:else if ev.type === 'resolve'}
                 <span>resolved {ev.number} by {ev.responder}{ev.note ? ` · ${ev.note}` : ''}</span>
+              {:else if ev.type === 'dispatch'}
+                <span>dispatch for {ev.number}: {(ev.responderNames ?? []).join(', ') || 'nobody reached'}{ev.respondersFailed ? ` (${ev.respondersFailed} failed)` : ''}</span>
               {:else}
                 <span>alert from {ev.sender || 'unknown'}{respondersText(ev)}</span>
                 <span class="event-text">{ev.text}</span>
