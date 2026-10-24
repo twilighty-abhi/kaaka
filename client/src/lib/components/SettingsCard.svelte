@@ -10,14 +10,8 @@
 	let backendUrl = $state(appSettings.backendUrl);
 	let saved = $state(false);
 
-	// Settings the user still has to fill in; shown as a warning so nothing silently falls back.
-	let missing = $derived(
-		[
-			!appSettings.gatewayNumber && "gateway phone number",
-			!appSettings.serverUrl && "Mac server address",
-			!appSettings.backendUrl && "telemetry backend URL"
-		].filter(Boolean) as string[]
-	);
+	// Only the gateway number is required; the computer settings are optional extras.
+	let missing = $derived(!appSettings.gatewayNumber);
 
 	function handleSave(e: Event) {
 		e.preventDefault();
@@ -33,10 +27,10 @@
 			<Settings class="h-5 w-5 text-primary" />
 			<Card.Title class="text-base font-bold">Settings</Card.Title>
 		</div>
-		{#if missing.length}
+		{#if missing}
 			<div class="mt-2 flex items-start gap-2 rounded-xl border border-red-500/50 bg-red-950/60 px-3 py-2 text-xs text-red-200">
 				<AlertCircle class="h-4 w-4 shrink-0 text-red-400" />
-				<span>Not set: {missing.join(", ")}. Alerts are not sent anywhere that is not configured.</span>
+				<span>Not set: gateway phone number. The emergency beacon stays off until it is set.</span>
 			</div>
 		{/if}
 	</Card.Header>
@@ -47,13 +41,17 @@
 				<Input type="tel" bind:value={gatewayNumber} placeholder="+91XXXXXXXXXX" />
 			</label>
 			<label class="block space-y-1 text-xs font-semibold">
-				<span>Mac server WebSocket</span>
+				<span>Computer dashboard WebSocket (optional)</span>
 				<Input type="url" bind:value={serverUrl} placeholder="ws://<mac-ip>:8765" />
 			</label>
 			<label class="block space-y-1 text-xs font-semibold">
-				<span>Telemetry backend</span>
+				<span>Live sensor stream URL (optional)</span>
 				<Input type="url" bind:value={backendUrl} placeholder="http://<mac-ip>:8080" />
 			</label>
+			<p class="text-[11px] text-muted-foreground">
+				Kaaka works phone-to-phone with only the gateway number. The two optional URLs just copy alerts and live
+				readings to a computer dashboard if one is running.
+			</p>
 			<div class="flex items-center gap-3">
 				<Button type="submit">Save</Button>
 				{#if saved}

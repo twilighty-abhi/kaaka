@@ -9,9 +9,9 @@ const DefaultSms = registerPlugin<{ setAuthorizedNumber(options: { number: strin
 class AppSettings {
 	/** Gateway phone number: SMS alert recipient and the authorized trigger sender. */
 	gatewayNumber = $state("");
-	/** Mac server WebSocket URL, e.g. ws://<mac-ip>:8765 */
+	/** Optional computer dashboard WebSocket URL, e.g. ws://<mac-ip>:8765 */
 	serverUrl = $state("");
-	/** Telemetry backend URL, e.g. http://<mac-ip>:3001 */
+	/** Optional live sensor stream URL, e.g. http://<mac-ip>:8080 */
 	backendUrl = $state("");
 	/** Random per-install id sent with backend telemetry. */
 	deviceId = $state("");

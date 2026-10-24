@@ -90,20 +90,19 @@ public class SmsReceiver extends BroadcastReceiver {
                 saveSmsToInbox(context, sender, completeMessage, timestamp);
             }
 
-            // 2. CHECK SENDER & CONTENT: Is it an authorized emergency contact or emergency trigger keyword?
+            // 2. CHECK SENDER: only the configured gateway number may trigger the emergency flow
+            // (message content is never enough: a keyword match would let anyone start the GPS beacon).
             String authorizedSuffix = authorizedNumberSuffix(context);
             boolean isAuthorizedSender = !authorizedSuffix.isEmpty() && digitsOnly.endsWith(authorizedSuffix);
-            String lowerMsg = completeMessage != null ? completeMessage.toLowerCase() : "";
-            boolean isEmergencyTrigger = lowerMsg.contains("call") || lowerMsg.contains("emergency") || lowerMsg.contains("alert") || lowerMsg.contains("kaaka");
 
-            if (!isAuthorizedSender && !isEmergencyTrigger) {
+            if (!isAuthorizedSender) {
                 // Regular contact: post normal notification (NO auto-open, NO alarm vibration)
                 Log.d(TAG, "Regular SMS from " + sender + ": posting standard notification.");
                 postNormalSmsNotification(context, sender, completeMessage, timestamp);
                 return;
             }
 
-            // 3. AUTHORIZED EMERGENCY CONTACT (configured gateway number) or emergency keyword:
+            // 3. AUTHORIZED EMERGENCY CONTACT (configured gateway number):
             // Deduplicate within 4 seconds for identical sender + message
             String messageKey = sender + ":" + completeMessage;
             long now = System.currentTimeMillis();
@@ -114,7 +113,7 @@ public class SmsReceiver extends BroadcastReceiver {
             lastEmergencyTimestamp = now;
             lastEmergencyHash = messageKey;
 
-            Log.d(TAG, "🚨 Emergency SMS from " + sender + " (authorized=" + isAuthorizedSender + ")! Triggering app auto-open, urgent notification, and alarm vibration.");
+            Log.d(TAG, "🚨 Emergency SMS from gateway " + sender + "! Triggering app auto-open, urgent notification, and alarm vibration.");
 
             // Function A: Instantly bring app to foreground (zero delay before anything else)
             launchMainActivity(context, sender, completeMessage);

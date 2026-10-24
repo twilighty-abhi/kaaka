@@ -11,6 +11,13 @@ Record each meaningful project change during the event, newest first. Update thi
 - Validation: Python compile check. Not yet verified against the running server, which must be restarted to pick this up.
 - Limitations: SMS-delivered telemetry can take up to 30 s to reach the dashboard; the client app's direct WebSocket copy is unaffected. If the client app runs on the same phone the server reads, a report can appear twice (WebSocket, then the SMS copy).
 
+## 2026-10-24T22:20:00+05:30 — Start the client beacon only for the configured gateway number
+
+- Changed: The Kaaka Sensors app starts its emergency beacon only when an SMS arrives from the configured gateway phone number (digits compared on the last 10), enforced in both `SmsReceiver.java` and `defaultSmsService.svelte.ts`; reports always go to the configured gateway number, never to the SMS sender. Keyword triggers ("call", "alert", "emergency", "kaaka") removed. Settings wording marks the computer dashboard and live stream as optional. `client/README.md` rewritten for the unified Mac + S23 flow. Rebuilt `client/KaakaSensors.apk`.
+- Why: Any SMS containing those words, from any number, made the app send its sensor data and GPS location to that sender every minute.
+- Validation: `npx svelte-check`: 0 errors, 0 warnings; web build, `cap sync` and `./gradlew assembleDebug` succeeded; unpacked APK contains the new rule and no keyword trigger.
+- Limitations: Not tested on a device; the S23 still has the previous client build installed.
+
 ## 2026-10-24T22:07:00+05:30 — Allow the client app to reach the Mac server over plain HTTP/WebSocket
 
 - Changed: `client/capacitor.config.ts` serves the app over `http` with cleartext allowed, and `client/android/app/src/main/AndroidManifest.xml` sets `usesCleartextTraffic="true"`.
