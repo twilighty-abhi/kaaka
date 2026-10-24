@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:29:08+05:30 — Nearest-responder routing: validation summary
+
+- Changed: `AI_USAGE.md` row for this feature.
+- Why: Record the assistance and the checks run.
+- Validation: With `KAAKA_ADMIN_TOKEN` set: `GET/POST/PATCH/DELETE /api/responders` and `POST /api/telemetry` return 401 without the token and 200 with header or `?token=`. All server, gateway and dashboard checks listed in the entries above.
+- Limitations: The dispatch SMS has not been sent from a real phone yet; the rebuilt gateway APK is not committed in this change.
+
 ## 2026-10-25T03:28:25+05:30 — Document nearest-responder routing
 
 - Changed: README (Mac + S23 section): how responders are registered, how distance/ETA are computed (straight line, 25 km/h assumption), the dispatch rule and the dispatch SMS; API table gains the four `/api/responders` endpoints and the `dispatch` field in the `/api/telemetry` response. `docs/PLAN.md`: status row for the feature and a next step for responder accept/decline.
