@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:56:26+05:30 — Document dashboard pages; analytics and pages validation summary
+
+- Changed: README: a "Dashboard pages" bullet (live, history, incident, analytics, responders, system; hash URLs; counts), status/CSV/analytics bullets updated for the pages, and API table rows for the `/api/incidents` filters, `GET /api/incidents/<key>` and `GET /api/responders/activity`. `AI_USAGE.md` row for this work.
+- Why: Keep the documentation in line with the new dashboard layout and endpoints.
+- Validation: Re-read the README bullets and table rows (escaped `|` keeps four columns). Overall checks for this branch are listed in the entries above: `unittest` 6/6, `py_compile`, spare-port API checks, headless-Chrome screenshots of every page, DevTools navigation and tooltip checks.
+- Limitations: Not tested with real gateway traffic or on a phone-sized screen; seeded data could not be backdated, so multi-day charts showed only today.
+
 ## 2026-10-25T03:55:25+05:30 — Dashboard: pages for live, history, incident detail, analytics, responders and system
 
 - Changed: `server/dashboard.html` is split into hash-routed pages with a nav bar under the header showing counts (live (open + acknowledged), history (resolved), responders (registered)); back/forward and reload keep the page. **Live** (default, `#live`): open and acknowledged incidents only, the incident map (trails, nearest-responder lines, hotspots toggle) and the activity log; the header with the S23 heartbeat and gateway tags stays on every page. **History** (`#history`): resolved incidents (or all), search by number digits, outcome (resolved by responder / closed by caller), from/to dates, newest first, 20 at a time with [load more], and a CSV link that carries the same filters. **Incident detail** (`#incident/<key>`, from the number or [timeline →] on any card): the incident card with [resolve] while still active, a time-ordered timeline of calls with reply result, help SMS text, alerts with coordinates, location shares, dispatches, ACKs (with responder name) and resolution/safe, and a map of that caller's trail. **Analytics** (`#analytics`). **Responders** (`#responders`): the registry panel, the same map (so "pick on map" still works) and per-responder dispatch/ACK history linking to each incident. **System** (`#system`): alert payload, live sensor tiles, voice bridge and telephony/trigger panels. Resolved cards no longer show "nearest … not dispatched yet". The chart crosshair now sits behind the columns.
