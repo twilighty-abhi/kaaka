@@ -1,5 +1,6 @@
 import { registerPlugin, Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { telemetryBeacon } from "./telemetryBeaconService.svelte.js";
+import { appSettings } from "./appSettings.svelte.js";
 
 export interface SmsTriggerEvent {
 	sender: string;
@@ -26,7 +27,6 @@ class DefaultSmsManager {
 	triggerCount = $state(0);
 	lastTrigger = $state.raw<SmsTriggerEvent | null>(null);
 	triggerHistory = $state.raw<SmsTriggerEvent[]>([]);
-	authorizedNumber = $state("9495364448");
 
 	private listenerHandle: PluginListenerHandle | null = null;
 	private pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -122,12 +122,13 @@ class DefaultSmsManager {
 
 		// Automatically initiate 60s emergency telemetry beacon
 		const digits = (event.sender || "").replace(/[^0-9]/g, "");
-		if (digits.endsWith("9495364448") || (event.message && (event.message.includes("call") || event.message.includes("emergency") || event.message.includes("alert")))) {
-			telemetryBeacon.startBeacon(event.sender || "9495364448");
+		const authorized = appSettings.gatewayNumber.replace(/[^0-9]/g, "").slice(-10);
+		if ((authorized && digits.endsWith(authorized)) || (event.message && (event.message.includes("call") || event.message.includes("emergency") || event.message.includes("alert")))) {
+			telemetryBeacon.startBeacon(event.sender);
 		}
 	}
 
-	simulateTestTrigger(sender = "9495364448", message = "TEST EMERGENCY ALERT: Fall detected!") {
+	simulateTestTrigger(sender: string, message = "TEST EMERGENCY ALERT: Fall detected!") {
 		this.handleTrigger({
 			sender,
 			message,

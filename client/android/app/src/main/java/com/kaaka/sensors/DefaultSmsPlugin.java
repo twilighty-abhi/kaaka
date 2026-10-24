@@ -51,6 +51,20 @@ public class DefaultSmsPlugin extends Plugin {
         }
     }
 
+    // Settings shared with SmsReceiver (set from the app's Settings card).
+    public static final String PREFS_NAME = "kaaka_settings";
+    public static final String PREF_AUTHORIZED_NUMBER = "authorized_number";
+
+    @PluginMethod
+    public void setAuthorizedNumber(PluginCall call) {
+        String number = call.getString("number", "");
+        getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_AUTHORIZED_NUMBER, number == null ? "" : number.trim())
+            .apply();
+        call.resolve();
+    }
+
     @PluginMethod
     public void getLastTrigger(PluginCall call) {
         if (lastTrigger != null) {

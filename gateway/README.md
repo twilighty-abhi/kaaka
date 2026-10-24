@@ -1,14 +1,15 @@
 # Kaaka Call App 📱
 
-A modern cross-platform Capacitor app featuring a phone dialer input box with the placeholder `9995283835` and an instant call button.
+Capacitor (SvelteKit) gateway app for the phone that receives calls. It connects to the Kaaka server over WebSocket, and when the server reports an incoming call (`CALL_DETECTED`) it sends the caller an auto-reply SMS. Numbers can also be entered and texted manually.
 
 ## ✨ Features
 
-- **Phone Number Input**: Number input with `placeholder="9995283835"`. Accepts numeric input, `+`, `*`, and `#`.
-- **Direct Dial Button**: One-tap Call button that triggers the native phone dialer for the entered number or falls back to `9995283835`.
-- **Integrated Keypad**: On-screen keypad (1-9, *, 0, #) with tactile feedback, backspace, and quick-clear controls.
-- **Capacitor Mobile Ready**: Pre-configured for Android (`@capacitor/android`) and Web/PWA.
-- **Cross-Platform Support**: Works seamlessly on Web, Android WebView, and iOS.
+- **Server link**: WebSocket connection to the Kaaka server, set under **[config] → endpoint** (`ws://<mac-ip>:8765`). Nothing is preset; the app shows "no server" until it is set.
+- **Auto-reply SMS**: Sends the reply message to the caller number from `CALL_DETECTED` and reports `SMS_SENT` back to the server. No fallback number is ever used.
+- **Manual SMS / call**: Enter a number and message and send.
+- **Capacitor Mobile Ready**: Android (`@capacitor/android`) with native SMS and call plugins.
+
+Permissions on the phone: SMS (asked on first send) and Phone (asked on first call).
 
 ---
 
@@ -18,7 +19,6 @@ A modern cross-platform Capacitor app featuring a phone dialer input box with th
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### 2. Build the Web App
 ```bash
@@ -27,26 +27,20 @@ npm run build
 
 ### 3. Sync with Capacitor (Android)
 ```bash
-npm run cap:sync
+npx cap sync android
 ```
 
-### 4. Open in Android Studio
+### 4. Build and install the APK
 ```bash
-npm run cap:open
-# or
-npx cap open android
+cd android && ./gradlew assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
-
-### 5. Run Directly on Connected Android Device or Emulator
-```bash
-npm run cap:android
-```
+A prebuilt debug APK is kept at `gateway/Kaaka.apk`.
 
 ---
 
 ## 🛠️ Project Structure
 
-- [`src/App.tsx`](file:///home/sujith/kaaka/src/App.tsx): Main dialer component containing the phone input, placeholder `9995283835`, and call handling.
-- [`src/index.css`](file:///home/sujith/kaaka/src/index.css): Responsive dark/modern styles optimized for mobile touchscreens and desktop.
-- [`capacitor.config.ts`](file:///home/sujith/kaaka/capacitor.config.ts): Capacitor configuration file.
-- [`android/`](file:///home/sujith/kaaka/android): Native Android Gradle project ready to build into an APK or AAB.
+- `src/routes/+page.svelte`: Main screen: server connection, auto-reply SMS, manual send, settings.
+- `capacitor.config.ts`: Capacitor configuration (app ID `com.kaaka.callapp`).
+- `android/`: Native Android Gradle project, including the SMS and call plugins.

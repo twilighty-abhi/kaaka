@@ -86,7 +86,7 @@ sequenceDiagram
         Server->>Server: Trigger n8n webhook workflow for multi-platform dispatch
     and Direct Cellular Emergency SMS
         Client->>Client: DirectSmsPlugin.sendSms(authorizedTarget, telemetrySnapshot)
-        Client-->>Gateway: Encoded Emergency SMS broadcast (9495364448)
+        Client-->>Gateway: Encoded Emergency SMS broadcast (to gateway number)
     end
 
     Note over Gateway: Gateway / Phone B receives distress telemetry and logs incident
@@ -109,7 +109,7 @@ sequenceDiagram
     Cellular->>AndroidOS: Incoming SMS payload
     AndroidOS->>SmsReceiver: Broadcast intent: SMS_DELIVER (Priority 999)
     SmsReceiver->>AndroidOS: Save SMS to telephony provider inbox
-    SmsReceiver->>SmsReceiver: Verify sender matches target suffix (9495364448)
+    SmsReceiver->>SmsReceiver: Verify sender matches configured gateway number
 
     alt Sender is Authorized Emergency Contact
         SmsReceiver->>SmsReceiver: Acquire PowerManager Full WakeLock (10s)
@@ -132,7 +132,7 @@ During an active Bluetooth call, the audio bridge records 10s segments and route
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Caller as 📞 Caller (Redmi Note 10)
+    actor Caller as 📞 Caller
     participant PW as 🎧 PipeWire / PulseAudio (HFP Audio)
     participant Bridge as 🎙️ audio_bridge.py
     participant N8N as ⚡ n8n Webhook Workflow
@@ -198,10 +198,12 @@ The server side also runs on an Apple Silicon Mac (tested on macOS 27). The Linu
 
 ### Setup
 
+Run all commands from the repository root (`kaaka/`).
+
 1. **Pair the phone** with the Mac (System Settings → Bluetooth), and allow **Calls** for the Mac in the phone's Bluetooth settings for that device.
 2. **Build the bridge:**
    ```bash
-   cd mac/hfp-bridge && swift build -c release
+   (cd mac/hfp-bridge && swift build -c release)
    ```
 3. **Bluetooth permission:** macOS asks the app you launch the server from (Terminal, iTerm, VS Code…). Allow it under System Settings → Privacy & Security → Bluetooth. Without it, the bridge hangs or sees no devices.
 4. **Python environment:**
@@ -209,11 +211,25 @@ The server side also runs on an Apple Silicon Mac (tested on macOS 27). The Linu
    python3 -m venv .venv-mac
    .venv-mac/bin/pip install -r server/requirements-mac.txt
    ```
-5. **Run** (use your phone's Bluetooth address, shown in System Settings → Bluetooth or `system_profiler SPBluetoothDataType`):
+5. **Run** with your phone's Bluetooth address (shown in System Settings → Bluetooth or `system_profiler SPBluetoothDataType`); the address below is only an example:
    ```bash
-   .venv-mac/bin/python server/server.py --bt-mac CC:F9:F0:55:B0:DE
+   .venv-mac/bin/python server/server.py --bt-mac AA:BB:CC:DD:EE:FF   # your phone's Bluetooth address (System Settings → Bluetooth)
    ```
+   Leave the terminal input alone while it runs: pressing Enter in the server console simulates a call.
    Set `HFP_BRIDGE_BIN` to use a bridge binary from another location.
+
+   Settings (nothing is hardcoded; unset optional settings disable that feature):
+
+   | Option | Environment variable | Purpose |
+   |---|---|---|
+   | `--bt-mac` (required) | `KAAKA_BT_MAC` | Gateway phone's Bluetooth address |
+   | `--client-number` | `KAAKA_CLIENT_NUMBER` | Client (sensor) phone number; its SMS are read as telemetry (otherwise only "Kaaka Alert" texts match) |
+   | `--adb-serial` | `KAAKA_ADB_SERIAL` | adb device to read SMS from (default: the only attached device) |
+   | — | `KAAKA_WEBHOOK_URL`, `KAAKA_WEBHOOK_FALLBACK_URL` | n8n voice-AI webhook (Linux audio bridge; off when unset) |
+   | — | `KAAKA_SPEAKER_SINK`, `KAAKA_MIC_SOURCE` | Linux PipeWire speaker/mic (default: system defaults) |
+   | — | `KAAKA_TTS_PYTHON` | Python with `piper-tts` for `npm run tts` |
+
+   Calls without caller ID stay "unknown" and never trigger an auto-reply SMS. The last real caller is kept in `server/last_call.json` (not committed).
 6. **Point the Gateway app** at the Mac: open its settings and set the WebSocket URL to `ws://<Mac's Wi-Fi IP>:8765` (the server prints this IP on startup).
 
 ### What works on macOS

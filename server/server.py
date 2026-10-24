@@ -6,7 +6,7 @@ Kaaka Bluetooth Call & Telemetry WebSocket + Dashboard Server
    When an active call is detected, extracts the phone number and
    broadcasts it over WebSockets to trigger automatic SMS dispatch.
 2. Monitors Bluetooth BLE / Message Access Profile (MAP) notifications
-   from the connected gateway phone (08:1C:6E:5F:10:F7). When an incoming
+   from the connected gateway phone (--bt-mac). When an incoming
    sensor telemetry SMS alert arrives from the client phone, extracts the
    payload and prints the live readings in the exact requested format.
 3. Hosts a real-time web dashboard UI on HTTP (default port 8080) displaying
@@ -83,6 +83,25 @@ def extract_body_from_bmsg(raw_text: str) -> str:
         return '\n'.join(body_lines).strip()
     return raw_text.strip()
 
+def format_sensor_report(sensors: dict) -> str:
+    """Turn the client app's sensor JSON into the report text the dashboard parses."""
+    def num(group, key, default=0.0):
+        try:
+            return float((sensors.get(group) or {}).get(key, default))
+        except (TypeError, ValueError):
+            return default
+    mag = sensors.get("magnetometer") or {}
+    return "\n".join([
+        "Kaaka Live: sensor stream",
+        "",
+        "Live Sensors (5/5):",
+        f"• Pedometer: {int(num('pedometer', 'steps'))} steps ({num('pedometer', 'distanceKm'):.2f} km)",
+        f"• Light: {round(num('ambientLight', 'lux'))} lx",
+        f"• Accelerometer: {num('accelerometer', 'magnitude'):.1f} m/s²",
+        f"• Gyroscope: {num('gyroscope', 'rate'):.1f} rad/s",
+        f"• Magnetometer: {round(num('magnetometer', 'heading'))}° {mag.get('cardinal', '')}".rstrip(),
+    ])
+
 class DashboardHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, server_instance=None, **kwargs):
         self.server_instance = server_instance
@@ -112,7 +131,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, f"Error loading dashboard: {e}")
         elif self.path == "/api/status":
-            phone_clients = [str(c.remote_address[0]) for c in self.server_instance.connected_clients if str(c.remote_address[0]) != '127.0.0.1']
+            phone_clients = self.server_instance.phone_client_ips()
             bt_connected = self.server_instance.check_bluetooth_connected()
             telephony_ag_online = self.server_instance.check_telephony_ag_online()
             gateway_online = (bt_connected and telephony_ag_online) or (len(phone_clients) > 0)
@@ -131,9 +150,10 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 "phone_app_connected": len(phone_clients) > 0,
                 "gateway_ips": phone_clients,
                 "clients_count": len(self.server_instance.connected_clients),
-                "last_call_number": self.server_instance.last_detected_number or "8714711540",
+                "last_call_number": self.server_instance.last_detected_number,
                 "telemetry_count": self.server_instance.telemetry_count,
                 "latest_telemetry": self.server_instance.latest_telemetry,
+                "webhook_url": self.server_instance.audio_bridge.primary_url,
                 "audio_bridge": {
                     "running": self.server_instance.audio_bridge.is_running,
                     "chunk_count": self.server_instance.audio_bridge.chunk_count,
@@ -153,9 +173,25 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         else:
             self.send_error(404, "Not Found")
 
+    def do_OPTIONS(self):
+        # CORS preflight: the client app's WebView posts JSON from another origin.
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
     def do_POST(self):
         if self.path == "/api/trigger-call":
-            self.server_instance.on_call_detected("+918714711540", name="Simulated Caller", state="active")
+            # Optional JSON body {"number": "..."}; without it the simulated call has no caller number.
+            number = ""
+            length = int(self.headers.get("Content-Length", 0))
+            if length:
+                try:
+                    number = str(json.loads(self.rfile.read(length).decode("utf-8")).get("number", ""))
+                except Exception:
+                    number = ""
+            self.server_instance.on_call_detected(number, name="Simulated Caller", state="active")
             body = b'{"success":true}'
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -198,7 +234,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 "• Coords: 9.064458, 76.557012\n"
                 "• Maps: https://maps.google.com/?q=9.064458,76.557012"
             )
-            self.server_instance.display_telemetry(sample_alert, sender="+919495364448", source="Simulated Test")
+            self.server_instance.display_telemetry(sample_alert, sender="simulated", source="Simulated Test")
             body = b'{"success":true}'
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -212,12 +248,17 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 post_data = self.rfile.read(length).decode("utf-8")
                 try:
                     payload = json.loads(post_data)
-                    report = payload.get("report") or payload.get("content") or post_data
-                    sender = payload.get("sender", "+918714711540")
                 except Exception:
-                    report = post_data
-                    sender = "+918714711540"
-                self.server_instance.display_telemetry(report, sender=sender, source="HTTP REST /api/telemetry")
+                    payload = None
+                if isinstance(payload, dict) and isinstance(payload.get("sensors"), dict):
+                    # Live stream from the client app's backend sync (Settings → Telemetry backend).
+                    self.server_instance.display_telemetry(format_sensor_report(payload["sensors"]),
+                                                           sender=str(payload.get("deviceId", "")),
+                                                           source="Live sensor stream", live=True)
+                else:
+                    report = (payload.get("report") or payload.get("content")) if isinstance(payload, dict) else None
+                    sender = payload.get("sender", "") if isinstance(payload, dict) else ""
+                    self.server_instance.display_telemetry(report or post_data, sender=sender, source="HTTP REST /api/telemetry")
                 body = b'{"success":true}'
             except Exception as e:
                 body = json.dumps({"error": str(e)}).encode("utf-8")
@@ -231,16 +272,27 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404, "Not Found")
 
 class TelemetryServer:
-    def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="08:1C:6E:5F:10:F7"):
+    def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="", client_number="", adb_serial=""):
         self.host = host
         self.port = port
         self.http_port = http_port
         self.bt_mac = bt_mac
+        # Client (sensor) phone number: its SMS are treated as telemetry. Matched on the last 10 digits.
+        client_digits = re.sub(r"\D", "", client_number or "")
+        self.client_suffix = client_digits[-10:]
+        self.adb_serial = adb_serial
         self.local_ip = get_local_ip()
         self.connected_clients = set()
         self.loop = None
         self.telephony_service = "org.pipewire.Telephony"
         self.last_detected_number = None
+        self.last_call_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_call.json")
+        if os.path.exists(self.last_call_file):
+            try:
+                with open(self.last_call_file, "r") as f:
+                    self.last_detected_number = json.load(f).get("number") or None
+            except Exception:
+                pass
         self.last_call_time = 0
         self.last_call_number = None
         self.telemetry_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "latest_telemetry.json")
@@ -310,7 +362,7 @@ class TelemetryServer:
         except Exception:
             return False
 
-    def display_telemetry(self, raw_content: str, sender: str = "", source: str = "BLE / Bluetooth MAP"):
+    def display_telemetry(self, raw_content: str, sender: str = "", source: str = "BLE / Bluetooth MAP", live: bool = False):
         """
         Displays live sensor readings in the exact requested visual format:
         
@@ -339,6 +391,14 @@ class TelemetryServer:
         self.telemetry_count += 1
         ts = format_timestamp()
         source_label = f"{sender} ({source})" if sender else source
+
+        if live:
+            # Continuous stream (about once a second): no console banner, no disk write.
+            self.latest_telemetry = {"content": clean_text, "sender": sender, "source": source,
+                                     "timestamp": ts, "update_count": self.telemetry_count}
+            if self.loop and self.connected_clients:
+                asyncio.run_coroutine_threadsafe(self.broadcast({"type": "TELEMETRY_RECEIVED", **self.latest_telemetry}), self.loop)
+            return
 
         print("\n" + "=" * 65, flush=True)
         print(f"\033[1;31m[{ts}] 🚨 KAAKA SENSOR TELEMETRY RECEIVED (Update #{self.telemetry_count})\033[0m", flush=True)
@@ -387,11 +447,22 @@ class TelemetryServer:
                 dead_clients.add(client)
         self.connected_clients -= dead_clients
 
+    def is_local_ip(self, ip) -> bool:
+        """Connections from this machine (e.g. the dashboard in a local browser) are not phones."""
+        return ip in ("127.0.0.1", "::1", self.local_ip)
+
+    def phone_client_ips(self):
+        return sorted({str(c.remote_address[0]) for c in self.connected_clients if not self.is_local_ip(str(c.remote_address[0]))})
+
+    def is_client_sender(self, sender) -> bool:
+        """True if sender matches the configured client phone number (--client-number)."""
+        return bool(self.client_suffix) and self.client_suffix in re.sub(r"\D", "", str(sender))
+
     def on_call_detected(self, number, name="", state="active", raw_path=""):
         """Called from D-Bus thread when a call is extracted."""
         clean_num = str(number).strip()
-        if not clean_num or clean_num == "Unknown":
-            clean_num = "8714711540"
+        if clean_num == "Unknown":
+            clean_num = ""  # no caller ID: never substitute a number (the gateway would SMS it)
 
         now = time.time()
         # Deduplicate triggers for the same number within 3 seconds
@@ -401,7 +472,13 @@ class TelemetryServer:
 
         self.last_call_time = now
         self.last_call_number = clean_num
-        self.last_detected_number = clean_num
+        if clean_num:
+            self.last_detected_number = clean_num
+            try:
+                with open(self.last_call_file, "w") as f:
+                    json.dump({"number": clean_num, "name": str(name), "timestamp": format_timestamp()}, f)
+            except Exception:
+                pass
         self.pending_call_trigger = {
             "number": clean_num,
             "name": str(name),
@@ -412,16 +489,19 @@ class TelemetryServer:
         print("\n" + "=" * 60)
         print(f"[{format_timestamp()}] 📞 NEW CALL EXTRACTED FROM BLUETOOTH HANDSFREE")
         print("=" * 60)
-        print(f"  📱 Phone Number : \033[1;32m{clean_num}\033[0m")
+        print(f"  📱 Phone Number : \033[1;32m{clean_num or 'unknown (no caller ID)'}\033[0m")
         if name:
             print(f"  👤 Contact Name : {name}")
         print(f"  ⚡ Call State   : {state}")
 
-        phone_clients = [str(c.remote_address[0]) for c in self.connected_clients if str(c.remote_address[0]) != '127.0.0.1']
+        phone_clients = self.phone_client_ips()
         if phone_clients:
             print(f"  📶 Gateway App Link : \033[1;32mConnected ({', '.join(phone_clients)})\033[0m")
         else:
-            print(f"  ℹ️ Phone A Gateway App is in background/standby" + (" (no MAP on macOS: SMS needs the Gateway app)" if IS_MAC else " (Direct Bluetooth MAP active)"))
+            if IS_MAC:
+                print("  ⚠️ Gateway App Link : \033[1;33mnot connected — no auto-reply SMS unless the app connects within 45 s\033[0m")
+            else:
+                print("  ℹ️ Gateway App is in background/standby (Direct Bluetooth MAP active)")
         print("=" * 60 + "\n", flush=True)
 
         payload = {
@@ -439,7 +519,10 @@ class TelemetryServer:
             self.auto_hangup_call(raw_path)
 
         # 2. Direct Bluetooth MAP SMS dispatch to caller to guarantee delivery and trigger client telemetry loop
-        threading.Thread(target=self.push_sms_via_bluetooth_map, args=(clean_num, "received call. will get back to you shortly."), daemon=True).start()
+        if clean_num:
+            threading.Thread(target=self.push_sms_via_bluetooth_map, args=(clean_num, "received call. will get back to you shortly."), daemon=True).start()
+        else:
+            print(f"[{format_timestamp()}] ℹ️ No caller number, so no auto-reply SMS.")
 
         # 3. WebSocket broadcast to connected apps
         if self.loop:
@@ -496,7 +579,7 @@ class TelemetryServer:
                     pass
 
             if answered or raw_path:
-                print(f"[{format_timestamp()}] 🎙️ Real call connected on Redmi Note 10! Activating Real-Time AI Audio Conversation Bridge...")
+                print(f"[{format_timestamp()}] 🎙️ Real call connected on the gateway phone! Activating Real-Time AI Audio Conversation Bridge...")
                 self.audio_bridge.notify_call_started()
             else:
                 print(f"[{format_timestamp()}] ℹ️ Simulated call test (no hardware call). Audio bridge remains in standby.")
@@ -594,7 +677,7 @@ class TelemetryServer:
 
             clean_target = str(target_number).strip().replace(" ", "")
             if not clean_target:
-                clean_target = "8714711540"
+                return
 
             bmsg = (
                 "BEGIN:BMSG\r\n"
@@ -648,7 +731,7 @@ class TelemetryServer:
             "ip": self.local_ip,
             "port": self.port,
             "http_port": self.http_port,
-            "last_number": self.last_detected_number or "9995283835",
+            "last_number": self.last_detected_number,
             "telemetry_count": self.telemetry_count,
             "latest_telemetry": self.latest_telemetry,
             "timestamp": format_timestamp()
@@ -656,7 +739,7 @@ class TelemetryServer:
         await websocket.send(json.dumps(welcome_payload))
 
         # Replay any recent pending call trigger (<45s old) to newly connected phone
-        if self.pending_call_trigger and client_addr[0] != '127.0.0.1':
+        if self.pending_call_trigger and not self.is_local_ip(client_addr[0]):
             age = time.time() - self.pending_call_trigger.get("timestamp", 0)
             if age < 45:
                 print(f"[{format_timestamp()}] 🚀 Replaying queued call trigger for {self.pending_call_trigger['number']} to Gateway ({client_addr[0]})!")
@@ -821,7 +904,7 @@ class TelemetryServer:
             sender = str(props.get('SenderAddress', ''))
             
             # Check if this message is a Kaaka sensor reading or from caller
-            if 'Kaaka' in subj or 'Sensors' in subj or 'Live Sensors' in subj or 'Pedometer' in subj or '8714711540' in sender or subj.startswith('proto:'):
+            if 'Kaaka' in subj or 'Sensors' in subj or 'Live Sensors' in subj or 'Pedometer' in subj or self.is_client_sender(sender) or subj.startswith('proto:'):
                 full_content = fetch_full_message(path)
                 final_text = full_content if full_content else subj
                 if 'Kaaka' in final_text or 'Sensors' in final_text or 'Live Sensors' in final_text or 'Pedometer' in final_text:
@@ -881,17 +964,17 @@ class TelemetryServer:
             try:
                 msgs = mas_interface.ListMessages('inbox', {'MaxListCount': dbus.UInt16(100)})
                 latest_alert = None
-                latest_sender = "+918714711540"
+                latest_sender = ""
                 for path, meta in msgs.items():
                     msg_id = str(path)
                     self.processed_msg_ids.add(msg_id)
                     subj = str(meta.get('Subject', ''))
                     sender = str(meta.get('SenderAddress', ''))
-                    if latest_alert is None and ('8714711540' in sender or 'Kaaka' in subj or subj.startswith('proto:')):
+                    if latest_alert is None and (self.is_client_sender(sender) or 'Kaaka' in subj or subj.startswith('proto:')):
                         full_content = fetch_full_message(path)
                         if full_content and ('Kaaka' in full_content or 'Live Sensors' in full_content or 'Pedometer' in full_content):
                             latest_alert = full_content
-                            latest_sender = sender or "+918714711540"
+                            latest_sender = sender
                 if latest_alert and (self.latest_telemetry is None or self.telemetry_count == 0):
                     self.display_telemetry(latest_alert, sender=latest_sender, source="Bluetooth BLE / MAP (Inbox)")
             except Exception as e:
@@ -946,9 +1029,9 @@ class TelemetryServer:
                         "• Coords: 9.064458, 76.557012\n"
                         "• Maps: https://maps.google.com/?q=9.064458,76.557012"
                     )
-                    self.display_telemetry(sample_alert, sender="+919495364448", source="Simulated Test")
+                    self.display_telemetry(sample_alert, sender="simulated", source="Simulated Test")
                 else:
-                    test_number = text if text else "8714711540"
+                    test_number = text
                     print(f"[{format_timestamp()}] 🧪 Manual call trigger test with number: {test_number}")
                     self.on_call_detected(test_number, name="Test Caller", state="active")
         except asyncio.CancelledError:
@@ -981,22 +1064,19 @@ class TelemetryServer:
     def run_adb_telemetry_listener(self):
         """
         Direct cellular SMS telemetry ingestor via Phone ADB connection.
-        Continuously polls content://sms every 1.5 seconds.
-        Guarantees zero-latency, 100% reliable telemetry ingestion with zero D-Bus drops.
+        Polls content://sms every 30 seconds, so SMS telemetry can take up to 30 s to appear.
+        The client's direct WebSocket copy (CLIENT_TELEMETRY) is the faster path.
         """
         adb_seen_ids = set()
         initialized = False
 
         while True:
             try:
-                dev_out = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=2).stdout
-                target_cmd = ["adb"]
-                if "289e9952" in dev_out:
-                    target_cmd = ["adb", "-s", "289e9952"]
-                elif "0fdefe1e3cfa" in dev_out:
-                    target_cmd = ["adb", "-s", "0fdefe1e3cfa"]
-
-                cmd = target_cmd + ["shell", "content query --uri content://sms --where \"address LIKE '%8714711540%' OR body LIKE '%Kaaka%'\""]
+                target_cmd = ["adb", "-s", self.adb_serial] if self.adb_serial else ["adb"]
+                where = "body LIKE '%Kaaka%'"
+                if self.client_suffix:
+                    where = f"address LIKE '%{self.client_suffix}%' OR " + where
+                cmd = target_cmd + ["shell", f"content query --uri content://sms --where \"{where}\""]
                 res = subprocess.run(cmd, capture_output=True, text=True, timeout=4)
                 if res.returncode == 0 and res.stdout and "No result found" not in res.stdout:
                     rows = res.stdout.split("Row: ")
@@ -1014,7 +1094,7 @@ class TelemetryServer:
                             addr_m = re.search(r"address=([^\s,]+)", latest_row)
                             if body_m:
                                 b_text = body_m.group(1).strip()
-                                s_addr = addr_m.group(1) if addr_m else "+918714711540"
+                                s_addr = addr_m.group(1) if addr_m else ""
                                 self.display_telemetry(b_text, sender=s_addr, source="Phone ADB Telephony Ingest")
                         initialized = True
                     else:
@@ -1030,11 +1110,11 @@ class TelemetryServer:
                                 if body_m:
                                     b_text = body_m.group(1).strip()
                                     if "Kaaka Alert" in b_text or "Live Sensors" in b_text or "Pedometer" in b_text:
-                                        s_addr = addr_m.group(1) if addr_m else "+918714711540"
+                                        s_addr = addr_m.group(1) if addr_m else ""
                                         self.display_telemetry(b_text, sender=s_addr, source="Phone ADB Telephony Ingest")
             except Exception:
                 pass
-            time.sleep(1.5)
+            time.sleep(30)
 
     async def start(self):
         self.loop = asyncio.get_running_loop()
@@ -1089,10 +1169,15 @@ def main():
     parser.add_argument("--port", "-p", type=int, default=8765, help="WebSocket port (default: 8765)")
     parser.add_argument("--http-port", type=int, default=8080, help="Web Dashboard HTTP port (default: 8080)")
     parser.add_argument("--host", default="0.0.0.0", help="Host interface (default: 0.0.0.0)")
-    parser.add_argument("--bt-mac", default="08:1C:6E:5F:10:F7", help="Gateway Bluetooth MAC address")
+    parser.add_argument("--bt-mac", default=os.environ.get("KAAKA_BT_MAC", ""), help="Gateway phone Bluetooth address (or KAAKA_BT_MAC)")
+    parser.add_argument("--client-number", default=os.environ.get("KAAKA_CLIENT_NUMBER", ""), help="Client (sensor) phone number whose SMS are telemetry (or KAAKA_CLIENT_NUMBER); optional")
+    parser.add_argument("--adb-serial", default=os.environ.get("KAAKA_ADB_SERIAL", ""), help="adb serial of the phone to read SMS from (or KAAKA_ADB_SERIAL); optional")
     args = parser.parse_args()
+    if not args.bt_mac:
+        parser.error("--bt-mac (or KAAKA_BT_MAC) is required: the gateway phone's Bluetooth address")
 
-    server = TelemetryServer(host=args.host, port=args.port, http_port=args.http_port, bt_mac=args.bt_mac)
+    server = TelemetryServer(host=args.host, port=args.port, http_port=args.http_port, bt_mac=args.bt_mac,
+                             client_number=args.client_number, adb_serial=args.adb_serial)
     try:
         asyncio.run(server.start())
     except KeyboardInterrupt:

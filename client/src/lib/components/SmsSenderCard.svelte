@@ -8,8 +8,9 @@
 	import { Send, MessageSquare, Phone, CheckCircle2, AlertCircle, Sparkles, ShieldCheck } from "lucide-svelte";
 
 	import { defaultSmsManager } from "#lib/services/defaultSmsService.svelte.js";
+	import { appSettings, sendToServer } from "#lib/services/appSettings.svelte.js";
 
-	let phoneNumber = $state("9495364448");
+	let phoneNumber = $state(appSettings.gatewayNumber);
 	let message = $state("Kaaka Alert: Emergency assistance requested");
 	let isSending = $state(false);
 	let status = $state<{ type: "success" | "error"; text: string } | null>(null);
@@ -56,6 +57,10 @@
 
 	async function handleSend() {
 		if (isSending) return;
+		if (!phoneNumber.trim()) {
+			status = { type: "error", text: "No recipient. Enter a number or set the gateway number in Settings." };
+			return;
+		}
 		isSending = true;
 		status = null;
 
@@ -70,22 +75,8 @@
 				: telemetryReport;
 		}
 
-		// Also send directly over WebSocket to server if reachable
-		for (const host of ["192.168.2.7", "192.168.2.38"]) {
-			try {
-				const ws = new WebSocket(`ws://${host}:8765`);
-				ws.onopen = () => {
-					ws.send(JSON.stringify({
-						type: "CLIENT_TELEMETRY",
-						report: finalMessage,
-						sender: "Phone B (Client)"
-					}));
-					setTimeout(() => ws.close(), 1500);
-				};
-			} catch (e) {
-				// Ignore offline
-			}
-		}
+		// Also send directly over WebSocket to the Mac server, if one is configured
+		sendToServer({ type: "CLIENT_TELEMETRY", report: finalMessage, sender: "Phone B (Client)" });
 
 		const result = await sendSms(phoneNumber, finalMessage);
 		isSending = false;
@@ -131,13 +122,13 @@
 					<Phone class="h-3.5 w-3.5 text-muted-foreground" />
 					Recipient Phone
 				</span>
-				<span class="text-[11px] text-muted-foreground font-normal">Gateway: 9495364448</span>
+				<span class="text-[11px] text-muted-foreground font-normal">Gateway: {appSettings.gatewayNumber || "not set (Settings)"}</span>
 			</label>
 			<div class="relative">
 				<Input
 					id="sms-phone-input"
 					type="tel"
-					placeholder="Enter 10-digit phone number"
+					placeholder="+91XXXXXXXXXX"
 					bind:value={phoneNumber}
 					class="h-11 rounded-xl bg-secondary/50 border-border/70 text-foreground font-medium pl-3 pr-4 text-sm focus:border-primary"
 				/>

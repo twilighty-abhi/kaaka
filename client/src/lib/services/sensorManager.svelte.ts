@@ -1,3 +1,4 @@
+import { appSettings } from "./appSettings.svelte.js";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { SvelteDate } from "svelte/reactivity";
 import type {
@@ -42,9 +43,9 @@ export class SensorManager {
 	isNative = $state(Capacitor.isNativePlatform());
 	isListening = $state(false);
 	isSimulated = $state(false);
-	backendSyncEnabled = $state(false);
-	backendUrl = $state("http://localhost:3001");
-	syncStatus = $state<"idle" | "syncing" | "error" | "connected">("idle");
+	// Stream readings whenever a telemetry backend URL is set in Settings (there is no separate switch).
+	backendSyncEnabled = $state(true);
+		syncStatus = $state<"idle" | "syncing" | "error" | "connected">("idle");
 	syncMessage = $state("");
 
 	status = $state.raw<SensorStatus>({
@@ -471,9 +472,14 @@ export class SensorManager {
 		// Send telemetry payload every 1 second
 		this.syncInterval = setInterval(async () => {
 			if (!this.backendSyncEnabled || !this.isListening) return;
+			if (!appSettings.backendUrl) {
+				this.syncStatus = "error";
+				this.syncMessage = "Backend URL not set (Settings)";
+				return;
+			}
 
 			const payload = {
-				deviceId: "android-device-kaaka",
+				deviceId: appSettings.deviceId,
 				platform: this.isNative ? "android-capacitor" : "web-preview",
 				timestamp: this.lastUpdateTimestamp,
 				sensors: {
@@ -486,7 +492,7 @@ export class SensorManager {
 			};
 
 			try {
-				const res = await fetch(`${this.backendUrl}/api/telemetry`, {
+				const res = await fetch(`${appSettings.backendUrl}/api/telemetry`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(payload)

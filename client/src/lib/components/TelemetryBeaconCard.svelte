@@ -2,6 +2,7 @@
 	import * as Card from "#lib/components/ui/card/index.js";
 	import { telemetryBeacon } from "#lib/services/telemetryBeaconService.svelte.js";
 	import { sensorManager } from "#lib/services/sensorManager.svelte.js";
+	import { appSettings } from "#lib/services/appSettings.svelte.js";
 	import {
 		Radio,
 		Square,
@@ -15,7 +16,7 @@
 		Flame
 	} from "lucide-svelte";
 
-	let targetInput = $state("9495364448");
+	let targetInput = $state(appSettings.gatewayNumber);
 
 	$effect(() => {
 		if (telemetryBeacon.targetNumber) {
@@ -24,7 +25,7 @@
 	});
 
 	function handleStart() {
-		telemetryBeacon.startBeacon(targetInput.trim() || "9495364448");
+		telemetryBeacon.startBeacon(targetInput.trim() || undefined);
 	}
 
 	function handleStop() {
@@ -194,8 +195,12 @@
 
 		<!-- Status Message if any -->
 		{#if telemetryBeacon.status}
-			<div class="my-3 flex items-center gap-2 text-xs py-2 px-3 rounded-xl bg-muted/60 border border-border/70 text-foreground">
-				<CheckCircle2 class="h-4 w-4 shrink-0 text-emerald-400" />
+			<div class="my-3 flex items-center gap-2 text-xs py-2 px-3 rounded-xl bg-muted/60 border border-border/70 {telemetryBeacon.status.type === 'error' ? 'text-red-300' : 'text-foreground'}">
+				{#if telemetryBeacon.status.type === 'error'}
+					<AlertCircle class="h-4 w-4 shrink-0 text-red-400" />
+				{:else}
+					<CheckCircle2 class="h-4 w-4 shrink-0 text-emerald-400" />
+				{/if}
 				<span class="truncate">{telemetryBeacon.status.text}</span>
 			</div>
 		{/if}
@@ -209,7 +214,7 @@
 					<input
 						type="tel"
 						bind:value={targetInput}
-						placeholder="Gateway phone number (e.g. 9495364448)"
+						placeholder="Gateway number (+91XXXXXXXXXX)"
 						class="w-full bg-transparent text-xs sm:text-sm font-mono text-foreground focus:outline-none"
 					/>
 				</div>
