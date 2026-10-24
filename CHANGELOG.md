@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T04:33:44+05:30 — Landing page: live demo loop and more motion
+
+- Added: on `site/index.html`, particles gather into the hero sphere and pulse outward every few seconds and on tap; headline words sharpen in; a scrolling keyword strip that leans with scroll speed; a "Watch it happen" section where a phone and the control room act out one incident (call, reply, location, dispatch, ACK, SAFE) with the app's real reply texts, looping only while visible; a moving mini map, scrolling history list and growing chart bars in the control room cards; labels that decode in; a pointer light on cards; buttons that lean toward the pointer; a footer wordmark that rises letter by letter. Nav link "Watch it".
+- Why: More motion for demos, and a way to show the whole flow without running the apps.
+- Validation: Headless Chrome against the live server at 1440 px and 390 px: no console errors, the demo reached step 4 after about 8 s and step 7 after about 14 s, screenshots of the hero intro, demo, control room cards and footer, no horizontal overflow at 390 px.
+- Limitations: The demo numbers (masked caller number, location, 1.2 km, ~3 min) and the chart bars are illustrations, not live data. With reduced motion the demo shows its final state.
+
 ## 2026-10-25T04:16:44+05:30 — Landing page animations
 
 - Added: motion on `site/index.html`: hero entrance, particle sphere that follows the pointer, scroll reveals with a stagger, stat count-up, signals moving through the network drawing, the Malayalam word drifting with the scroll, a scroll progress bar and hover lifts. Fixed the default 8 px body margin and the large word being clipped at the right edge.
