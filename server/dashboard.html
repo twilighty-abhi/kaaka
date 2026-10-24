@@ -477,6 +477,66 @@
       color: var(--text-mid);
     }
 
+
+    /* Analytics (GET /api/analytics). Series colours: reference palette slots 1-3, dark steps,
+       validated against the panel surface #0a0a0a (scripts/validate_palette.js, dataviz skill). */
+    .analytics {
+      --viz-surface: #0a0a0a;
+      --viz-grid: #1f1f1f;
+      --viz-axis: #333333;
+      --viz-ink: #ffffff;
+      --viz-ink-2: #b3b3b3;
+      --viz-muted: #8a8a8a;
+      --series-call: #3987e5;
+      --series-help_sms: #d95926;
+      --series-app_alert: #199e70;
+      --series-single: #3987e5;
+    }
+    .analytics.loading .viz-body { opacity: 0.55; transition: opacity 0.15s; }
+    .viz-filters { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+    .viz-filters .action-btn[aria-pressed="true"] { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-bg); font-weight: 600; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; }
+    .kpi-tile { background: var(--bg-box); border: 1px solid var(--border-dim); padding: 0.7rem 0.8rem; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+    .kpi-label { font-size: 0.68rem; color: var(--viz-muted); }
+    .kpi-value { font-size: 1.45rem; font-weight: 600; color: var(--viz-ink); line-height: 1.15; }
+    .kpi-value.empty { color: var(--viz-muted); }
+    .kpi-sub { font-size: 0.66rem; color: var(--viz-muted); }
+    .viz-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 0.75rem; }
+    @media (max-width: 860px) { .viz-grid { grid-template-columns: 1fr; } }
+    .viz-card { background: var(--bg-box); border: 1px solid var(--border-dim); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+    .viz-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+    .viz-title { font-size: 0.72rem; font-weight: 600; color: var(--viz-ink-2); }
+    .viz-legend { display: flex; gap: 0.8rem; flex-wrap: wrap; font-size: 0.68rem; color: var(--viz-ink-2); }
+    .viz-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+    .viz-swatch { width: 0.6rem; height: 0.6rem; display: inline-block; border-radius: 2px !important; }
+    .viz-chart { position: relative; width: 100%; }
+    .viz-chart svg { display: block; width: 100%; overflow: visible; }
+    .viz-chart svg:focus { outline: 1px solid var(--border-strong); outline-offset: 2px; }
+    .viz-chart text { font-family: 'IBM Plex Mono', monospace; font-size: 10px; fill: var(--viz-muted); font-variant-numeric: tabular-nums; }
+    .viz-chart text.viz-direct { fill: var(--viz-ink-2); font-weight: 600; }
+    .viz-note { font-size: 0.68rem; color: var(--viz-muted); }
+    .viz-table { width: 100%; border-collapse: collapse; font-size: 0.7rem; font-variant-numeric: tabular-nums; }
+    .viz-table th, .viz-table td { text-align: right; padding: 0.25rem 0.45rem; border-bottom: 1px solid var(--border-dim); }
+    .viz-table th:first-child, .viz-table td:first-child { text-align: left; }
+    .viz-table th { color: var(--viz-muted); font-weight: 500; }
+    .viz-table-wrap { max-height: 260px; overflow: auto; }
+    .viz-tooltip {
+      position: fixed; z-index: 1000; pointer-events: none; display: none;
+      background: #111111; border: 1px solid var(--border-strong); padding: 0.4rem 0.55rem;
+      font-size: 0.7rem; color: var(--viz-ink-2); min-width: 9rem;
+    }
+    .viz-tooltip .tt-title { color: var(--viz-muted); margin-bottom: 0.2rem; }
+    .viz-tooltip .tt-row { display: flex; align-items: center; gap: 0.4rem; }
+    .viz-tooltip .tt-key { width: 0.8rem; height: 2px; display: inline-block; }
+    .viz-tooltip .tt-val { color: var(--viz-ink); font-weight: 600; min-width: 1.6rem; text-align: right; font-variant-numeric: tabular-nums; }
+    .bar-list { display: flex; flex-direction: column; gap: 0.45rem; }
+    .bar-row { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.5rem; align-items: center; font-size: 0.7rem; color: var(--viz-ink-2); }
+    .bar-track { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+    .bar-fill { height: 10px; background: var(--series-single); border-radius: 0 4px 4px 0 !important; min-width: 0; }
+    .bar-val { color: var(--viz-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .bar-row:hover .bar-fill, .bar-row:focus .bar-fill { filter: brightness(1.25); }
+    .bar-row:focus { outline: 1px solid var(--border-strong); }
+
     /* Footer */
     footer {
       max-width: 1200px;
@@ -524,6 +584,60 @@
     <div class="incident-list" id="incident-list">
       <div class="stream-item"><span>no incidents yet</span></div>
     </div>
+  </section>
+
+  <!-- Analytics (GET /api/analytics): one range filter scopes every tile, chart and table below it -->
+  <section class="panel analytics" id="analytics-panel">
+    <div class="panel-label-row">
+      <span class="panel-label">// analytics</span>
+      <span class="panel-meta" id="analytics-meta">loading…</span>
+    </div>
+    <div class="viz-filters" role="group" aria-label="time range">
+      <button type="button" class="action-btn" data-range="24h" aria-pressed="false">[24h]</button>
+      <button type="button" class="action-btn" data-range="7d" aria-pressed="true">[7d]</button>
+      <button type="button" class="action-btn" data-range="30d" aria-pressed="false">[30d]</button>
+      <button type="button" class="action-btn" data-range="all" aria-pressed="false">[all]</button>
+    </div>
+    <div class="viz-body">
+      <div class="kpi-grid" id="kpi-grid"></div>
+    </div>
+    <div class="viz-body viz-grid">
+      <div class="viz-card" id="card-contacts">
+        <div class="viz-card-head">
+          <span class="viz-title" id="contacts-title">contacts per day by channel</span>
+          <button type="button" class="action-btn" data-table-toggle="contacts">[table]</button>
+        </div>
+        <div class="viz-legend" id="contacts-legend"></div>
+        <div class="viz-chart" id="contacts-chart"></div>
+        <div class="viz-table-wrap" id="contacts-table" hidden></div>
+      </div>
+      <div class="viz-card" id="card-hours">
+        <div class="viz-card-head">
+          <span class="viz-title">contacts by hour of day</span>
+          <button type="button" class="action-btn" data-table-toggle="hours">[table]</button>
+        </div>
+        <div class="viz-chart" id="hours-chart"></div>
+        <div class="viz-table-wrap" id="hours-table" hidden></div>
+      </div>
+    </div>
+    <div class="viz-body viz-grid">
+      <div class="viz-card" id="card-outcomes">
+        <div class="viz-card-head">
+          <span class="viz-title">incident outcomes</span>
+          <button type="button" class="action-btn" data-table-toggle="outcomes">[table]</button>
+        </div>
+        <div class="bar-list" id="outcomes-chart"></div>
+        <div class="viz-table-wrap" id="outcomes-table" hidden></div>
+      </div>
+      <div class="viz-card" id="card-responders">
+        <div class="viz-card-head">
+          <span class="viz-title">responder leaderboard</span>
+          <span class="viz-note">acks matched by number</span>
+        </div>
+        <div class="viz-table-wrap" id="leaderboard"></div>
+      </div>
+    </div>
+    <div class="viz-tooltip" id="viz-tooltip" role="tooltip"></div>
   </section>
 
   <!-- Map of incidents' latest locations (OpenStreetMap tiles; needs internet) -->
@@ -843,6 +957,7 @@ awaiting emergency trigger from client or gateway...</div>
       if (source !== 'Live sensor stream') {
         playBeep(920, 0.25);
         refreshIncidents();
+        refreshAnalytics();
       }
     } else if (msg.type === 'CALL_DETECTED') {
       document.getElementById('last-call-num').textContent = msg.number || 'unknown (no caller ID)';
@@ -860,6 +975,7 @@ awaiting emergency trigger from client or gateway...</div>
       }
       playBeep(640, 0.2);
       refreshIncidents();
+      refreshAnalytics();
     } else if (msg.type === 'LOCATION_SHARED') {
       addFeedItem(`location shared by ${msg.number || 'a caller'}: ${Number(msg.lat).toFixed(5)}, ${Number(msg.lon).toFixed(5)}`, true);
       playBeep(760, 0.2);
@@ -872,11 +988,13 @@ awaiting emergency trigger from client or gateway...</div>
     } else if (msg.type === 'INCIDENT_ACK') {
       addFeedItem(`incident for ${msg.number} acknowledged by ${msg.responder || 'a responder'}`);
       refreshIncidents();
+      refreshAnalytics();
     } else if (msg.type === 'INCIDENT_RESOLVED') {
       addFeedItem(msg.by === 'caller'
         ? `${msg.number} reported safe — incident closed`
         : `incident for ${msg.number} resolved by ${msg.by || 'someone'}` + (msg.note ? `: ${msg.note}` : ''));
       refreshIncidents();
+      refreshAnalytics();
     } else if (msg.type === 'GATEWAY_STALE') {
       addFeedItem(msg.stale ? `gateway phone silent (last seen ${msg.last_seen || 'never'})` : 'gateway phone back online', msg.stale);
       renderHeartbeat(msg.stale);
@@ -1475,15 +1593,337 @@ awaiting emergency trigger from client or gateway...</div>
     } catch (e) {}
   }
 
+  // ---- Analytics (GET /api/analytics) --------------------------------------------------------
+  // Inline SVG, no chart library. Text that can come from callers/responders goes in via textContent.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const CHANNELS = [
+    { key: 'call', label: 'call' },
+    { key: 'help_sms', label: 'help sms' },
+    { key: 'app_alert', label: 'app alert' },
+  ];
+  let analyticsRange = '7d';
+  let analyticsData = null;
+  let analyticsLoading = false;
+
+  function svgEl(tag, attrs) {
+    const node = document.createElementNS(SVG_NS, tag);
+    Object.entries(attrs || {}).forEach(([k, v]) => node.setAttribute(k, v));
+    return node;
+  }
+  function seriesColor(key) {
+    return getComputedStyle(document.getElementById('analytics-panel')).getPropertyValue('--series-' + key).trim();
+  }
+  // Column with a 4px rounded data end and a square base.
+  function columnPath(x, y, w, h, rounded) {
+    const r = rounded ? Math.min(4, w / 2, h) : 0;
+    return 'M' + x + ',' + (y + h) + 'V' + (y + r) + (r ? 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y : '') +
+           'H' + (x + w - r) + (r ? 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) : '') + 'V' + (y + h) + 'Z';
+  }
+  function niceScale(max) {
+    if (max <= 0) return { max: 4, step: 1 };
+    const raw = max / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = Math.max(1, [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw));
+    return { max: Math.ceil(max / step) * step, step };
+  }
+  function compact(n) { return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'k' : String(n); }
+
+  // Tooltip: values lead, labels follow; short line keys in the series colour.
+  function showTooltip(evt, title, rows) {
+    const tip = document.getElementById('viz-tooltip');
+    tip.replaceChildren(el('div', 'tt-title', title));
+    rows.forEach((r) => {
+      const row = el('div', 'tt-row');
+      if (r.color) { const key = el('span', 'tt-key'); key.style.background = r.color; row.append(key); }
+      row.append(el('span', 'tt-val', String(r.value)), el('span', '', r.label));
+      tip.append(row);
+    });
+    tip.style.display = 'block';
+    let x, y;
+    if (evt.clientX !== undefined && evt.type !== 'keydown' && evt.type !== 'focus') { x = evt.clientX; y = evt.clientY; }
+    else { const b = (evt.anchor || evt.target).getBoundingClientRect(); x = b.left + b.width / 2; y = b.top; }
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, x + 14)) + 'px';
+    tip.style.top = Math.max(8, y - h - 12) + 'px';
+  }
+  function hideTooltip() { document.getElementById('viz-tooltip').style.display = 'none'; }
+
+  // "2026-10-25 14:00" -> "14"; "2026-10-25" -> "10-25"
+  function bucketTick(label, bucket) {
+    return bucket === 'hour' ? label.slice(11, 13) : label.slice(5);
+  }
+
+  // Columns (stacked by series, or one series). Crosshair + tooltip for every series at the hovered X.
+  function renderColumns(container, opts) {
+    const { rows, series, labelOf, tickOf, title } = opts;
+    container.replaceChildren();
+    const W = Math.max(260, container.clientWidth || 600), H = 200;
+    const m = { t: 18, r: 6, b: 24, l: 30 };
+    const pw = W - m.l - m.r, ph = H - m.t - m.b;
+    const n = rows.length;
+    const totals = rows.map((r) => series.reduce((s, c) => s + (r[c.key] || 0), 0));
+    const maxTotal = Math.max(0, ...totals);
+    const scale = niceScale(maxTotal);
+    const band = pw / Math.max(1, n);
+    const bw = Math.max(1, Math.min(24, band - 2 > 3 ? band * 0.72 : band - 1));
+    const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, height: H, role: 'img', tabindex: '0',
+                                'aria-label': title + '. use left and right arrow keys to read values; the table button shows all data.' });
+    const y = (v) => m.t + ph - (v / scale.max) * ph;
+    for (let v = 0; v <= scale.max; v += scale.step) {
+      if (v > 0) svg.append(svgEl('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: 'var(--viz-grid)', 'stroke-width': 1 }));
+      const t = svgEl('text', { x: m.l - 6, y: y(v) + 3, 'text-anchor': 'end' });
+      t.textContent = compact(v);
+      svg.append(t);
+    }
+    const cols = svgEl('g');
+    svg.append(cols);
+    const groups = [];
+    rows.forEach((r, i) => {
+      const g = svgEl('g');
+      const x = m.l + i * band + (band - bw) / 2;
+      let base = m.t + ph;
+      const drawn = series.filter((c) => r[c.key] > 0);
+      drawn.forEach((c, k) => {
+        const h = (r[c.key] / scale.max) * ph;
+        const gap = k > 0 ? 2 : 0;  // 2px surface gap between stacked segments
+        const top = base - h;
+        const segH = Math.max(1, h - gap);
+        g.append(svgEl('path', { d: columnPath(x, top, bw, segH, k === drawn.length - 1), fill: seriesColor(c.color || c.key) }));
+        base = top;
+      });
+      cols.append(g);
+      groups.push(g);
+    });
+    svg.append(svgEl('line', { x1: m.l, x2: W - m.r, y1: m.t + ph, y2: m.t + ph, stroke: 'var(--viz-axis)', 'stroke-width': 1 }));
+    // X ticks: as many as fit (about one per 46px), always including the last bucket.
+    const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(pw / 46))));
+    rows.forEach((r, i) => {
+      if (i % every !== 0 && i !== n - 1) return;
+      if (i !== n - 1 && n - 1 - i < every) return;  // keep the last tick clear of its neighbour
+      const t = svgEl('text', { x: m.l + i * band + band / 2, y: H - 6, 'text-anchor': 'middle' });
+      t.textContent = tickOf(r, i);
+      svg.append(t);
+    });
+    // Selective direct label: only the highest column's total.
+    if (maxTotal > 0) {
+      const i = totals.lastIndexOf(maxTotal);
+      const t = svgEl('text', { x: m.l + i * band + band / 2, y: y(maxTotal) - 5, 'text-anchor': 'middle', class: 'viz-direct' });
+      t.textContent = (series.length > 1 ? 'peak ' : '') + maxTotal;
+      svg.append(t);
+    }
+    const cross = svgEl('line', { y1: m.t, y2: m.t + ph, stroke: 'var(--border-strong)', 'stroke-width': 1, visibility: 'hidden' });
+    svg.append(cross);
+    const hit = svgEl('rect', { x: m.l, y: m.t, width: pw, height: ph + m.b, fill: 'transparent' });
+    svg.append(hit);
+    let active = -1;
+    function focusIndex(i, evt) {
+      active = Math.max(0, Math.min(n - 1, i));
+      const cx = m.l + active * band + band / 2;
+      cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+      groups.forEach((g, k) => g.setAttribute('opacity', k === active ? 1 : 0.55));
+      const r = rows[active];
+      const lines = series.map((c) => ({ value: r[c.key] || 0, label: c.label, color: seriesColor(c.color || c.key) }));
+      if (series.length > 1) lines.unshift({ value: totals[active], label: 'total' });
+      showTooltip(evt, labelOf(r, active), lines);
+    }
+    function clear() {
+      active = -1;
+      cross.setAttribute('visibility', 'hidden');
+      groups.forEach((g) => g.setAttribute('opacity', 1));
+      hideTooltip();
+    }
+    hit.addEventListener('pointermove', (evt) => {
+      const b = svg.getBoundingClientRect();
+      const px = (evt.clientX - b.left) * (W / b.width) - m.l;
+      focusIndex(Math.floor(px / band), evt);
+    });
+    hit.addEventListener('pointerleave', clear);
+    svg.addEventListener('blur', clear);
+    svg.addEventListener('keydown', (evt) => {
+      if (evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight') return;
+      evt.preventDefault();
+      const next = active < 0 ? n - 1 : active + (evt.key === 'ArrowRight' ? 1 : -1);
+      const i = Math.max(0, Math.min(n - 1, next));
+      const b = svg.getBoundingClientRect();
+      const left = b.left + (m.l + i * band + band / 2) * (b.width / W);
+      focusIndex(i, { type: 'keydown', anchor: { getBoundingClientRect: () => ({ left, top: b.top + m.t, width: 0 }) } });
+    });
+    container.append(svg);
+  }
+
+  function renderTable(container, headers, rows) {
+    const table = el('table', 'viz-table');
+    const head = el('tr');
+    headers.forEach((h) => head.append(el('th', '', h)));
+    const thead = el('thead'); thead.append(head);
+    const tbody = el('tbody');
+    rows.forEach((r) => { const tr = el('tr'); r.forEach((v) => tr.append(el('td', '', v === null || v === undefined ? '—' : String(v)))); tbody.append(tr); });
+    table.append(thead, tbody);
+    container.replaceChildren(table);
+  }
+
+  function kpiTile(label, value, sub, empty) {
+    const tile = el('div', 'kpi-tile');
+    tile.append(el('span', 'kpi-label', label), el('span', 'kpi-value' + (empty ? ' empty' : ''), value));
+    if (sub) tile.append(el('span', 'kpi-sub', sub));
+    return tile;
+  }
+
+  function renderKpis(d) {
+    const k = d.kpis;
+    const grid = document.getElementById('kpi-grid');
+    const mins = (v) => (v === null ? '—' : v < 60 ? v + ' min' : (v / 60).toFixed(1) + ' h');
+    grid.replaceChildren(
+      kpiTile('incidents', String(k.incidents), 'with any contact in range'),
+      kpiTile('open now', String(k.open_now), 'not yet resolved (all time)'),
+      kpiTile('median time to ack', mins(k.median_ack_minutes),
+              k.median_ack_minutes === null ? 'no acknowledgements yet' : 'p90 ' + mins(k.p90_ack_minutes) + ' · ' + k.acks + ' acked',
+              k.median_ack_minutes === null),
+      kpiTile('median time to close', mins(k.median_close_minutes),
+              k.median_close_minutes === null ? 'nothing resolved yet' : k.resolved + ' resolved', k.median_close_minutes === null),
+      kpiTile('located', k.located_pct === null ? '—' : k.located_pct + '%',
+              k.located_pct === null ? 'no incidents in range' : 'incidents with any location', k.located_pct === null),
+      kpiTile('auto-reply sent', k.reply_sent_pct === null ? '—' : k.reply_sent_pct + '%',
+              k.reply_sent_pct === null ? 'no reply attempted' : 'of ' + k.replies_attempted + ' attempted', k.reply_sent_pct === null),
+      kpiTile('closed by caller', String(k.closed_by_caller), 'caller texted safe'),
+    );
+  }
+
+  function renderContacts(d) {
+    const hourly = d.bucket === 'hour';
+    document.getElementById('contacts-title').textContent = 'contacts per ' + (hourly ? 'hour' : 'day') + ' by channel';
+    const legend = document.getElementById('contacts-legend');
+    legend.replaceChildren(...CHANNELS.map((c) => {
+      const item = el('span');
+      const sw = el('span', 'viz-swatch'); sw.style.background = seriesColor(c.key);
+      item.append(sw, document.createTextNode(c.label));
+      return item;
+    }));
+    renderColumns(document.getElementById('contacts-chart'), {
+      rows: d.daily, series: CHANNELS, title: 'contacts per ' + (hourly ? 'hour' : 'day') + ' by channel',
+      labelOf: (r) => r.date, tickOf: (r) => bucketTick(r.date, d.bucket),
+    });
+    renderTable(document.getElementById('contacts-table'), [hourly ? 'hour' : 'date', ...CHANNELS.map((c) => c.label), 'total'],
+      d.daily.map((r) => [r.date, r.call, r.help_sms, r.app_alert, r.call + r.help_sms + r.app_alert]));
+  }
+
+  function renderHours(d) {
+    const rows = d.hours.map((v, h) => ({ hour: h, contacts: v }));
+    const hh = (h) => String(h).padStart(2, '0');
+    renderColumns(document.getElementById('hours-chart'), {
+      rows, series: [{ key: 'contacts', label: 'contacts', color: 'single' }], title: 'contacts by hour of day',
+      labelOf: (r) => hh(r.hour) + ':00–' + hh(r.hour) + ':59', tickOf: (r) => hh(r.hour),
+    });
+    renderTable(document.getElementById('hours-table'), ['hour', 'contacts'], rows.map((r) => [hh(r.hour) + ':00', r.contacts]));
+  }
+
+  function renderOutcomes(d) {
+    const items = [
+      ['open', 'open (no ack)'], ['acknowledged_open', 'acknowledged'],
+      ['resolved_by_responder', 'resolved by responder'], ['closed_by_caller', 'closed by caller'],
+    ];
+    const total = items.reduce((s, [k]) => s + d.outcomes[k], 0);
+    const max = Math.max(1, ...items.map(([k]) => d.outcomes[k]));
+    const list = document.getElementById('outcomes-chart');
+    list.replaceChildren();
+    items.forEach(([k, label]) => {
+      const v = d.outcomes[k];
+      const row = el('div', 'bar-row');
+      row.tabIndex = 0;
+      const track = el('div', 'bar-track');
+      const fill = el('div', 'bar-fill');
+      fill.style.width = v ? 'calc((100% - 3rem) * ' + (v / max) + ')' : '0';
+      track.append(fill, el('span', 'bar-val', String(v)));
+      row.append(el('span', '', label), track);
+      const pctText = total ? Math.round(100 * v / total) + '% of ' + total : 'no incidents';
+      const show = (evt) => showTooltip(evt, label, [{ value: v, label: 'incidents · ' + pctText, color: seriesColor('single') }]);
+      row.addEventListener('pointermove', show);
+      row.addEventListener('focus', (evt) => show({ type: 'focus', target: fill.offsetWidth ? fill : row }));
+      row.addEventListener('pointerleave', hideTooltip);
+      row.addEventListener('blur', hideTooltip);
+      list.append(row);
+    });
+    if (!total) list.append(el('div', 'viz-note', 'no incidents in this range'));
+    renderTable(document.getElementById('outcomes-table'), ['outcome', 'incidents'], items.map(([k, label]) => [label, d.outcomes[k]]));
+  }
+
+  function renderLeaderboard(d) {
+    const box = document.getElementById('leaderboard');
+    if (!d.responders.length) { box.replaceChildren(el('div', 'viz-note', 'no responders registered or dispatched')); return; }
+    renderTable(box, ['responder', 'number', 'dispatches', 'acks', 'avg km'],
+      d.responders.map((r) => [r.name, r.number, r.dispatches, r.acks, r.avg_distance_km === null ? '—' : r.avg_distance_km.toFixed(2)]));
+  }
+
+  function renderAnalytics() {
+    const d = analyticsData;
+    if (!d) return;
+    document.getElementById('analytics-meta').textContent = d.from + ' → ' + d.to + ' · ' + (d.bucket === 'hour' ? 'hourly' : 'daily') + ' buckets';
+    renderKpis(d);
+    renderContacts(d);
+    renderHours(d);
+    renderOutcomes(d);
+    renderLeaderboard(d);
+    if (typeof updateHotspots === 'function') updateHotspots();
+  }
+
+  async function refreshAnalytics() {
+    if (analyticsLoading) return;
+    analyticsLoading = true;
+    const panel = document.getElementById('analytics-panel');
+    panel.classList.add('loading');  // keep the previous render, dimmed, while refetching
+    try {
+      const res = await api('/api/analytics?range=' + encodeURIComponent(analyticsRange));
+      if (res.ok) {
+        analyticsData = await res.json();
+        renderAnalytics();
+      } else {
+        document.getElementById('analytics-meta').textContent = 'analytics unavailable: HTTP ' + res.status;
+      }
+    } catch (e) {
+      document.getElementById('analytics-meta').textContent = 'analytics unavailable';
+    } finally {
+      analyticsLoading = false;
+      panel.classList.remove('loading');
+    }
+  }
+
+  function initAnalytics() {
+    document.querySelectorAll('#analytics-panel [data-range]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        analyticsRange = btn.dataset.range;
+        document.querySelectorAll('#analytics-panel [data-range]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+        refreshAnalytics();
+      });
+    });
+    document.querySelectorAll('#analytics-panel [data-table-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const name = btn.dataset.tableToggle;
+        const table = document.getElementById(name + '-table');
+        const chart = document.getElementById(name + '-chart');
+        const showTable = table.hidden;
+        table.hidden = !showTable;
+        chart.hidden = showTable;
+        const legend = document.getElementById(name + '-legend');
+        if (legend) legend.hidden = showTable;
+        btn.textContent = showTable ? '[chart]' : '[table]';
+      });
+    });
+    let resizeTimer = null;
+    window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAnalytics, 150); });
+  }
+
   window.addEventListener('load', async () => {
     if (adminToken) document.getElementById('csv-link').href = '/api/incidents.csv?token=' + encodeURIComponent(adminToken);
     initMap();
+    initAnalytics();
     await updateServerStatus();  // learns the WebSocket port first
     connectWebSocket();
     await refreshResponders();
     refreshIncidents();
+    refreshAnalytics();
     setInterval(updateServerStatus, 2000);
     setInterval(refreshIncidents, 10000);
+    setInterval(refreshAnalytics, 10000);
     setInterval(refreshResponders, 30000);
     setInterval(tickTelemetryTimer, 1000);
   });
