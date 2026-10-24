@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka turns one Android phone and a laptop into a community help line over plain SMS.">
+<title>Kaaka Help Line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Noto+Sans+Malayalam:wght@500&display=swap">
+<style>
+/* Layout: full-bleed deep-teal canvas, centred hero over a particle sphere, then bands that sink deeper (abyss → kelp cards → deep wells). One visual world, dark only. */
+:root {
+  color-scheme: dark;
+  --abyss: #012624; --deep: #011d1c; --kelp: #003734; --slate: #707777;
+  --mist: #edfffe; --platinum: #ffffff; --silver: #bbc7c6; --ash: #f2f2f2; --phosphor: #fde9ff;
+  --arrow-fill: rgba(3, 81, 75, 0.5); --hairline: rgba(255, 255, 255, 0.1);
+  --aurora: linear-gradient(90deg, rgb(203, 255, 252) 0%, rgb(237, 255, 254) 26.25%, rgb(255, 253, 250) 47.57%, rgb(250, 209, 255) 88.96%);
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-ml: "Noto Sans Malayalam", "Inter", system-ui, sans-serif;
+  --gutter-l: max(20px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(20px, env(safe-area-inset-right, 0px));
+}
+html { scroll-behavior: smooth; background: var(--abyss); }
+body { background: var(--abyss); color: var(--silver); font: 400 16px/1.4 var(--font); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.band { padding-left: var(--gutter-l); padding-right: var(--gutter-r); }
+.inner { max-width: 1240px; margin: 0 auto; }
+h1, h2, h3 { color: var(--platinum); font-weight: 500; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.label { font-size: 12px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--silver); }
+.label.mist { color: var(--mist); }
+
+/* nav */
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: color-mix(in srgb, var(--abyss) 88%, transparent); backdrop-filter: blur(8px); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--abyss); }
+.nav .inner { height: 80px; display: flex; align-items: center; gap: 24px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--platinum); text-decoration: none; font-weight: 500; font-size: 20px; letter-spacing: -0.02em; }
+.links { display: flex; gap: 24px; margin-left: auto; }
+.links a { text-decoration: none; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--silver); }
+.links a:hover, .links a:focus-visible { color: var(--platinum); }
+.btn { display: inline-flex; align-items: center; gap: 10px; border-radius: 6px; font: 400 14px/1.43 Arial, system-ui, sans-serif; text-transform: uppercase; letter-spacing: .04em; text-decoration: none; padding: 14px 22px; }
+.btn-aurora { background: var(--aurora); color: #222222; }
+.btn-kelp { background: var(--kelp); color: var(--platinum); }
+.btn:focus-visible, .links a:focus-visible, .arrow:focus-visible { outline: 2px solid var(--mist); outline-offset: 3px; }
+
+/* hero */
+.hero { position: relative; overflow: hidden; }
+.hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hero .inner { position: relative; min-height: min(86vh, 820px); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 24px; padding-block: 120px 96px; }
+.hero h1 { font-size: clamp(44px, 8vw, 96px); line-height: 1; letter-spacing: -0.045em; max-width: 12ch; }
+.hero .sub { max-width: 600px; font-size: 18px; color: var(--mist); }
+.hero .ctas { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.scrim { position: absolute; inset: 0; background: radial-gradient(ellipse 55% 45% at 50% 50%, rgba(1, 38, 36, .78), rgba(1, 38, 36, 0) 70%); pointer-events: none; }
+
+/* stats */
+.stats { padding-block: 68px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+.stats .inner { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+.stat .num { color: var(--phosphor); font-size: clamp(48px, 6vw, 86px); font-weight: 500; line-height: 1; letter-spacing: -0.046em; font-variant-numeric: tabular-nums; }
+.stat .cap { margin-top: 12px; font-size: 13px; letter-spacing: .055em; text-transform: uppercase; color: var(--mist); max-width: 22ch; }
+
+/* sections */
+section { padding-block: 120px 68px; }
+.head { display: grid; gap: 20px; max-width: 720px; margin-bottom: 48px; }
+.head h2 { font-size: clamp(36px, 5vw, 61px); line-height: 1; letter-spacing: -0.04em; }
+.head p { font-size: 18px; max-width: 600px; }
+
+/* steps */
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; list-style: none; margin: 0; padding: 0; counter-reset: step; }
+.step { background: var(--kelp); border-radius: 16px; padding: 36px; display: grid; gap: 16px; align-content: start; min-width: 0; }
+.step::before { counter-increment: step; content: "0" counter(step); font-size: 12px; font-weight: 500; letter-spacing: .15em; color: var(--mist); }
+.step h3 { font-size: 24px; line-height: 1.3; letter-spacing: -0.02em; }
+.step .who { font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: var(--slate); }
+
+/* explore: feature rows + molecule */
+.explore { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 48px; align-items: center; }
+.rows { display: grid; gap: 8px; }
+.row { border-radius: 16px; padding: 40px 36px; display: grid; grid-template-columns: minmax(0, 1fr) 32px; gap: 12px 24px; border: 1px solid var(--hairline); }
+.row h3 { font-size: clamp(28px, 3vw, 36px); line-height: 1; letter-spacing: -0.02em; }
+.row p { grid-column: 1 / -1; max-width: 560px; }
+.row .tag { grid-column: 1 / -1; font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: var(--mist); }
+.arrow { width: 32px; height: 32px; border-radius: 6px; background: var(--arrow-fill); display: grid; place-items: center; color: var(--platinum); text-decoration: none; }
+.molecule { width: 100%; height: auto; max-width: 100%; }
+
+/* kinetic */
+.kinetic { padding-block: 80px 40px; overflow: hidden; }
+.kinetic .word { font-family: var(--font-ml); font-weight: 500; font-size: clamp(88px, 20vw, 295px); line-height: 1; letter-spacing: -0.02em; color: var(--kelp); white-space: nowrap; text-align: center; }
+.kinetic .line { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-top: 8px; }
+.kinetic .line p { max-width: 520px; font-size: 18px; color: var(--mist); }
+
+/* control room */
+.panels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.panel { background: var(--kelp); border-radius: 16px; padding: 36px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.panel h3 { font-size: 24px; line-height: 1.3; letter-spacing: -0.02em; }
+.panel .label { color: var(--mist); }
+.mini { margin-top: 12px; display: grid; gap: 6px; }
+.mini div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding-block: 8px; border-top: 1px solid var(--hairline); }
+.mini b { color: var(--phosphor); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* safety */
+.safety { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.safety .panel { background: transparent; border: 1px solid var(--hairline); }
+
+/* cta well + footer */
+.well { background: var(--deep); border-radius: 16px; padding: 120px 36px; text-align: center; display: grid; justify-items: center; gap: 24px; }
+.well h2 { font-size: clamp(36px, 5vw, 61px); line-height: 1; letter-spacing: -0.04em; max-width: 16ch; }
+.well p { max-width: 560px; font-size: 18px; }
+.note112 { font-size: 13px; letter-spacing: .055em; text-transform: uppercase; color: var(--mist); }
+footer { background: var(--deep); margin-top: 68px; padding-block: 64px 48px; }
+footer .inner { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; font-size: 14px; }
+footer nav { display: flex; gap: 24px; flex-wrap: wrap; }
+footer a { text-decoration: none; color: var(--silver); }
+footer a:hover { color: var(--platinum); }
+
+@media (max-width: 960px) {
+  .steps, .panels { grid-template-columns: minmax(0, 1fr); }
+  .stats .inner { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 40px; }
+  .explore { grid-template-columns: minmax(0, 1fr); }
+  .molecule { max-width: 420px; margin: 0 auto; }
+  .safety { grid-template-columns: minmax(0, 1fr); }
+  .links { display: none; }
+  .nav .btn { margin-left: auto; }
+}
+@media (max-width: 480px) {
+  section { padding-block: 80px 48px; }
+  .hero .inner { min-height: 0; padding-block: 96px 80px; }
+  .step, .panel { padding: 28px; }
+  .row { padding: 32px 24px; }
+  .well { padding: 80px 24px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<header class="nav band">
+  <div class="inner">
+    <a class="brand" href="#top" aria-label="Kaaka home">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="none" stroke="#ffffff" stroke-width="1.5"/><circle cx="14" cy="14" r="5" fill="#fde9ff"/><path d="M19 14h7" stroke="#ffffff" stroke-width="1.5"/></svg>
+      kaaka
+    </a>
+    <nav class="links" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#parts">What you get</a>
+      <a href="#control">Control room</a>
+      <a href="#safety">Safety</a>
+    </nav>
+    <a class="btn btn-kelp" href="https://github.com/twilighty-abhi/kaaka" target="_blank" rel="noopener">Get Kaaka</a>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero band">
+    <canvas id="orb" aria-hidden="true"></canvas>
+    <div class="scrim"></div>
+    <div class="inner">
+      <p class="label mist">Kaaka · community help line</p>
+      <h1>One call. Location follows.</h1>
+      <p class="sub">Kaaka turns one Android phone and a laptop into a help line. A missed call gets an instant reply, the nearest responder is alerted, and the caller appears on a live map. All over plain SMS, with no mobile data needed.</p>
+      <div class="ctas">
+        <a class="btn btn-aurora" href="#how">See how it works <span aria-hidden="true">↓</span></a>
+        <a class="btn btn-kelp" href="https://github.com/twilighty-abhi/kaaka" target="_blank" rel="noopener">View on GitHub <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats band" aria-label="Kaaka in numbers">
+    <div class="inner">
+      <div class="stat"><div class="num">1</div><p class="cap">Android phone is the Kaaka number</p></div>
+      <div class="stat"><div class="num">0</div><p class="cap">Mobile data needed: calls and SMS only</p></div>
+      <div class="stat"><div class="num">15 s</div><p class="cap">Location updates while the caller moves</p></div>
+      <div class="stat"><div class="num">112</div><p class="cap">Named in every reply for immediate danger</p></div>
+    </div>
+  </div>
+
+  <section id="how" class="band">
+    <div class="inner">
+      <div class="head">
+        <p class="label">How it works</p>
+        <h2>From a missed call to a closed incident.</h2>
+        <p>Six steps, most of them automatic. The caller never has to explain where they are.</p>
+      </div>
+      <ol class="steps">
+        <li class="step"><span class="who">Caller · any phone</span><h3>Calls or texts the Kaaka number</h3><p>A plain call, or an SMS with HELP, SOS or സഹായം for someone who cannot talk.</p></li>
+        <li class="step"><span class="who">Kaaka number</span><h3>Rejects the call, replies by SMS</h3><p>Free for the caller. The reply says help is being arranged and, in immediate danger, to call 112.</p></li>
+        <li class="step"><span class="who">Caller's phone</span><h3>The reply starts the location beacon</h3><p>With Kaaka Sensors installed, GPS reports flow back automatically. Without it, a link lets them share location from the browser.</p></li>
+        <li class="step"><span class="who">Responders</span><h3>The nearest responder is dispatched</h3><p>Distance and ETA by SMS, with a map link and “Reply ACK to confirm”. Nobody answers in five minutes? A reminder goes out.</p></li>
+        <li class="step"><span class="who">Control room</span><h3>One incident, on a live map</h3><p>Calls, help texts, alerts and the caller's route are grouped per caller, with the nearest responder drawn on the map.</p></li>
+        <li class="step"><span class="who">Caller or responder</span><h3>Closed when help arrives</h3><p>A responder texts RESOLVE, or the caller texts SAFE. Everything stays on record for later.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="parts" class="band">
+    <div class="inner explore">
+      <div>
+        <div class="head">
+          <p class="label">What you get</p>
+          <h2>Three small parts. One help line.</h2>
+        </div>
+        <div class="rows">
+          <article class="row"><span class="tag">Gateway app</span><h3>The Kaaka number</h3><a class="arrow" href="https://github.com/twilighty-abhi/kaaka/tree/main/gateway" target="_blank" rel="noopener" aria-label="Gateway app on GitHub">↗</a><p>An Android phone that screens every incoming call, including saved contacts, replies by SMS, texts responders and reports to the control room. Works with the screen locked.</p></article>
+          <article class="row"><span class="tag">Caller app</span><h3>Kaaka Sensors</h3><a class="arrow" href="https://github.com/twilighty-abhi/kaaka/tree/main/client" target="_blank" rel="noopener" aria-label="Kaaka Sensors on GitHub">↗</a><p>An SOS button, fall detection, a safety timer and an “I'm safe” button. Location reports go out even when Android won't let the app open itself.</p></article>
+          <article class="row"><span class="tag">Dashboard</span><h3>The control room</h3><a class="arrow" href="https://github.com/twilighty-abhi/kaaka/tree/main/server" target="_blank" rel="noopener" aria-label="Control room on GitHub">↗</a><p>Live incidents and routes, history with search, analytics, a responder registry and desktop notifications. Runs on any laptop.</p></article>
+        </div>
+      </div>
+      <svg class="molecule" viewBox="0 0 420 460" role="img" aria-label="Network of a caller, the Kaaka number, responders and the control room">
+        <g stroke="#ffffff" stroke-opacity=".35" stroke-width="1.2" fill="none">
+          <line x1="210" y1="90" x2="210" y2="230"/><line x1="210" y1="230" x2="90" y2="330"/><line x1="210" y1="230" x2="330" y2="330"/>
+          <line x1="210" y1="230" x2="340" y2="140"/><line x1="90" y1="330" x2="210" y2="400"/><line x1="330" y1="330" x2="210" y2="400"/>
+          <line x1="340" y1="140" x2="330" y2="330" stroke-dasharray="4 6"/>
+        </g>
+        <g fill="#012624" stroke="#ffffff" stroke-width="1.5">
+          <circle cx="210" cy="90" r="30"/><circle cx="90" cy="330" r="22"/><circle cx="330" cy="330" r="22"/><circle cx="340" cy="140" r="16"/><circle cx="210" cy="400" r="26"/>
+        </g>
+        <circle cx="210" cy="230" r="42" fill="#003734" stroke="#ffffff" stroke-width="1.5"/>
+        <circle cx="210" cy="230" r="10" fill="#fde9ff"/>
+        <g fill="#bbc7c6" font-family="Inter, system-ui, sans-serif" font-size="11" letter-spacing="1.6" text-anchor="middle">
+          <text x="210" y="40">CALLER</text><text x="210" y="293">KAAKA NUMBER</text><text x="90" y="372">RESPONDER</text><text x="330" y="372">RESPONDER</text><text x="368" y="114">MAP</text><text x="210" y="448">CONTROL ROOM</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <div class="kinetic band" aria-label="Help in Malayalam">
+    <div class="inner">
+      <div class="word" aria-hidden="true">സഹായം</div>
+      <div class="line">
+        <p class="label mist">Help, in Malayalam</p>
+        <p>Someone who cannot talk can text HELP, SOS or സഹായം. Kaaka handles it like a call: an auto-reply, responders alerted, and an incident on the map.</p>
+      </div>
+    </div>
+  </div>
+
+  <section id="control" class="band">
+    <div class="inner">
+      <div class="head">
+        <p class="label">Control room</p>
+        <h2>See every caller. Know who is going.</h2>
+        <p>A browser dashboard that turns calls and texts into incidents people can act on.</p>
+      </div>
+      <div class="panels">
+        <article class="panel"><p class="label">Live</p><h3>Open incidents and routes</h3><p>Each caller's trail on the map, the nearest responder with distance and ETA, and an alert when the gateway phone goes silent.</p></article>
+        <article class="panel"><p class="label">History</p><h3>Every incident, searchable</h3><p>Search by number, filter by outcome and date, open a full timeline, export to CSV.</p></article>
+        <article class="panel"><p class="label">Analytics</p><h3>What the help line is doing</h3><p>Contacts per day by channel, peak hours, outcomes and a responder leaderboard.</p>
+          <div class="mini" aria-label="Example metrics">
+            <div><span>Median time to acknowledge</span><b>tracked</b></div>
+            <div><span>Incidents with a location</span><b>tracked</b></div>
+            <div><span>Auto-replies sent</span><b>tracked</b></div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="safety" class="band">
+    <div class="inner">
+      <div class="head">
+        <p class="label">Safety by design</p>
+        <h2>Built for the worst moment, not the best one.</h2>
+      </div>
+      <div class="safety">
+        <article class="panel"><p class="label">Works without data</p><h3>Plain calls and SMS</h3><p>Basic phones, weak signal, no balance for data. A rejected call costs the caller nothing.</p></article>
+        <article class="panel"><p class="label">Location stays private</p><h3>Only the Kaaka number can start it</h3><p>The caller's beacon starts only for a reply from their configured Kaaka number. A stranger cannot request it.</p></article>
+        <article class="panel"><p class="label">Protected dashboard</p><h3>Locked before it goes public</h3><p>The server refuses a public address without an admin token, and replies are rate-limited per caller.</p></article>
+        <article class="panel"><p class="label">Alongside 112</p><h3>Never instead of it</h3><p>Every reply points to 112 for immediate danger. Kaaka adds location, tracking and a responder loop.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <div class="band">
+    <div class="inner">
+      <div class="well">
+        <p class="label mist">For campuses, colonies and families</p>
+        <h2>Run a help line with one phone.</h2>
+        <p>Kaaka is open source. Set up the Kaaka number, add your responders, and open the control room on any laptop.</p>
+        <a class="btn btn-aurora" href="https://github.com/twilighty-abhi/kaaka" target="_blank" rel="noopener">Get Kaaka on GitHub <span aria-hidden="true">↗</span></a>
+        <p class="note112">In immediate danger, call 112.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="band">
+  <div class="inner">
+    <span>kaaka · community help line</span>
+    <nav aria-label="Footer">
+      <a href="#how">How it works</a>
+      <a href="#control">Control room</a>
+      <a href="https://github.com/twilighty-abhi/kaaka" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+// Particle sphere: points on a sphere (Fibonacci lattice), slowly rotating, depth-shaded teal → white with a pink rim.
+(() => {
+  const canvas = document.getElementById('orb');
+  const ctx = canvas.getContext('2d');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const N = 1400, pts = [];
+  for (let i = 0; i < N; i++) {
+    const y = 1 - (i / (N - 1)) * 2, r = Math.sqrt(1 - y * y), t = i * 2.399963229728653;
+    pts.push([Math.cos(t) * r, y, Math.sin(t) * r]);
+  }
+  let w = 0, h = 0, dpr = 1, angle = 0.6;
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = canvas.clientWidth; h = canvas.clientHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+    const R = Math.min(w, h) * 0.42, cx = w / 2, cy = h / 2;
+    const ca = Math.cos(angle), sa = Math.sin(angle), tilt = 0.35, ct = Math.cos(tilt), st = Math.sin(tilt);
+    for (const [x, y, z] of pts) {
+      const x1 = x * ca + z * sa, z1 = -x * sa + z * ca;
+      const y2 = y * ct - z1 * st, z2 = y * st + z1 * ct;
+      const depth = (z2 + 1) / 2;
+      const rim = Math.abs(x1) > 0.88 ? 1 : 0;
+      const a = 0.12 + depth * 0.78;
+      ctx.fillStyle = rim ? `rgba(253,233,255,${a})` : depth > 0.6 ? `rgba(237,255,254,${a})` : `rgba(0,190,180,${a})`;
+      const s = 0.6 + depth * 1.4;
+      ctx.fillRect(cx + x1 * R, cy + y2 * R, s, s);
+    }
+  }
+  function tick() { angle += 0.0018; draw(); if (!reduce) requestAnimationFrame(tick); }
+  resize(); window.addEventListener('resize', () => { resize(); draw(); });
+  reduce ? draw() : requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
