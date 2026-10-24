@@ -38,6 +38,34 @@ public class GatewayTextTest {
     }
 
     @Test
+    public void manualPublicUrlWinsOverAuto() {
+        assertEquals("https://manual.example",
+            GatewayText.effectivePublicUrl("https://manual.example/", "https://auto.example"));
+    }
+
+    @Test
+    public void autoPublicUrlUsedWhenManualEmpty() {
+        assertEquals("https://auto.example", GatewayText.effectivePublicUrl("", "https://auto.example/"));
+        assertEquals("https://auto.example", GatewayText.effectivePublicUrl(null, "  https://auto.example "));
+    }
+
+    @Test
+    public void noPublicUrlWhenBothEmpty() {
+        assertEquals("", GatewayText.effectivePublicUrl("", ""));
+        assertEquals("", GatewayText.effectivePublicUrl(null, null));
+        assertEquals("", GatewayText.locationLine(GatewayText.effectivePublicUrl("", ""), "abc123def456"));
+    }
+
+    @Test
+    public void insecureAutoUrlIsStillUsedButFlagged() {
+        String url = GatewayText.effectivePublicUrl("", "http://10.0.2.2:8080");
+        assertEquals("http://10.0.2.2:8080", url);
+        assertTrue(GatewayText.isInsecurePublicUrl(url));
+        assertFalse(GatewayText.isInsecurePublicUrl("https://auto.example"));
+        assertFalse(GatewayText.isInsecurePublicUrl(""));
+    }
+
+    @Test
     public void locationLineOnlyWithPublicUrl() {
         assertEquals("", GatewayText.locationLine("", "abc123def456"));
         assertEquals("\nShare your location: https://x.example/l/abc123def456",

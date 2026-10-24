@@ -36,6 +36,7 @@ The Mac's Bluetooth hands-free mode (`--bt-mac`, `mac/hfp-bridge`) is a separate
 | S23 locked / app closed | Built; test pending |
 | Responder SMS alerts and ACK by SMS | Built; gateway unit tests pass; device test pending |
 | 112 reply text, location link in reply | Built; device test pending (link needs an https public URL) |
+| Location link: live sharing page, URL learned from the dashboard, `scripts/public-url.sh`, admin token enforced for public URLs | Built; server and unit tests pass; not yet run through a real tunnel |
 | Heartbeat and "S23 last seen" | Built; server tested; first real heartbeat pending (installed on the S23) |
 | Battery-optimisation exemption | Built; device test pending |
 | Incidents, location page, ACK endpoint, persistence, admin token | Built; full simulated incident passed end to end on the Mac |
@@ -48,7 +49,7 @@ Android does not pass calls from saved contacts to call-screening apps (Telecom 
 ## Next steps
 
 1. **Device test pass** using [TESTING.md](TESTING.md).
-2. **Public https URL** (only if location links are wanted): a tunnel or small server in front of the dashboard, with `KAAKA_ADMIN_TOKEN` set before exposing it.
+2. **Public https URL** (only if location links are wanted): run `scripts/public-url.sh`, restart the server with `KAAKA_PUBLIC_URL` and `KAAKA_ADMIN_TOKEN`, set the token in Kaaka Call; test a link from a real phone browser.
 3. **Second Android phone** with Kaaka Sensors for the SOS/fall/beacon tests.
 4. **Tune fall detection** thresholds from real tests.
 5. **Backup:** a second gateway phone and power backup.

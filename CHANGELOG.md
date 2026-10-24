@@ -4,6 +4,61 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:24:22+05:30 — Document location links for callers without the app
+
+- Changed: README: new "Location links for callers without the app" section (flow, https requirement, `scripts/public-url.sh`, admin-token requirement, automatic URL from the heartbeat); settings and API tables updated (heartbeat reply, 429 on location updates). `docs/PLAN.md` status and next steps updated.
+- Why: Setup has several moving parts and a safety rule; they need to be written down.
+- Validation: Links and anchors checked by reading; no code change.
+- Limitations: None identified.
+
+## 2026-10-25T03:23:44+05:30 — Helper to give the dashboard a public https URL
+
+- Changed: `scripts/public-url.sh` checks for cloudflared (prints the brew install command if missing) and for a running dashboard, opens a Cloudflare quick tunnel to the dashboard port, extracts the `https://*.trycloudflare.com` URL and prints the exact next steps (restart with `KAAKA_PUBLIC_URL` and `KAAKA_ADMIN_TOKEN`, set the token in Kaaka Call; the phone learns the URL from the heartbeat).
+- Why: The location link needs an https address reachable from callers' phones; this is the quickest way to get one for a demo or pilot.
+- Validation: `bash -n`; missing-cloudflared and no-dashboard paths exit with clear messages. No tunnel was opened.
+- Limitations: Quick-tunnel URLs change on every run; for a permanent address use a named tunnel or a hosted server.
+
+## 2026-10-25T03:23:02+05:30 — Show the automatic public URL in the gateway settings
+
+- Changed: `getSettings` returns `autoPublicUrl`; under the public link field the UI shows "auto: <url> (from the dashboard)" when the field is empty and a URL was reported (flagged when not https), or a hint to leave the field empty.
+- Why: The operator should see which URL callers will get without digging into logs.
+- Validation: `npx svelte-check` 0 errors; `npm run build`; `npx cap sync android`; `assembleDebug`.
+- Limitations: Not checked on a device.
+
+## 2026-10-25T03:23:02+05:30 — Gateway learns the public URL from the dashboard heartbeat
+
+- Changed: `GatewayStore.postToDashboardForReply` returns the JSON reply (the existing `postToDashboard` wraps it). `Heartbeat` stores the reply's `public_url` as the automatic URL (`autoPublicUrl`), logging changes. `CallHandler` builds the reply's location link from `effectivePublicUrl` (manual setting, else automatic).
+- Why: No one should have to copy a tunnel URL into the phone: the dashboard already knows it.
+- Validation: `./gradlew assembleDebug` builds; unit tests 15/15. Not yet exercised against a running dashboard from the app.
+- Limitations: The automatic URL only updates when a heartbeat gets through (every 15 min or on settings save).
+
+## 2026-10-25T03:23:02+05:30 — Decide the location-link URL in pure code, with tests
+
+- Changed: `GatewayText.effectivePublicUrl(manual, auto)` (manual setting wins, else the dashboard-reported URL, else none; trailing slashes dropped) and `isInsecurePublicUrl`. Four new unit tests in `GatewayTextTest`.
+- Why: The gateway will soon learn the public URL from the dashboard; the choice between manual and automatic URL must be simple and tested.
+- Validation: `./gradlew testDebugUnitTest`: GatewayTextTest 15/15 (manual wins, auto when manual empty, none when both empty, non-https auto used but flagged).
+- Limitations: None identified.
+
+## 2026-10-25T03:20:28+05:30 — Location page keeps sharing while open
+
+- Changed: `server/locate.html`: after the first successful share it watches the position and sends an update at most every 15 s, shows "Sharing live location · N updates" and a "Stop sharing" button; 429 replies (sent too soon) are skipped silently. The https warning stays. Plain HTML/JS, no external scripts.
+- Why: A moving caller's position should keep flowing without them pressing the button again.
+- Validation: Script syntax parsed with Node; page still served (200) in the earlier spare-port test. Not opened in a real phone browser.
+- Limitations: Browser geolocation needs an https origin; the page says so when it is not.
+
+## 2026-10-25T03:19:48+05:30 — Heartbeat returns the public URL; location updates rate-limited
+
+- Changed: `POST /api/heartbeat` now replies `{"success": true, "public_url": "..."}` (empty when no public URL is configured). `POST /api/location` accepts at most one update per link token every 10 s and answers 429 otherwise.
+- Why: Lets the gateway app learn the public URL automatically, and keeps live location sharing from flooding the server.
+- Validation: `py_compile`; spare-port run with `KAAKA_ADMIN_TOKEN` and a public URL: heartbeat reply carries the URL, call-event with token 200, `/l/<token>` 200, first location 200 and a second within 10 s 429, incident lists one location.
+- Limitations: The rate limit is in memory and resets when the server restarts.
+
+## 2026-10-25T03:13:45+05:30 — Require an admin token for a public dashboard URL
+
+- Changed: `server/server.py` exits with a clear error when a public URL (`--public-url` / `KAAKA_PUBLIC_URL`) is set without `KAAKA_ADMIN_TOKEN`, unless `--allow-unprotected-public` is given.
+- Why: A public URL exposes the dashboard and gateway endpoints to the internet; without the token anyone could read callers' numbers and locations.
+- Validation: `py_compile`; starting with `KAAKA_PUBLIC_URL` and no token prints the error and exits.
+- Limitations: None identified.
 ## 2026-10-25T03:24:45+05:30 — Document "I'm safe" / SAFE
 
 - Changed: README (Mac + S23 section), `gateway/README.md`, `client/README.md` and `docs/TESTING.md` describe the SAFE text, the "I'm safe" button, the dashboard badge and two device checks.

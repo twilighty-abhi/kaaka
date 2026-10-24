@@ -7,6 +7,8 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.telephony.SmsManager;
 import android.util.Log;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -32,6 +34,7 @@ public final class GatewayStore {
     private static final String KEY_DASHBOARD = "dashboard_url";
     private static final String KEY_RESPONDERS = "responder_numbers";
     private static final String KEY_PUBLIC_URL = "public_url";
+    private static final String KEY_AUTO_PUBLIC_URL = "auto_public_url"; // learned from the dashboard's heartbeat reply
     private static final String KEY_DASHBOARD_TOKEN = "dashboard_token";
     private static final String KEY_ESCALATE_MINUTES = "escalate_minutes";
     private static final String KEY_MAX_REPLIES = "max_replies_per_hour";
@@ -99,6 +102,21 @@ public final class GatewayStore {
     public static String publicUrl(Context context) {
         String url = prefs(context).getString(KEY_PUBLIC_URL, "");
         return url == null ? "" : url.trim().replaceAll("/+$", "");
+    }
+
+    /** Public URL reported by the dashboard server in its heartbeat reply; "" when it has none. */
+    public static String autoPublicUrl(Context context) {
+        String url = prefs(context).getString(KEY_AUTO_PUBLIC_URL, "");
+        return url == null ? "" : url.trim().replaceAll("/+$", "");
+    }
+
+    public static void saveAutoPublicUrl(Context context, String url) {
+        prefs(context).edit().putString(KEY_AUTO_PUBLIC_URL, url == null ? "" : url.trim()).apply();
+    }
+
+    /** The URL used for location links: the manual setting when set, else the one the dashboard reported. */
+    public static String effectivePublicUrl(Context context) {
+        return GatewayText.effectivePublicUrl(publicUrl(context), autoPublicUrl(context));
     }
 
     /** Sent as X-Kaaka-Token when the dashboard server requires KAAKA_ADMIN_TOKEN; "" when unset. */
@@ -292,8 +310,13 @@ public final class GatewayStore {
 
     /** POSTs JSON to the optional dashboard server. Call from a background thread; failures are only logged. */
     public static void postToDashboard(Context context, String path, JSONObject body) {
+        postToDashboardForReply(context, path, body);
+    }
+
+    /** Same as postToDashboard but returns the JSON reply, or null when there was no 2xx reply. */
+    public static JSONObject postToDashboardForReply(Context context, String path, JSONObject body) {
         String base = dashboardUrl(context);
-        if (base.isEmpty()) return;
+        if (base.isEmpty()) return null;
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(base + path).openConnection();
@@ -308,9 +331,21 @@ public final class GatewayStore {
                 out.write(body.toString().getBytes(StandardCharsets.UTF_8));
             }
             int code = conn.getResponseCode();
-            if (code >= 300) Log.w(TAG, "Dashboard " + path + " returned HTTP " + code);
+            if (code >= 300) {
+                Log.w(TAG, "Dashboard " + path + " returned HTTP " + code);
+                return null;
+            }
+            try (InputStream in = conn.getInputStream()) {
+                byte[] buf = new byte[4096];
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                int n;
+                while ((n = in.read(buf)) > 0 && out.size() < 64 * 1024) out.write(buf, 0, n);
+                String text = out.toString("UTF-8").trim();
+                return text.isEmpty() ? new JSONObject() : new JSONObject(text);
+            }
         } catch (Exception e) {
             Log.w(TAG, "Dashboard " + path + " unreachable: " + e.getMessage());
+            return null;
         } finally {
             if (conn != null) conn.disconnect();
         }

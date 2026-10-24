@@ -111,6 +111,22 @@ final class GatewayText {
         return REPLY_EN;
     }
 
+    /**
+     * URL used for location links: the manually configured one wins; otherwise the URL the dashboard
+     * reported in its heartbeat reply; "" when neither is set. Trailing slashes are dropped.
+     */
+    static String effectivePublicUrl(String manual, String auto) {
+        String m = manual == null ? "" : manual.trim().replaceAll("/+$", "");
+        if (!m.isEmpty()) return m;
+        return auto == null ? "" : auto.trim().replaceAll("/+$", "");
+    }
+
+    /** True when a URL is set but not https: callers' browsers will refuse to share location on it. */
+    static boolean isInsecurePublicUrl(String url) {
+        String u = url == null ? "" : url.trim();
+        return !u.isEmpty() && !u.toLowerCase().startsWith("https://");
+    }
+
     /** Location link appended to the caller's reply, or "" when no public URL is set. */
     static String locationLine(String publicUrl, String token) {
         if (publicUrl == null || publicUrl.trim().isEmpty() || token == null || token.isEmpty()) return "";

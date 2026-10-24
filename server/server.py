@@ -232,6 +232,9 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         if self.server_instance.incidents.token_number(token) is None:
             self.send_json(404, {"success": False, "error": "unknown or expired location link"})
             return
+        if not self.server_instance.accept_location_update(token):
+            self.send_json(429, {"success": False, "error": "too many updates: at most one every 10 seconds"})
+            return
         self.server_instance.on_location(token, float(lat), float(lon), None if accuracy is None else float(accuracy))
         self.send_json(200, {"success": True})
 
@@ -444,7 +447,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif path == "/api/heartbeat":
-            status, result = 200, {"success": True}
+            # The reply carries the public URL so the gateway app can build location links without manual setup.
+            status, result = 200, {"success": True, "public_url": self.server_instance.public_url}
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 beat = json.loads(self.rfile.read(length).decode("utf-8") or "null")
@@ -601,6 +605,7 @@ class TelemetryServer:
         self.bt_enabled = bool(bt_mac)
         self.last_gateway_event = None
         self.last_heartbeat = None  # latest POST /api/heartbeat from the gateway phone
+        self.location_last_accepted = {}  # token -> epoch of the last accepted /api/location update
         self.hfp = None
         if IS_MAC and self.bt_enabled:
             self.hfp = HfpBridgeClient(
@@ -786,6 +791,17 @@ class TelemetryServer:
             if message:
                 payload["message"] = message
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+
+    # Live sharing from the location page: accept at most one update per token every 10 s.
+    LOCATION_MIN_INTERVAL = 10.0
+
+    def accept_location_update(self, token) -> bool:
+        now = time.time()
+        last = self.location_last_accepted.get(token, 0)
+        if now - last < self.LOCATION_MIN_INTERVAL:
+            return False
+        self.location_last_accepted[token] = now
+        return True
 
     def on_location(self, token, lat, lon, accuracy):
         """A caller shared their location through the SMS link (POST /api/location)."""
@@ -1619,7 +1635,14 @@ def main():
     parser.add_argument("--adb-serial", default=os.environ.get("KAAKA_ADB_SERIAL", ""), help="adb serial of the phone to read SMS from (or KAAKA_ADB_SERIAL); optional")
     parser.add_argument("--public-url", default=os.environ.get("KAAKA_PUBLIC_URL", ""), help="Public https URL of this server (or KAAKA_PUBLIC_URL); shown for reference, the gateway app builds the links")
     parser.add_argument("--no-notify", action="store_true", help="Disable macOS notifications (or KAAKA_NOTIFY=0)")
+    parser.add_argument("--allow-unprotected-public", action="store_true",
+                        help="Allow a public URL without KAAKA_ADMIN_TOKEN (not recommended)")
     args = parser.parse_args()
+    # A public URL exposes the dashboard and gateway endpoints to the internet: require the admin token.
+    if args.public_url and not os.environ.get("KAAKA_ADMIN_TOKEN") and not args.allow_unprotected_public:
+        parser.error("a public URL (--public-url / KAAKA_PUBLIC_URL) needs KAAKA_ADMIN_TOKEN, otherwise anyone "
+                     "on the internet can read callers' numbers and locations. Set KAAKA_ADMIN_TOKEN "
+                     "(and the same token in Kaaka Call), or pass --allow-unprotected-public.")
 
     server = TelemetryServer(host=args.host, port=args.port, http_port=args.http_port, bt_mac=args.bt_mac,
                              client_number=args.client_number, adb_serial=args.adb_serial,

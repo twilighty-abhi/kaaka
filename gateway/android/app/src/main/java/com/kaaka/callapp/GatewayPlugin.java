@@ -142,6 +142,7 @@ public class GatewayPlugin extends Plugin {
         result.put("dashboardUrl", GatewayStore.dashboardUrl(context));
         result.put("responderNumbers", GatewayStore.responderText(context));
         result.put("publicUrl", GatewayStore.publicUrl(context));
+        result.put("autoPublicUrl", GatewayStore.autoPublicUrl(context));
         result.put("dashboardToken", GatewayStore.dashboardToken(context));
         call.resolve(result);
     }

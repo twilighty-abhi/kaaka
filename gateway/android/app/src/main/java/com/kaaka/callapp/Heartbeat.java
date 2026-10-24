@@ -5,6 +5,7 @@ import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.BatteryManager;
+import android.util.Log;
 import android.os.Build;
 import android.os.PowerManager;
 import androidx.work.Constraints;
@@ -21,6 +22,7 @@ import org.json.JSONObject;
  * (POST {dashboard}/api/heartbeat). Does nothing while no dashboard URL is set.
  */
 final class Heartbeat {
+    private static final String TAG = "KaakaGateway";
     private static final String WORK_NAME = "kaaka-heartbeat";
 
     private Heartbeat() {}
@@ -54,7 +56,15 @@ final class Heartbeat {
             body.put("contactCalls", contactCalls(context));
         } catch (JSONException ignored) {
         }
-        GatewayStore.postToDashboard(context, "/api/heartbeat", body);
+        JSONObject reply = GatewayStore.postToDashboardForReply(context, "/api/heartbeat", body);
+        if (reply != null) {
+            // The dashboard tells us its public URL so location links need no manual setup here.
+            String url = reply.optString("public_url", "");
+            if (!url.equals(GatewayStore.autoPublicUrl(context))) {
+                GatewayStore.saveAutoPublicUrl(context, url);
+                Log.i(TAG, url.isEmpty() ? "Dashboard reports no public URL" : "Dashboard public URL: " + url);
+            }
+        }
     }
 
     static boolean screeningRole(Context context) {
