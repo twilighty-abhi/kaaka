@@ -39,7 +39,9 @@ public final class GatewayStore {
     private static final String KEY_EVENTS = "events";
     private static final String KEY_LAST_CALL = "last_call_number";
     private static final String KEY_LAST_CALL_AT = "last_call_at";
-    private static final long CALL_DEDUPE_MS = 60_000;
+    // Call screening and the phone-state receiver see the same call within about a second.
+    // Keep this short: a real second call from the same number must not be swallowed.
+    private static final long CALL_DEDUPE_MS = 10_000;
     // Enough history for the 24 h STATUS summary, rate limiting and escalation checks.
     private static final int MAX_EVENTS = 200;
 
@@ -244,7 +246,7 @@ public final class GatewayStore {
     }
 
     /**
-     * Returns true the first time a call from this number is seen within a minute.
+     * Returns true the first time a call from this number is seen within CALL_DEDUPE_MS.
      * Call screening and the phone-state receiver can both see the same call; only one may handle it.
      */
     public static synchronized boolean claimCall(Context context, String number) {

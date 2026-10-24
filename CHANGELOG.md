@@ -4,6 +4,14 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:51:15+05:30 — Do not ignore a second call from the same number
+
+- Changed: `GatewayStore.CALL_DEDUPE_MS` 60 s → 10 s. Rebuilt `gateway/Kaaka.apk`.
+- Why: Device test: a call at 00:30:40 was rejected, but a second call from the same number 30 s later (the "S23 locked" test) rang until missed with no reply, because the dedupe meant for the two detection paths seeing one call ignored any call from that number for a minute. Both paths fire within about a second.
+- Also found: the dashboard received nothing since 00:16 because the S23 had dropped off Wi-Fi and was on mobile data (logs: "Dashboard … unreachable … from 192.0.0.2"); fixed by reconnecting the S23 to the same Wi-Fi as the Mac (no code change).
+- Validation: `./gradlew testDebugUnitTest assembleDebug` (GatewayTextTest 11/11); installed on the S23, call-screening role kept; S23 → Mac:8080 reachable.
+- Limitations: Second-call behaviour to be re-tested by hand.
+
 ## 2026-10-25T00:46:25+05:30 — Fix Kaaka Sensors default-SMS request loop (root cause of the frozen UI)
 
 - Changed: `client/.../MainActivity.java` no longer requests the default-SMS role in `onResume`; the role is requested only from the receiver screen's button (`DefaultSmsPlugin.requestDefaultSms`). Removed the unused helper and imports. Rebuilt `client/KaakaSensors.apk`.
