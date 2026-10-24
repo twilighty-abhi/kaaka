@@ -136,6 +136,11 @@ class IncidentStore:
     def add_resolve(self, number, by, note, phone_timestamp):
         return self._record({"kind": "resolve", "number": number, "by": by, "note": note, "phone_timestamp": phone_timestamp})
 
+    def events_snapshot(self):
+        """A copy of the in-memory event list (oldest first), e.g. for analytics."""
+        with self.lock:
+            return list(self.events)
+
     def status_of(self, number):
         """Current status of the incident for this number, or None if there is none."""
         inc = self._build().get(number_key(number))

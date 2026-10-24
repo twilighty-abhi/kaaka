@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:43:06+05:30 — Analytics API: GET /api/analytics
+
+- Changed: New `server/analytics.py` with pure functions over the incident event log (range windows with hourly or daily buckets, incident episodes, linear-interpolated percentiles, responder dispatch/ACK stats, 0.005° hotspot grid). `server/server.py` serves `GET /api/analytics?range=24h|7d|30d|all` (default `7d`, 400 on another value, same admin-token rule as `/api/incidents`). `IncidentStore.events_snapshot()` gives a copy of the event list.
+- Why: The dashboard needs response-time, channel, outcome, responder and hotspot numbers without the browser re-deriving them from the 50 newest incidents.
+- Validation: `py_compile` of the server modules; spare-port server: `range=1y` returns 400, one seeded call shows up in `range=24h` (24 hourly buckets, `reply_sent_pct` 100, ack/close medians `null`), default range returns 7 daily buckets.
+- Limitations: Each reopening of a resolved incident counts as a new incident (episode). The store keeps the newest 5000 events in memory, so `all` covers at most those. Server receive time is used for all timestamps, not the phone's.
+
 ## 2026-10-25T03:32:47+05:30 — Rebuild both apps with SAFE, location links and nearest-responder dispatch
 
 - Changed: `gateway/Kaaka.apk` and `client/KaakaSensors.apk` rebuilt from the integrated branch (feat/im-safe + feat/location-link + feat/nearest-responder on top of the beacon-interval/trail work). Merge conflicts were all additive and resolved by keeping both sides.

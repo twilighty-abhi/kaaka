@@ -51,9 +51,11 @@ except ImportError:
 try:
     from server.incidents import IncidentStore, TOKEN_RE, number_key
     from server.responders import ResponderRegistry
+    from server import analytics
 except ImportError:
     from incidents import IncidentStore, TOKEN_RE, number_key
     from responders import ResponderRegistry
+    import analytics
 
 if IS_MAC:
     try:
@@ -278,6 +280,13 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(200, {"incidents": self.server_instance.incidents_with_nearest()})
         elif path == "/api/responders":
             self.send_json(200, {"responders": self.server_instance.responders.list()})
+        elif path == "/api/analytics":
+            range_key = (query.get("range") or [analytics.DEFAULT_RANGE])[0]
+            if range_key not in analytics.RANGES:
+                self.send_json(400, {"success": False, "error": f'range must be one of {", ".join(analytics.RANGES)}'})
+                return
+            self.send_json(200, analytics.compute(self.server_instance.incidents.events_snapshot(),
+                                                  self.server_instance.responders.list(), range_key, time.time()))
         elif path == "/api/incidents.csv":
             body = incidents_csv(self.server_instance.incidents.incidents()).encode("utf-8")
             self.send_response(200)
