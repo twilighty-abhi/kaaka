@@ -2,7 +2,7 @@
 
 > **Abstract**: An edge-aware emergency telemetry and rapid-response system combining real-time physical sensor detection with automated telephony gateways and localized speech microservices. Built with Capacitor 7, Svelte 5 (runes mode), Node.js, Linux PipeWire D-Bus telephony monitors, and Malayalam voice AI (TTS/ASR), the platform bridges on-device incident detection with automated dispatch and base-station notification channels for reliable emergency intervention.
 
-Plan, status and next steps: [docs/PLAN.md](docs/PLAN.md) · Device test checklist: [docs/TESTING.md](docs/TESTING.md)
+Landing page: [site/index.html](site/index.html) (open in a browser, no build) · Plan, status and next steps: [docs/PLAN.md](docs/PLAN.md) · Device test checklist: [docs/TESTING.md](docs/TESTING.md)
 
 ## Unified setup: Mac + S23
 

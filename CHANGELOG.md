@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T04:09:44+05:30 — Landing page
+
+- Added: `site/index.html`, a single-file landing page: hero with a canvas particle sphere, stat strip, the six-step flow, the three parts (Kaaka number, Kaaka Sensors, control room) with a network illustration, the control room pages, safety notes and a call-to-action to the repository. README links to it.
+- Why: A page to show judges and visitors what Kaaka is without running anything.
+- Validation: Headless Chrome screenshots at 1440 px and at a 390 px mobile viewport; no horizontal overflow at 390 px (scrollWidth equals the viewport).
+- Limitations: Static page only, not deployed anywhere. Fonts load from Google Fonts; offline it falls back to system fonts.
+
 ## 2026-10-25T03:56:26+05:30 — Document dashboard pages; analytics and pages validation summary
 
 - Changed: README: a "Dashboard pages" bullet (live, history, incident, analytics, responders, system; hash URLs; counts), status/CSV/analytics bullets updated for the pages, and API table rows for the `/api/incidents` filters, `GET /api/incidents/<key>` and `GET /api/responders/activity`. `AI_USAGE.md` row for this work.
