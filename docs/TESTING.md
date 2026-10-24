@@ -49,6 +49,8 @@ Use a phone whose number is **not** saved in the S23's contacts (call it **Calle
 - [ ] **Rate limit:** call 4 times from Caller within an hour; the 4th gets no reply and no responder text (event shows "rate-limited"; dashboard still shows the call).
 - [ ] **STATUS:** Responder texts `STATUS`; gets the list of open incidents.
 - [ ] **RESOLVE:** Responder texts `RESOLVE <Caller number> reached, safe`; gets "Kaaka: resolved …"; dashboard shows resolved (greyed); a new call from Caller reopens it.
+- [ ] **Caller reports SAFE:** after a call from Caller, text `SAFE` (or "I'm safe") from Caller to the S23. Caller gets "Kaaka: glad you are safe. Your alert is closed…"; Responder gets "Kaaka: <Caller> reported safe at …"; dashboard shows the green "safe" badge and "closed by caller"; no escalation reminder follows. Texting `SAFE` again (no open incident) gets no reply.
+- [ ] **I'm safe button (Kaaka Sensors):** press SOS, then "I'm safe — close my alert": the beacon stops, the app shows "SAFE sent", and the dashboard closes the incident.
 - [ ] **Resolve from dashboard:** press [resolve] on an incident, add a note; status changes; [hide resolved] hides it.
 - [ ] **Reply language:** set Malayalam, call; check the Malayalam reply arrives correctly (and have a native speaker check the wording). Set back to English or Both.
 - [ ] **Silent S23 alert:** turn off the S23's Wi-Fi for 20+ minutes (or stop Kaaka Call); the dashboard and a Mac notification report the S23 as silent; turning Wi-Fi back on clears it.

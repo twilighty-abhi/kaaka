@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:24:45+05:30 — Document "I'm safe" / SAFE
+
+- Changed: README (Mac + S23 section), `gateway/README.md`, `client/README.md` and `docs/TESTING.md` describe the SAFE text, the "I'm safe" button, the dashboard badge and two device checks.
+- Why: Keep docs and the test checklist in step with the feature.
+- Validation: Re-read against the implemented behaviour.
+- Limitations: None identified.
+
 ## 2026-10-25T03:24:11+05:30 — Dashboard shows incidents closed by the caller
 
 - Changed: `/api/incidents` adds `closed_by_caller` (true when the incident was resolved with `by: "caller"`). The dashboard shows a green "safe" badge and "closed by caller · reported safe at …"; the feed and the macOS notification say "Caller reported safe". A later call, help SMS or alert reopens the incident as before.
