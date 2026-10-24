@@ -5,13 +5,21 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.provider.Telephony;
+import android.Manifest;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
-@CapacitorPlugin(name = "DefaultSms")
+@CapacitorPlugin(
+    name = "DefaultSms",
+    // RECEIVE_SMS lets SmsReceivedReceiver see the gateway's reply without being the default SMS app.
+    permissions = { @Permission(strings = { Manifest.permission.RECEIVE_SMS }, alias = "receiveSms") }
+)
 public class DefaultSmsPlugin extends Plugin {
 
     private static DefaultSmsPlugin instance;
@@ -22,7 +30,7 @@ public class DefaultSmsPlugin extends Plugin {
         super.load();
         instance = this;
         if (lastTrigger != null) {
-            notifyListeners("smsReceived", lastTrigger);
+            notifyListeners("smsReceived", lastTrigger, true);
         }
     }
 
@@ -41,7 +49,8 @@ public class DefaultSmsPlugin extends Plugin {
         data.put("timestamp", timestamp);
         lastTrigger = data;
         if (instance != null) {
-            instance.notifyListeners("smsReceived", data);
+            // Retained until the web layer subscribes (the trigger often arrives before the page loads).
+            instance.notifyListeners("smsReceived", data, true);
         }
     }
 
@@ -49,6 +58,27 @@ public class DefaultSmsPlugin extends Plugin {
         if (instance != null) {
             instance.notifyListeners("stopBeaconTriggered", new JSObject());
         }
+    }
+
+    @PluginMethod
+    public void checkReceiveSms(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("granted", getPermissionState("receiveSms") == PermissionState.GRANTED);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void requestReceiveSms(PluginCall call) {
+        if (getPermissionState("receiveSms") == PermissionState.GRANTED) {
+            checkReceiveSms(call);
+        } else {
+            requestPermissionForAlias("receiveSms", call, "receiveSmsCallback");
+        }
+    }
+
+    @PermissionCallback
+    private void receiveSmsCallback(PluginCall call) {
+        checkReceiveSms(call);
     }
 
     // Settings shared with SmsReceiver (set from the app's Settings card).

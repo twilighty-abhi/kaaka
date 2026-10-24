@@ -397,8 +397,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 "• Accelerometer: 9.7 m/s²\n"
                 "• Gyroscope: 0.2 rad/s\n"
                 "• Magnetometer: 186° S\n"
-                "• Coords: 9.064458, 76.557012\n"
-                "• Maps: https://maps.google.com/?q=9.064458,76.557012"
+                "• Location: unavailable"
             )
             self.server_instance.display_telemetry(sample_alert, sender="simulated", source="Simulated Test")
             body = b'{"success":true}'
@@ -1463,8 +1462,7 @@ class TelemetryServer:
                         "• Accelerometer: 9.7 m/s²\n"
                         "• Gyroscope: 0.2 rad/s\n"
                         "• Magnetometer: 186° S\n"
-                        "• Coords: 9.064458, 76.557012\n"
-                        "• Maps: https://maps.google.com/?q=9.064458,76.557012"
+                        "• Location: unavailable"
                     )
                     self.display_telemetry(sample_alert, sender="simulated", source="Simulated Test")
                 else:

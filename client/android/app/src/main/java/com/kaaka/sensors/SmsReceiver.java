@@ -96,9 +96,12 @@ public class SmsReceiver extends BroadcastReceiver {
             boolean isAuthorizedSender = !authorizedSuffix.isEmpty() && digitsOnly.endsWith(authorizedSuffix);
 
             if (!isAuthorizedSender) {
-                // Regular contact: post normal notification (NO auto-open, NO alarm vibration)
-                Log.d(TAG, "Regular SMS from " + sender + ": posting standard notification.");
-                postNormalSmsNotification(context, sender, completeMessage, timestamp);
+                // Only the default SMS app (SMS_DELIVER) notifies for ordinary messages; otherwise the
+                // phone's own SMS app already does, and a second notification would be a duplicate.
+                if (Telephony.Sms.Intents.SMS_DELIVER_ACTION.equals(action)) {
+                    Log.d(TAG, "Regular SMS from " + sender + ": posting standard notification.");
+                    postNormalSmsNotification(context, sender, completeMessage, timestamp);
+                }
                 return;
             }
 
@@ -115,7 +118,13 @@ public class SmsReceiver extends BroadcastReceiver {
 
             Log.d(TAG, "🚨 Emergency SMS from gateway " + sender + "! Triggering app auto-open, urgent notification, and alarm vibration.");
 
-            // Function A: Instantly bring app to foreground (zero delay before anything else)
+            // Send the first location report natively: Android 14+ may block opening the app from here.
+            String gateway = context.getSharedPreferences(DefaultSmsPlugin.PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(DefaultSmsPlugin.PREF_AUTHORIZED_NUMBER, "");
+            PendingResult pending = goAsync();
+            NativeAlert.send(context.getApplicationContext(), gateway, pending::finish);
+
+            // Function A: Bring app to foreground (may be blocked by background-start limits; the notification opens it)
             launchMainActivity(context, sender, completeMessage);
 
             // Function B: Wake up screen and acquire temporary wake lock

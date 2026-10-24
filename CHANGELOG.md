@@ -4,6 +4,84 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T01:58:19+05:30 — Dashboard: no beep for the live sensor stream
+
+- Changed: `server/dashboard.html` beeps only for alerts, calls and other events, not for "Live sensor stream" telemetry.
+- Why: With a phone streaming sensor readings (about once a second), an open dashboard tab beeped continuously.
+- Validation: Reviewed the handler; stream messages carry source "Live sensor stream".
+- Limitations: Reload open dashboard tabs to pick up the change.
+
+## 2026-10-25T01:52:02+05:30 — Scripted demo on two emulators; remove leftover sample coordinates
+
+- Changed: New `scripts/demo-emulated.sh` resets two configured emulators and the dashboard, runs the SMS relay and a GPS feed, and performs the scenario (incoming call, reply-triggered location alert, SOS, help SMS, caller stops beacon, dashboard resolve) while `scripts/record-demo.sh` records a captioned side-by-side video. `record-demo.sh` gains an optional caption strip (`CAPTIONS`) and label tag (`DEMO_TAG`). Removed the hardcoded sample coordinates 9.064458, 76.557012 from the dashboard's GPS tile, Maps link and simulated alert and from the server's simulated alerts ("Location: unavailable" instead).
+- Why: A presentable demo of the full flow; the coordinates were leftover real-looking data.
+- Validation: Recorded `demo/kaaka-demo-20261025-014600.mp4` (2164×1470, 165 s): one incident with 1 call, 1 help SMS, 3 location alerts (9.931200, 76.267300), resolved with note; gateway heartbeat shown.
+- Limitations: The phones in the video are emulators and the phone network (call, SMS delivery) and GPS are simulated; headless emulator rendering can show a brief partial frame.
+
+## 2026-10-25T01:37:01+05:30 — Send the first location report natively when the Kaaka number replies
+
+- Changed: Kaaka Sensors' SMS receiver now sends the first "Kaaka Alert" itself (`NativeAlert.java`): a recent last-known fix or a fresh fix (up to 8 s, via `goAsync`), else "Location: unavailable", in the same report format. Added `READ_PHONE_STATE` (newer Android checks the carrier group ID when apps send SMS: sends failed with `getGroupIdLevel1`) and `ACCESS_BACKGROUND_LOCATION` with a "Location all the time" row in the setup card. Trigger events to the web layer are retained until it subscribes. New `scripts/emulator-network.py` relays SMS between two emulators for demos/tests. Rebuilt `client/KaakaSensors.apk`.
+- Why: The reply-triggered beacon never reported: Android 14+ blocks the receiver from opening the app ("Background activity launch blocked"), the web beacon therefore never ran, SMS sending lacked READ_PHONE_STATE, and location was "while using the app" only, so background location requests were rejected.
+- Validation: Two Android 17 emulators (gateway Kaaka Call, caller Kaaka Sensors) with the Mac dashboard: incoming call → rejected → reply → native alert "with location" → gateway → dashboard incident with latest location 9.931200, 76.267300 and Maps link.
+- Limitations: On real phones the user must grant "Allow all the time" location and READ_PHONE_STATE; not yet re-tested on the Xiaomi.
+
+## 2026-10-25T01:22:15+05:30 — Demo video recorder
+
+- Changed: New `scripts/record-demo.sh <gateway-serial> <caller-serial> [seconds] [dashboard-url]` records both phones (`adb screenrecord`) and the dashboard (headless Chrome screenshots every 2 s) at the same time, normalizes the clips (a clip with no frames becomes a still), labels them (labels rendered with Chrome because this ffmpeg build has no `drawtext`) and stitches them side by side into `demo/kaaka-demo-<timestamp>.mp4`. Tries to keep screens awake while recording (MIUI blocks this over adb). `demo/` is ignored by Git.
+- Why: Record a demo of the whole flow across both phones and the Mac.
+- Validation: 15 s test run with the S23 and the Xiaomi: 2190×1360, 15.0 s, three labelled panels (checked a frame).
+- Limitations: Phone recording is limited to 180 s per run; the dashboard panel updates every 2 s.
+
+## 2026-10-25T01:13:30+05:30 — Report the real SMS send result in Kaaka Sensors
+
+- Changed: `DirectSmsPlugin` sends through the phone's default SMS SIM (`createForSubscriptionId`) and resolves only after the sent-PendingIntent results for all parts arrive; failures are rejected with a readable reason (no service, radio off, network rejected, limit), and a 30 s timeout reports an unconfirmed send. Rebuilt `client/KaakaSensors.apk`.
+- Why: Device test: the SOS card showed "SOS sent … sent #2" while the Xiaomi's sent box and the S23's inbox had no message — the plugin resolved immediately with no sent callback, so silent failures looked like success.
+- Validation: `assembleDebug`; installed on the Xiaomi. SOS could not be pressed over adb (MIUI blocks input injection), so the send result is to be checked by hand.
+- Limitations: Delivery reports (receipt by the S23) are not tracked, only the send result.
+
+## 2026-10-25T01:09:31+05:30 — Setup checklist in Kaaka Sensors (all permissions in one place)
+
+- Changed: New `KaakaSetupPlugin` (status of SMS send/receive, location, notifications, physical activity, battery exemption; `requestAll`; battery-exemption request; opens the MIUI permission editor or the app settings page) and a "Finish setup" card at the top of the main screen with "Allow all", "Exempt" and "Open phone settings". Missing permissions are requested once per app start, never in a loop. Added `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. The separate receive-SMS row in Settings is replaced by this card. Rebuilt `client/KaakaSensors.apk`.
+- Why: Device test on the Xiaomi: RECEIVE_SMS, POST_NOTIFICATIONS (never requested at runtime on Android 13+) and ACTIVITY_RECOGNITION were missing and MIUI blocked lock-screen display and background starts, so the Kaaka reply could not start the beacon and no alarm could show. MIUI also blocks `pm grant` over adb, so the app must ask itself.
+- Validation: `svelte-check` 0 errors; `assembleDebug`; installed on the Xiaomi; one permission request on start, no repeat.
+- Limitations: The user must accept the prompts and enable MIUI's Autostart / lock screen / background pop-ups on the device.
+
+## 2026-10-25T01:05:08+05:30 — Let Kaaka Sensors start the beacon from the Kaaka reply without being the default SMS app
+
+- Changed: `DefaultSmsPlugin` declares the RECEIVE_SMS permission and adds `checkReceiveSms` / `requestReceiveSms`; the Settings card shows "Start beacon when the Kaaka number replies" with an Allow button and MIUI guidance (Autostart, show on lock screen, background pop-ups). `SmsReceiver` no longer posts its own notification for ordinary SMS when it is not the default SMS app (the phone's SMS app already does). Rebuilt `client/KaakaSensors.apk`.
+- Why: Device test: the S23 rejected the Xiaomi's calls and its reply reached the Xiaomi, but Kaaka Sensors never reacted — RECEIVE_SMS was not granted (only SEND_SMS), because the app only obtained SMS access as the default SMS app. MIUI also denied "show when locked".
+- Validation: `svelte-check` 0 errors; `assembleDebug`; installed on the Xiaomi; no role-request loop.
+- Limitations: Automatic trigger to be re-tested after granting the permission on the device.
+
+## 2026-10-25T00:51:15+05:30 — Do not ignore a second call from the same number
+
+- Changed: `GatewayStore.CALL_DEDUPE_MS` 60 s → 10 s. Rebuilt `gateway/Kaaka.apk`.
+- Why: Device test: a call at 00:30:40 was rejected, but a second call from the same number 30 s later (the "S23 locked" test) rang until missed with no reply, because the dedupe meant for the two detection paths seeing one call ignored any call from that number for a minute. Both paths fire within about a second.
+- Also found: the dashboard received nothing since 00:16 because the S23 had dropped off Wi-Fi and was on mobile data (logs: "Dashboard … unreachable … from 192.0.0.2"); fixed by reconnecting the S23 to the same Wi-Fi as the Mac (no code change).
+- Validation: `./gradlew testDebugUnitTest assembleDebug` (GatewayTextTest 11/11); installed on the S23, call-screening role kept; S23 → Mac:8080 reachable.
+- Limitations: Second-call behaviour to be re-tested by hand.
+
+## 2026-10-25T00:46:25+05:30 — Fix Kaaka Sensors default-SMS request loop (root cause of the frozen UI)
+
+- Changed: `client/.../MainActivity.java` no longer requests the default-SMS role in `onResume`; the role is requested only from the receiver screen's button (`DefaultSmsPlugin.requestDefaultSms`). Removed the unused helper and imports. Rebuilt `client/KaakaSensors.apk`.
+- Why: After the user declined the role permanently, Android denied each request instantly, the activity resumed and requested again: logcat showed 170 `REQUEST_ROLE` starts in 8 s. The repeated pause/resume and status-bar inset changes swallowed touches and kept the WebView redrawing.
+- Validation: On the Xiaomi (Android 13) after reinstall: 0 role-request starts in 8 s, 13 frames rendered in 8 s with 0 janky (was ~36 frames/s, 35–50% janky), app CPU ~16%.
+- Limitations: Users who want the automatic beacon trigger must open the receiver screen and tap the default-SMS button.
+
+## 2026-10-25T00:43:59+05:30 — Reduce Kaaka Sensors rendering load
+
+- Changed: Removed `backdrop-blur` from all client cards, sticky header and fixed footer, the always-pulsing blurred glow, and the per-update bar transitions; location state is now updated with the other on-screen values (at most every 200 ms) instead of on every sample. Rebuilt `client/KaakaSensors.apk`.
+- Why: Scrolling stuttered on the Xiaomi: backdrop blur is redrawn on every scroll frame and content change in Android WebView, and reactive location updates re-rendered components ~16 times per second.
+- Validation: `svelte-check` 0 errors; on the Xiaomi (idle main screen, 5 s windows): app CPU 53% → 34–38%, WebView renderer 18% → 7%, janky frames 49% → 32–39%.
+- Limitations: The WebView still renders ~36 frames/s while idle; feel to be confirmed by hand.
+
+## 2026-10-25T00:39:05+05:30 — Fix Kaaka Sensors freezing on the second phone
+
+- Changed: `client/capacitor.config.ts` sets `loggingBehavior: 'none'`; `sensorManager.svelte.ts` passes every native sample to fall detection but updates the on-screen state at most every 200 ms. Rebuilt `client/KaakaSensors.apk`.
+- Why: On a Xiaomi (Android 13) the app stopped responding to touches: Capacitor's debug bridge logged every sensor event (~16/s, full JSON) on the UI thread and every card and sparkline re-rendered per sample.
+- Validation: `svelte-check` 0 errors/0 warnings; installed on the Xiaomi; Capacitor console lines in 6 s dropped from ~90 to 0.
+- Limitations: Responsiveness to be confirmed by hand on the device.
+
 ## 2026-10-25T00:16:53+05:30 — Round 3 integration check and test checklist
 
 - Changed: `docs/TESTING.md` adds round-3 device checks (help SMS, escalation, rate limit, STATUS/RESOLVE, dashboard resolve, Malayalam reply, silent-S23 alert, map/CSV, safety timer). Live dashboard restarted on round-3 code with notifications on.

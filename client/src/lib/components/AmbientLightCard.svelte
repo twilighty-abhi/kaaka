@@ -10,7 +10,7 @@
 	);
 </script>
 
-<Card.Root class="relative overflow-hidden border-border/70 bg-card/90 shadow-md backdrop-blur-xl transition-all hover:border-emerald-500/40 rounded-2xl">
+<Card.Root class="relative overflow-hidden border-border/70 bg-card/90 shadow-md transition-all hover:border-emerald-500/40 rounded-2xl">
 	<!-- Ambient glow -->
 	<div class="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-emerald-500/10 blur-2xl"></div>
 

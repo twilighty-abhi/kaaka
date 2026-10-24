@@ -600,10 +600,10 @@ awaiting emergency trigger from client or gateway...</div>
       <div class="sensor-tile">
         <span class="tile-label">// 06 gps coordinates</span>
         <div class="tile-val-row" style="margin-top: 0.2rem;">
-          <span class="tile-value" id="val-coords" style="font-size: 1.05rem; letter-spacing: -0.5px;">9.0644, 76.5570</span>
+          <span class="tile-value" id="val-coords" style="font-size: 1.05rem; letter-spacing: -0.5px;">—</span>
         </div>
         <span class="tile-sub">
-          <a id="link-maps" href="https://maps.google.com/?q=9.064458,76.557012" target="_blank" style="color: var(--brutal-yellow); text-decoration: underline;">view in maps ↗</a>
+          <a id="link-maps" href="#" target="_blank" style="color: var(--brutal-yellow); text-decoration: underline;">view in maps ↗</a>
         </span>
       </div>
     </div>
@@ -797,8 +797,11 @@ awaiting emergency trigger from client or gateway...</div>
       const source = msg.source || 'bluetooth ble / map';
       const sender = msg.sender || '';
       updateTelemetryDisplay(content, sender ? `${sender} via ${source}` : source, msg.update_count);
-      playBeep(920, 0.25);
-      if (source !== 'Live sensor stream') refreshIncidents();
+      // The live stream arrives about once a second: no beep, and no incident refresh, for it.
+      if (source !== 'Live sensor stream') {
+        playBeep(920, 0.25);
+        refreshIncidents();
+      }
     } else if (msg.type === 'CALL_DETECTED') {
       document.getElementById('last-call-num').textContent = msg.number || 'unknown (no caller ID)';
       addFeedItem(`call detected from ${msg.number} (${msg.state || 'active'})`, true);
@@ -1034,9 +1037,7 @@ awaiting emergency trigger from client or gateway...</div>
   }
 
   function triggerSimulatedAlert() {
-    const lat = (9.064458 + (Math.random() - 0.5) * 0.005).toFixed(6);
-    const lon = (76.557012 + (Math.random() - 0.5) * 0.005).toFixed(6);
-    const sample = `Kaaka Alert: Emergency assistance requested\n\nLive Sensors (5/5):\n• Pedometer: ${Math.floor(Math.random() * 50)} steps (0.03 km)\n• Light: ${Math.floor(Math.random() * 80 + 30)} lx\n• Accelerometer: ${(Math.random() * 1.5 + 9.2).toFixed(1)} m/s²\n• Gyroscope: ${(Math.random() * 0.5).toFixed(1)} rad/s\n• Magnetometer: ${Math.floor(Math.random() * 360)}° S\n• Coords: ${lat}, ${lon}\n• Maps: https://maps.google.com/?q=${lat},${lon}`;
+    const sample = `Kaaka Alert: Emergency assistance requested\n\nLive Sensors (5/5):\n• Pedometer: ${Math.floor(Math.random() * 50)} steps (0.03 km)\n• Light: ${Math.floor(Math.random() * 80 + 30)} lx\n• Accelerometer: ${(Math.random() * 1.5 + 9.2).toFixed(1)} m/s²\n• Gyroscope: ${(Math.random() * 0.5).toFixed(1)} rad/s\n• Magnetometer: ${Math.floor(Math.random() * 360)}° S\n• Location: unavailable (simulated alert)`;
     
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
