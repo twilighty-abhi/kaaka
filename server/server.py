@@ -325,6 +325,33 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     b"<p>Kaaka help line. The control room is at <a href=/admin>/admin</a>.</p>")
         self.send_html(200, page)
 
+    DOCS_FILE_RE = re.compile(r"^[a-z0-9-]+\.(html|css)$")
+
+    def serve_docs(self, path):
+        """Public user docs (site/docs/*.html and docs.css). /docs redirects to /docs/ so relative links resolve."""
+        if path == "/docs":
+            self.send_response(301)
+            self.send_header("Location", "/docs/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        name = path[len("/docs/"):] or "index.html"
+        if not self.DOCS_FILE_RE.match(name):  # no slashes or dots beyond the extension: no path traversal
+            self.send_error(404, "Not found")
+            return
+        docs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site", "docs")
+        try:
+            with open(os.path.join(docs_dir, name), "rb") as f:
+                content = f.read()
+        except OSError:
+            self.send_error(404, "Not found")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/css; charset=utf-8" if name.endswith(".css") else "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
     def handle_location(self):
         """POST /api/location (public): a caller shares their location through the SMS link."""
         try:
@@ -364,6 +391,9 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             return
         if path in ("/", "/index.html"):
             self.serve_landing_page()  # public: what Kaaka is; the dashboard lives at /admin
+            return
+        if path == "/docs" or path.startswith("/docs/"):
+            self.serve_docs(path)  # public user docs
             return
         if path == "/api/health":
             # Public liveness probe for load balancers / containers: nothing sensitive in here.

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: Responders">
+<title>Responders · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li><a href="sms-commands.html">SMS commands</a></li>
+    <li><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li><a href="dashboard.html">The control room</a></li>
+    <li class="current"><a href="responders.html">Responders</a></li>
+    <li><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li><a href="deployment.html">Running in production</a></li>
+    <li><a href="api.html">API reference</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>Responders</h1>
+    <nav class="toc" aria-label="On this page"></nav>
+<p class="lead">Responders are the people who go to the caller. They need nothing but a phone that can receive and send SMS. Kaaka texts them, reads their replies, and works out who is nearest.</p>
+
+<h2 id="two-lists">Two lists, same numbers</h2>
+<ul>
+<li><strong>Responder numbers in Kaaka Call</strong> ([config] on the Kaaka number) decide who is texted on every call and who may use the responder commands.</li>
+<li><strong>The responder registry in the control room</strong> (responders page) adds a name, a home position and availability. This is what the nearest-responder dispatch uses.</li>
+</ul>
+<p>Enter the same phone numbers in both. The control room matches ACKs to registry entries by number.</p>
+
+<h2 id="dispatch">Nearest responder and dispatch</h2>
+<ol>
+<li>When an open incident gets its first location (from a Kaaka Sensors report or a shared link), the server finds the nearest available responders by straight-line distance and estimates the time at 25 km/h city speed. This is a planning number, not a promise.</li>
+<li>It dispatches the one or two nearest: they are recorded on the incident, and the Kaaka number texts each one <em>"Kaaka dispatch: you are the nearest responder (1.2 km, ~3 min) to &lt;caller&gt;. Location: &lt;maps&gt; Reply ACK &lt;caller&gt; to confirm."</em></li>
+<li>Later locations for the same open incident do not dispatch again. A resolved incident that reopens does.</li>
+</ol>
+<p>Toggle a responder's availability on the responders page when they are off duty; unavailable responders are never dispatched but still get the ordinary call texts from Kaaka Call.</p>
+
+<h2 id="ack">Acknowledging and resolving</h2>
+<p>A responder replies <code>ACK</code> (or <code>ACK &lt;number&gt;</code>) to take an incident. The caller is told, the control room shows who acknowledged, and the escalation reminder is cancelled. When the caller is reached, the responder texts <code>RESOLVE &lt;number&gt; &lt;note&gt;</code>; the note shows in the control room. <code>STATUS</code> lists what is still open. All three are in <a href="sms-commands.html">SMS commands</a>.</p>
+
+<h2 id="escalation">If nobody answers</h2>
+<p>After the escalation time (5 minutes by default) with no ACK or RESOLVE, every responder gets one reminder: <em>"Kaaka UNACKNOWLEDGED: call from &lt;number&gt; at &lt;HH:mm&gt;. Reply ACK &lt;number&gt; to confirm."</em> The control room's analytics page tracks the median and p90 time to acknowledge, so you can see whether the team keeps up.</p>
+    <nav class="pager"><a class="prev" href="dashboard.html">← The control room</a><a class="next" href="location-links.html">Location links →</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>

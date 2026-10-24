@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: Location links">
+<title>Location links · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li><a href="sms-commands.html">SMS commands</a></li>
+    <li><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li><a href="dashboard.html">The control room</a></li>
+    <li><a href="responders.html">Responders</a></li>
+    <li class="current"><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li><a href="deployment.html">Running in production</a></li>
+    <li><a href="api.html">API reference</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>Location links</h1>
+    
+<p class="lead">Most callers will not have Kaaka Sensors. The reply SMS can carry a link that shares their location from any phone browser, with no app.</p>
+
+<h2 id="how">How it works</h2>
+<ol>
+<li>Kaaka Call gives every call a random token and reports it with the call. When it knows a public URL, the reply ends with <code>Share your location: https://&lt;public-url&gt;/l/&lt;token&gt;</code>.</li>
+<li>The caller opens the link and taps <strong>Share my location</strong>. The browser's GPS position is posted to the control room.</li>
+<li>While the page stays open it sends an update every 15 seconds ("Sharing live location · N updates") until the caller taps <strong>Stop sharing</strong>, so a moving caller leaves a trail on the map.</li>
+<li>The location shows on the caller's incident with a Google Maps link, and triggers the nearest-responder dispatch.</li>
+</ol>
+<p>Links expire after 24 hours. The server accepts at most one update per link every 10 seconds. The link page and the location endpoint are the only public parts of the control room; everything else stays behind the admin token.</p>
+
+<h2 id="setup">Setup</h2>
+<p>Browsers only share location on <strong>https</strong> pages, so the control room must be reachable at a public https address.</p>
+<ol>
+<li>Set an admin token on the server. The server refuses to start with a public URL and no token (only <code>--allow-unprotected-public</code> overrides this, for throwaway tests).</li>
+<li>Get an https address. For a quick test: <code>scripts/public-url.sh</code> opens a Cloudflare quick tunnel (<code>brew install cloudflared</code>) and prints the URL and the next commands. The address changes on every run. For something permanent use a named tunnel, a reverse proxy with a certificate, or a hosted server. See <a href="deployment.html">Running in production</a>.</li>
+<li>Restart the server with <code>KAAKA_PUBLIC_URL=&lt;url&gt; KAAKA_ADMIN_TOKEN=&lt;token&gt;</code>.</li>
+<li>In Kaaka Call set the same <strong>dashboard token</strong>. The phone learns the public URL from the next heartbeat reply within a minute and shows it as "auto: …" under the public link URL field. Set that field yourself only to pin a different address.</li>
+</ol>
+<p>Kaaka Call warns if the URL is not https, because the link would not work.</p>
+    <nav class="pager"><a class="prev" href="responders.html">← Responders</a><a class="next" href="deployment.html">Running in production →</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>

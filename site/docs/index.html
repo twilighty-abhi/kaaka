@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: Overview">
+<title>Overview · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li class="current"><a href="index.html">Overview</a></li>
+    <li><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li><a href="sms-commands.html">SMS commands</a></li>
+    <li><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li><a href="dashboard.html">The control room</a></li>
+    <li><a href="responders.html">Responders</a></li>
+    <li><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li><a href="deployment.html">Running in production</a></li>
+    <li><a href="api.html">API reference</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>Overview</h1>
+    <nav class="toc" aria-label="On this page"></nav>
+<p class="lead">Kaaka is a community help line run from one Android phone and one laptop. Callers need nothing but a phone that can make a call or send an SMS.</p>
+
+<h2 id="parts">The three parts</h2>
+<table>
+<tr><th>Part</th><th>Runs on</th><th>What it does</th></tr>
+<tr><td><strong>Kaaka Call</strong> (the Kaaka number)</td><td>One Android phone with a SIM</td><td>Screens every incoming call, rejects it and replies by SMS. Texts responders, handles their replies, and reports everything to the control room.</td></tr>
+<tr><td><strong>Control room</strong> (dashboard)</td><td>A laptop or server</td><td>Groups calls, texts, alerts and locations into incidents on a live map. History, analytics, responder registry, notifications.</td></tr>
+<tr><td><strong>Kaaka Sensors</strong> (optional)</td><td>The caller's own phone</td><td>SOS button, fall detection, a safety timer and an "I'm safe" button. Sends GPS reports by SMS to the Kaaka number.</td></tr>
+</table>
+
+<h2 id="flow">What happens on a call</h2>
+<ol>
+<li>Someone calls the Kaaka number. The call is rejected at once, so it costs the caller nothing.</li>
+<li>The caller gets an SMS: <em>"Kaaka received your call. Help is being arranged. If in immediate danger, call 112."</em> If a public URL is set, it ends with a link to share their location.</li>
+<li>Every configured responder gets an SMS with the caller's number and <em>"Reply ACK &lt;number&gt; to confirm."</em></li>
+<li>The call appears in the control room as an open incident. When the caller's location arrives, the nearest available responder is dispatched by SMS with distance and ETA.</li>
+<li>A responder replies <code>ACK</code>; the caller is told a responder has seen their call. If nobody replies within five minutes, responders get one reminder.</li>
+<li>The incident closes when a responder texts <code>RESOLVE</code>, the caller texts <code>SAFE</code>, or someone presses [resolve] in the control room.</li>
+</ol>
+
+<h2 id="texts">Help without a call</h2>
+<p>An SMS to the Kaaka number containing <code>HELP</code>, <code>SOS</code>, <code>KAAKA</code> or <code>സഹായം</code> is handled exactly like a call. See <a href="sms-commands.html">SMS commands</a>.</p>
+
+<div class="callout warn"><strong>Kaaka works alongside 112, never instead of it.</strong> Every reply points to 112 for immediate danger. Kaaka adds location, tracking and a responder loop; it cannot answer calls with a voice.</div>
+
+<h2 id="next">Where to go next</h2>
+<ul>
+<li><a href="getting-started.html">Getting started</a>: set up the Kaaka number and the control room in about twenty minutes.</li>
+<li><a href="sms-commands.html">SMS commands</a>: every text Kaaka understands and sends.</li>
+<li><a href="deployment.html">Running in production</a>: token, service files, backups, health check.</li>
+</ul>
+    <nav class="pager"><a class="next" href="getting-started.html">Getting started →</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>

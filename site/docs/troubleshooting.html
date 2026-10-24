@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: Troubleshooting">
+<title>Troubleshooting · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li><a href="sms-commands.html">SMS commands</a></li>
+    <li><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li><a href="dashboard.html">The control room</a></li>
+    <li><a href="responders.html">Responders</a></li>
+    <li><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li><a href="deployment.html">Running in production</a></li>
+    <li><a href="api.html">API reference</a></li>
+    <li class="current"><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>Troubleshooting</h1>
+    <nav class="toc" aria-label="On this page"></nav>
+<p class="lead">Problems seen in real testing, and what fixed them.</p>
+
+<h2 id="calls">Calls are not detected</h2>
+<ul>
+<li>Check the four setup rows in Kaaka Call are green. Call screening needs Android 10 or newer and the caller ID &amp; spam role; without it nothing happens on a call.</li>
+<li>Calls from <strong>saved contacts</strong> need the "calls from contacts" permissions. Without them, Android keeps those calls away from Kaaka.</li>
+<li>Two calls from the same number within 10 seconds count as one.</li>
+</ul>
+
+<h2 id="sms">The reply SMS is not sent</h2>
+<ul>
+<li>Hidden numbers get no SMS by design.</li>
+<li>Check the hourly limit: after three contacts from one number in an hour, the event shows "rate-limited" and no text goes out.</li>
+<li>On Xiaomi/MIUI and similar phones, grant SMS inside the app's setup card (not only in system settings), allow the app to run in the background, and turn off battery restrictions. MIUI silently blocks apps otherwise.</li>
+</ul>
+
+<h2 id="silent">The control room shows nothing or says the phone is silent</h2>
+<ul>
+<li>The Kaaka number and the laptop must be on the same Wi-Fi, and the dashboard server address in Kaaka Call must be the laptop's current IP. <strong>The IP changes when the laptop joins another network</strong>; the server banner prints the current one. Save settings in Kaaka Call to send a heartbeat right away.</li>
+<li>If the phone's Wi-Fi is off or sleeping, events queue on the phone until it is back. Exempt Kaaka Call from battery optimisation.</li>
+<li>With an admin token, the token in Kaaka Call must match exactly, or every report is refused with 401.</li>
+<li><code>GET /api/health</code> shows whether the server is up and whether the phone has reported recently.</li>
+</ul>
+
+<h2 id="sensors">Kaaka Sensors does not react to the reply</h2>
+<ul>
+<li>The gateway phone number in its settings must match the Kaaka number as it appears on the incoming SMS (with the country code).</li>
+<li>Location must be allowed <strong>all the time</strong>, and phone permission is needed on some Android versions. Without them the report goes out with "Location: unavailable" or not at all.</li>
+<li>Android 14 and newer stop apps opening from the background. Kaaka Sensors sends the first report natively from the SMS receiver for that reason, so the report arrives even if the screen does not change.</li>
+</ul>
+
+<h2 id="install">"App not installed" or "package conflicts"</h2>
+<p>The phone has an earlier build signed with a different key. Uninstall the old Kaaka app, then install the new APK. Note the dashboard address and token first; uninstalling clears them.</p>
+
+<h2 id="link">The location link does nothing</h2>
+<ul>
+<li>It must be https. Browsers refuse to share location on plain http. Kaaka Call warns if the public URL is not https.</li>
+<li>Links expire after 24 hours and need the control room to be reachable at that address.</li>
+</ul>
+
+<h2 id="map">The map is blank</h2>
+<p>Map tiles come from the internet. Offline, the panel says the map is unavailable; incidents and the rest of the dashboard still work.</p>
+
+<h2 id="server">The server does not start</h2>
+<ul>
+<li>"a public URL needs KAAKA_ADMIN_TOKEN": set a token, or drop the public URL.</li>
+<li>On Linux, <code>--bt-mac</code> (Bluetooth mode) needs <code>python3-dbus</code> and <code>python3-gi</code>. Without <code>--bt-mac</code> only <code>websockets</code> is needed.</li>
+<li>Port already in use: another server is running; stop it or pass <code>--http-port</code> and <code>--port</code>.</li>
+</ul>
+    <nav class="pager"><a class="prev" href="api.html">← API reference</a><a class="next" href="safety.html">Safety and privacy →</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>

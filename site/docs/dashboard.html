@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: The control room">
+<title>The control room · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li><a href="sms-commands.html">SMS commands</a></li>
+    <li><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li class="current"><a href="dashboard.html">The control room</a></li>
+    <li><a href="responders.html">Responders</a></li>
+    <li><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li><a href="deployment.html">Running in production</a></li>
+    <li><a href="api.html">API reference</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>The control room</h1>
+    <nav class="toc" aria-label="On this page"></nav>
+<p class="lead">The control room is the browser dashboard at <code>/admin</code>. It turns calls and texts into incidents people can act on. The header on every page shows the WebSocket link, the gateway mode and when the Kaaka number was last seen.</p>
+
+<h2 id="pages">Pages</h2>
+<table>
+<tr><th>Page</th><th>What it shows</th></tr>
+<tr><td><strong>live</strong></td><td>Open and acknowledged incidents, newest activity first. Each card shows the caller, calls and alerts, the latest location, the nearest responders with distance and ETA, and [timeline →] and [resolve] buttons. Below it the incident map with trails, nearest-responder lines and a [hotspots] overlay, then the activity log.</td></tr>
+<tr><td><strong>history</strong></td><td>Resolved incidents. Search by digits of the number, filter by outcome (resolved by responder / closed by caller) and by date, [load more] 20 at a time, [download csv] with the same filters.</td></tr>
+<tr><td><strong>incident</strong></td><td>One caller's full timeline: calls with the reply result, help SMS text, alerts with coordinates, location shares, dispatches, ACKs and the resolution. A map of the caller's trail. [resolve] while still active. Open it from any number or [timeline →].</td></tr>
+<tr><td><strong>analytics</strong></td><td>One range filter (24h / 7d / 30d / all). KPI tiles: incidents, open now, median and p90 time to ACK, median time to close, % located, % replies sent, closed by caller. Charts: contacts per day by channel, contacts by hour, outcomes, a responder leaderboard. Each chart has a [table] view.</td></tr>
+<tr><td><strong>responders</strong></td><td>The responder registry (add, availability, remove, [pick on map]) with each responder's dispatches and ACKs.</td></tr>
+<tr><td><strong>system</strong></td><td>The raw latest alert, live sensor tiles, telephony details and the test triggers.</td></tr>
+</table>
+<p>The address keeps the page (for example <code>/admin#history</code>), so reload and back work. Counts show next to live, history and responders.</p>
+
+<h2 id="status">Incident status</h2>
+<ul>
+<li><strong>open</strong>: needs attention, highlighted.</li>
+<li><strong>acknowledged</strong>: a responder replied ACK.</li>
+<li><strong>resolved</strong>: closed by a responder's RESOLVE, the caller's SAFE (shown with a green "safe" badge and "closed by caller"), or the [resolve] button. A later call, help SMS or alert reopens it.</li>
+</ul>
+<p>Incidents group everything by the caller's number (its last 10 digits). History is kept in the data directory and reloaded when the server restarts.</p>
+
+<h2 id="map">The map</h2>
+<p>OpenStreetMap tiles through Leaflet, so it needs internet. Offline, the panel says the map is unavailable and everything else works. Each incident's latest location is a pin; a caller who keeps sharing leaves a trail. A dashed line runs from the nearest available responder to each open incident, labelled with distance and ETA.</p>
+
+<h2 id="notify">Notifications</h2>
+<p>On a Mac the server posts a system notification for a new or reopened incident, an acknowledgement, a resolution, and when the Kaaka number goes silent or comes back. Turn them off with <code>--no-notify</code> or <code>KAAKA_NOTIFY=0</code>.</p>
+
+<h2 id="csv">Export</h2>
+<p>[download csv] on the history page, or <code>GET /api/incidents.csv</code> with the same filters. Columns: number, status, first and last seen, counts of calls, help SMS and alerts, latest coordinates, who acknowledged and resolved and when, and the note.</p>
+    <nav class="pager"><a class="prev" href="kaaka-sensors.html">← Kaaka Sensors</a><a class="next" href="responders.html">Responders →</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>

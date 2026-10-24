@@ -80,6 +80,22 @@ class OpenServerTests(HttpServerCase):
             self.assertIn("text/html", headers["Content-Type"])
             self.assertEqual(body, expected)
 
+    def test_docs_are_served(self):
+        status, headers, _ = self.request("GET", "/docs")
+        self.assertEqual((status, headers["Location"]), (301, "/docs/"))
+        for path, kind in (("/docs/", "text/html"), ("/docs/sms-commands.html", "text/html"), ("/docs/docs.css", "text/css")):
+            status, headers, body = self.request("GET", path)
+            self.assertEqual(status, 200, path)
+            self.assertIn(kind, headers["Content-Type"])
+            self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        status, _, body = self.request("GET", "/docs/")
+        self.assertIn(b"Kaaka docs", body)
+
+    def test_docs_reject_traversal_and_unknown_pages(self):
+        for path in ("/docs/../server/server.py", "/docs/%2e%2e/VERSION", "/docs/build_docs.py", "/docs/nope.html", "/docs/a/b.html"):
+            status, _, _ = self.request("GET", path)
+            self.assertEqual(status, 404, path)
+
     def test_admin_without_token_configured(self):
         status, headers, body = self.request("GET", "/admin")
         self.assertEqual(status, 200)
@@ -187,6 +203,8 @@ class TokenServerTests(HttpServerCase):
 
     def test_public_routes_stay_public(self):
         self.assertEqual(self.request("GET", "/")[0], 200)
+        self.assertEqual(self.request("GET", "/docs/")[0], 200)
+        self.assertEqual(self.request("GET", "/docs/docs.css")[0], 200)
         status, health = self.get_json("/api/health")
         self.assertEqual(status, 200)
         self.assertNotIn("admin_token", json.dumps(health))
