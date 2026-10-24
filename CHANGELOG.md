@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-24T21:49:00+05:30 — Poll phone SMS for telemetry every 30 s
+
+- Changed: `server/server.py` ADB telemetry listener now reads the phone's SMS store every 30 s instead of every 1.5 s.
+- Why: Owner's request; polling `content://sms` over USB every 1.5 s was more frequent than needed.
+- Validation: Python compile check. Not yet verified against the running server, which must be restarted to pick this up.
+- Limitations: SMS-delivered telemetry can take up to 30 s to reach the dashboard; the client app's direct WebSocket copy is unaffected. If the client app runs on the same phone the server reads, a report can appear twice (WebSocket, then the SMS copy).
+
 ## 2026-10-24T21:47:00+05:30 — Count only phones as gateway connections
 
 - Changed: `server/server.py` treats WebSocket clients from this machine (loopback or the server's own IP, e.g. the dashboard in a local browser) as non-phones in the call log, `/api/status` and pending-call replay, and warns on macOS when a call arrives with no gateway app connected.

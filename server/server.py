@@ -1024,8 +1024,8 @@ class TelemetryServer:
     def run_adb_telemetry_listener(self):
         """
         Direct cellular SMS telemetry ingestor via Phone ADB connection.
-        Continuously polls content://sms every 1.5 seconds.
-        Guarantees zero-latency, 100% reliable telemetry ingestion with zero D-Bus drops.
+        Polls content://sms every 30 seconds, so SMS telemetry can take up to 30 s to appear.
+        The client's direct WebSocket copy (CLIENT_TELEMETRY) is the faster path.
         """
         adb_seen_ids = set()
         initialized = False
@@ -1074,7 +1074,7 @@ class TelemetryServer:
                                         self.display_telemetry(b_text, sender=s_addr, source="Phone ADB Telephony Ingest")
             except Exception:
                 pass
-            time.sleep(1.5)
+            time.sleep(30)
 
     async def start(self):
         self.loop = asyncio.get_running_loop()
