@@ -232,6 +232,9 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         if self.server_instance.incidents.token_number(token) is None:
             self.send_json(404, {"success": False, "error": "unknown or expired location link"})
             return
+        if not self.server_instance.accept_location_update(token):
+            self.send_json(429, {"success": False, "error": "too many updates: at most one every 10 seconds"})
+            return
         self.server_instance.on_location(token, float(lat), float(lon), None if accuracy is None else float(accuracy))
         self.send_json(200, {"success": True})
 
@@ -444,7 +447,8 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif path == "/api/heartbeat":
-            status, result = 200, {"success": True}
+            # The reply carries the public URL so the gateway app can build location links without manual setup.
+            status, result = 200, {"success": True, "public_url": self.server_instance.public_url}
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 beat = json.loads(self.rfile.read(length).decode("utf-8") or "null")
@@ -601,6 +605,7 @@ class TelemetryServer:
         self.bt_enabled = bool(bt_mac)
         self.last_gateway_event = None
         self.last_heartbeat = None  # latest POST /api/heartbeat from the gateway phone
+        self.location_last_accepted = {}  # token -> epoch of the last accepted /api/location update
         self.hfp = None
         if IS_MAC and self.bt_enabled:
             self.hfp = HfpBridgeClient(
@@ -786,6 +791,17 @@ class TelemetryServer:
             if message:
                 payload["message"] = message
             asyncio.run_coroutine_threadsafe(self.broadcast(payload), self.loop)
+
+    # Live sharing from the location page: accept at most one update per token every 10 s.
+    LOCATION_MIN_INTERVAL = 10.0
+
+    def accept_location_update(self, token) -> bool:
+        now = time.time()
+        last = self.location_last_accepted.get(token, 0)
+        if now - last < self.LOCATION_MIN_INTERVAL:
+            return False
+        self.location_last_accepted[token] = now
+        return True
 
     def on_location(self, token, lat, lon, accuracy):
         """A caller shared their location through the SMS link (POST /api/location)."""

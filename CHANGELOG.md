@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:19:48+05:30 — Heartbeat returns the public URL; location updates rate-limited
+
+- Changed: `POST /api/heartbeat` now replies `{"success": true, "public_url": "..."}` (empty when no public URL is configured). `POST /api/location` accepts at most one update per link token every 10 s and answers 429 otherwise.
+- Why: Lets the gateway app learn the public URL automatically, and keeps live location sharing from flooding the server.
+- Validation: `py_compile`; spare-port run with `KAAKA_ADMIN_TOKEN` and a public URL: heartbeat reply carries the URL, call-event with token 200, `/l/<token>` 200, first location 200 and a second within 10 s 429, incident lists one location.
+- Limitations: The rate limit is in memory and resets when the server restarts.
+
 ## 2026-10-25T03:13:45+05:30 — Require an admin token for a public dashboard URL
 
 - Changed: `server/server.py` exits with a clear error when a public URL (`--public-url` / `KAAKA_PUBLIC_URL`) is set without `KAAKA_ADMIN_TOKEN`, unless `--allow-unprotected-public` is given.
