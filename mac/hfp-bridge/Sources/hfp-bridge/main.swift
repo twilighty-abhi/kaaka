@@ -113,7 +113,13 @@ final class Bridge: NSObject, IOBluetoothHandsFreeDeviceDelegate, IOBluetoothDev
         // HF features: EC/NR 0x1, CLI presentation 0x4, remote volume 0x10, enhanced call status 0x20
         h.supportedFeatures = 0x1 | 0x4 | 0x10 | 0x20
         hf = h
-        h.connect()
+        // A connect() issued in the same run-loop pass as the first IOBluetoothHandsFreeDevice
+        // init is silently dropped (no callback); give IOBluetooth a moment to set up first.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [self] in
+            guard gen == attempt, hf === h else { return }
+            emit("log", ["message": "HFP connect issued (attempt \(gen))"])
+            h.connect()
+        }
     }
 
     // IOBluetoothDeviceAsyncCallbacks
@@ -125,10 +131,11 @@ final class Bridge: NSObject, IOBluetoothHandsFreeDeviceDelegate, IOBluetoothDev
             scheduleRetry()
             return
         }
+        emit("log", ["message": "baseband connected"])
         querySDP(gen)
     }
     func sdpQueryComplete(_ device: IOBluetoothDevice!, status: IOReturn) {
-        if status != kIOReturnSuccess { emit("log", ["message": "SDP query status \(hex(status))"]) }
+        emit("log", ["message": "SDP query complete \(hex(status))"])
         connectHF(attempt)
     }
 
