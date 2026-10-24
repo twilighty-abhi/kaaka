@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: SMS commands">
+<title>SMS commands · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li class="current"><a href="sms-commands.html">SMS commands</a></li>
+    <li><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li><a href="dashboard.html">The control room</a></li>
+    <li><a href="responders.html">Responders</a></li>
+    <li><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li><a href="deployment.html">Running in production</a></li>
+    <li><a href="api.html">API reference</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>SMS commands</h1>
+    <nav class="toc" aria-label="On this page"></nav>
+<p class="lead">Every text Kaaka understands, who may send it, and the exact replies. Commands are case-insensitive. Texts Kaaka sends itself are never treated as commands, so two Kaaka numbers cannot answer each other.</p>
+
+<h2 id="callers">From callers (anyone)</h2>
+<table>
+<tr><th>Text</th><th>Effect</th><th>Reply</th></tr>
+<tr><td><code>HELP</code>, <code>SOS</code>, <code>KAAKA</code> or <code>സഹായം</code> anywhere in the message</td><td>Handled like a call: responders are texted, an incident opens, escalation starts. The first 80 characters of the message are passed to responders and shown in the control room.</td><td>The auto-reply, with the location link if one is set.</td></tr>
+<tr><td><code>SAFE</code>, <code>I'm safe</code>, <code>I am safe</code> or <code>സുരക്ഷിതം</code></td><td>Closes the caller's open incident (a call, help SMS or alert in the last 24 hours with no later RESOLVE or SAFE). Responders are told. No reminder follows.</td><td>"Kaaka: glad you are safe. Your alert is closed. If you need help again, call or text this number." A SAFE with no open incident gets no reply.</td></tr>
+<tr><td>Any other text</td><td>Ignored.</td><td>None.</td></tr>
+</table>
+
+<h2 id="responders">From responders (configured numbers only)</h2>
+<table>
+<tr><th>Text</th><th>Effect</th><th>Reply</th></tr>
+<tr><td><code>ACK</code> or <code>ACK &lt;number&gt;</code></td><td>Acknowledges the most recent incident, or the given caller. The caller is texted "A Kaaka responder has seen your call and will contact you soon." The control room shows "acknowledged by …".</td><td>"Kaaka: ACK recorded for &lt;number&gt;" or "Kaaka: no recent incident to acknowledge".</td></tr>
+<tr><td><code>STATUS</code></td><td>Lists incidents from the last 24 hours that have no later ACK or RESOLVE.</td><td>"Kaaka: 2 open — +91… (call 10:42), +91… (help SMS 10:50)" or "Kaaka: no open incidents".</td></tr>
+<tr><td><code>RESOLVE</code>, <code>RESOLVE &lt;number&gt;</code>, <code>RESOLVE &lt;number&gt; &lt;note&gt;</code></td><td>Closes the most recent incident, or the given caller's, with an optional note. The control room marks it resolved with the note.</td><td>"Kaaka: resolved &lt;number&gt;".</td></tr>
+</table>
+<p>Responder commands are checked before caller texts, so a responder's own "safe" message is never misread. Texts from responders that are not commands are ignored and never treated as help requests. An ACK is never forwarded to other responders.</p>
+
+<h2 id="sent">Texts Kaaka sends</h2>
+<table>
+<tr><th>To</th><th>When</th><th>Text</th></tr>
+<tr><td>Caller</td><td>Call or help SMS</td><td>"Kaaka received your call. Help is being arranged. If in immediate danger, call 112." (plus "Share your location: https://…/l/&lt;token&gt;" when a public URL is set)</td></tr>
+<tr><td>Caller</td><td>A responder ACKs</td><td>"A Kaaka responder has seen your call and will contact you soon."</td></tr>
+<tr><td>Caller</td><td>Caller texts SAFE</td><td>"Kaaka: glad you are safe. Your alert is closed. If you need help again, call or text this number."</td></tr>
+<tr><td>Responders</td><td>Call</td><td>"Kaaka: call from &lt;number&gt; at &lt;HH:mm&gt; — rejected, reply sent. Reply ACK &lt;number&gt; to confirm."</td></tr>
+<tr><td>Responders</td><td>Help SMS</td><td>"Kaaka: help SMS from &lt;number&gt; at &lt;HH:mm&gt;: "&lt;first 80 characters&gt;" Reply ACK &lt;number&gt; to confirm."</td></tr>
+<tr><td>Responders</td><td>Kaaka Sensors alert</td><td>"Kaaka alert from &lt;sender&gt;: " plus the alert's first line and its Maps link, "Reply ACK &lt;number&gt; to confirm."</td></tr>
+<tr><td>Nearest responder</td><td>First location for an open incident</td><td>"Kaaka dispatch: you are the nearest responder (1.2 km, ~3 min) to &lt;caller&gt;. Location: &lt;maps&gt; Reply ACK &lt;caller&gt; to confirm."</td></tr>
+<tr><td>Responders</td><td>No ACK after the escalation time</td><td>"Kaaka UNACKNOWLEDGED: call from &lt;number&gt; at &lt;HH:mm&gt;. Reply ACK &lt;number&gt; to confirm." (once)</td></tr>
+<tr><td>Responders</td><td>Caller texts SAFE</td><td>"Kaaka: &lt;number&gt; reported safe at &lt;HH:mm&gt;. Incident closed."</td></tr>
+</table>
+<p>All of these are ordinary SMS from the Kaaka number's SIM and cost the same as any SMS. The location link makes the reply longer, so it may take two parts.</p>
+    <nav class="pager"><a class="prev" href="kaaka-call.html">← Kaaka Call settings</a><a class="next" href="kaaka-sensors.html">Kaaka Sensors →</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>

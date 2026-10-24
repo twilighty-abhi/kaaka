@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: Getting started">
+<title>Getting started · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li><a href="index.html">Overview</a></li>
+    <li class="current"><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li><a href="sms-commands.html">SMS commands</a></li>
+    <li><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li><a href="dashboard.html">The control room</a></li>
+    <li><a href="responders.html">Responders</a></li>
+    <li><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li><a href="deployment.html">Running in production</a></li>
+    <li><a href="api.html">API reference</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>Getting started</h1>
+    <nav class="toc" aria-label="On this page"></nav>
+<p class="lead">You need one Android phone (Android 10 or newer) with a SIM that can send SMS, and a laptop on the same Wi-Fi. The phone becomes the Kaaka number.</p>
+
+<h2 id="dashboard">1. Start the control room</h2>
+<pre><code>git clone https://github.com/twilighty-abhi/kaaka
+cd kaaka
+python3 -m venv .venv-mac &amp;&amp; .venv-mac/bin/pip install -r server/requirements.txt
+.venv-mac/bin/python server/server.py</code></pre>
+<p>The banner prints the laptop's Wi-Fi address. Open <code>http://&lt;ip&gt;:8080/admin</code> in a browser: that is the control room. <code>http://&lt;ip&gt;:8080/</code> is the public landing page and <code>/docs</code> is this wiki.</p>
+<div class="callout"><strong>Before anyone else can reach it, set a token.</strong> <code>export KAAKA_ADMIN_TOKEN=&lt;long random string&gt;</code> before starting the server, then open the control room once as <code>/admin?token=&lt;the token&gt;</code>. Without a token anyone on the network can read callers' numbers and locations. See <a href="deployment.html">Running in production</a>.</div>
+
+<h2 id="gateway">2. Install Kaaka Call on the Kaaka number</h2>
+<ol>
+<li>Copy <code>gateway/Kaaka.apk</code> to the phone and install it. On a phone that had an earlier debug build, uninstall that first.</li>
+<li>Open <strong>Kaaka Call</strong>. The setup card lists four rows. Make each one green:
+  <ul>
+  <li><strong>call screening</strong>: tap [enable] and choose Kaaka Call as the caller ID &amp; spam app.</li>
+  <li><strong>sms send / receive</strong>: tap [allow].</li>
+  <li><strong>calls from contacts</strong>: tap [allow] (phone, call log and call management). Android does not pass calls from saved contacts to call screening, so Kaaka Call handles them another way.</li>
+  <li><strong>battery optimisation</strong>: tap [exempt] so the phone never puts Kaaka to sleep.</li>
+  </ul></li>
+<li>Tap <strong>[config]</strong> and fill in:
+  <ul>
+  <li><strong>responder numbers</strong>: the phones that should be texted on every call, comma or newline separated.</li>
+  <li><strong>dashboard server</strong>: <code>http://&lt;laptop ip&gt;:8080</code>.</li>
+  <li><strong>dashboard token</strong>: the same value as <code>KAAKA_ADMIN_TOKEN</code>, if you set one.</li>
+  </ul>
+  Leave the rest at the defaults for now and tap <strong>save</strong>. Saving sends a heartbeat; within a minute the control room header shows the phone as seen.</li>
+</ol>
+<p>The header reads <strong>active</strong> when screening and SMS are both on. Settings are stored natively, so Kaaka keeps working with the app closed and the screen locked.</p>
+
+<h2 id="test">3. Make a test call</h2>
+<ol>
+<li>From another phone, call the Kaaka number. It should be rejected within a second.</li>
+<li>That phone receives the reply SMS. Each responder receives the call alert.</li>
+<li>The control room's <strong>live</strong> page shows a new open incident.</li>
+<li>From a responder phone, text <code>ACK</code> to the Kaaka number. The caller gets a confirmation and the incident shows "acknowledged".</li>
+<li>Text <code>RESOLVE</code> from the responder phone. The incident moves to <strong>history</strong>.</li>
+</ol>
+<p>The full checklist with every feature is in <code>docs/TESTING.md</code> in the repository.</p>
+
+<h2 id="responders">4. Register responders in the control room</h2>
+<p>On the <strong>responders</strong> page add each responder with a name, phone number and home position (type <code>lat, lon</code> or use [pick on map]). This is what makes the nearest-responder dispatch work; the responder numbers in Kaaka Call are what get the SMS. Use the same numbers in both places. See <a href="responders.html">Responders</a>.</p>
+
+<h2 id="sensors">5. Optional: Kaaka Sensors for callers</h2>
+<p>People who want an SOS button and automatic location reports install <code>client/KaakaSensors.apk</code> on their own phone and enter the Kaaka number in its settings. See <a href="kaaka-sensors.html">Kaaka Sensors</a>. The Kaaka number itself does not need it.</p>
+    <nav class="pager"><a class="prev" href="index.html">← Overview</a><a class="next" href="kaaka-call.html">Kaaka Call settings →</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>

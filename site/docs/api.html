@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: API reference">
+<title>API reference · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li><a href="sms-commands.html">SMS commands</a></li>
+    <li><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li><a href="dashboard.html">The control room</a></li>
+    <li><a href="responders.html">Responders</a></li>
+    <li><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li><a href="deployment.html">Running in production</a></li>
+    <li class="current"><a href="api.html">API reference</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>API reference</h1>
+    <nav class="toc" aria-label="On this page"></nav>
+<p class="lead">The control room's HTTP API. All bodies are JSON. Errors return <code>{"success": false, "error": "…"}</code>. With <code>KAAKA_ADMIN_TOKEN</code> set, every endpoint except the public ones needs the token as the <code>X-Kaaka-Token</code> header, <code>?token=</code>, or the dashboard cookie.</p>
+
+<h2 id="public">Public</h2>
+<table>
+<tr><th>Endpoint</th><th>Purpose</th></tr>
+<tr><td><code>GET /</code>, <code>/docs</code></td><td>Landing page and this wiki.</td></tr>
+<tr><td><code>GET /api/health</code></td><td><code>{ok, version, uptime_seconds, gateway_online}</code>.</td></tr>
+<tr><td><code>GET /l/&lt;token&gt;</code></td><td>The location-sharing page for a caller. 404 when unknown or expired.</td></tr>
+<tr><td><code>POST /api/location</code></td><td><code>{token, lat, lon, accuracy?}</code>. 400 malformed, 404 unknown or expired token, 429 more than one update per 10 s.</td></tr>
+</table>
+
+<h2 id="gateway">From the Kaaka number</h2>
+<table>
+<tr><th>Endpoint</th><th>Body</th></tr>
+<tr><td><code>POST /api/call-event</code></td><td><code>number</code> ("" if hidden), <code>state</code> (<code>rejected</code>, <code>allowed</code>, or <code>sms</code> for a help text), <code>sms</code> (<code>sent</code>, <code>failed</code>, <code>skipped</code>), <code>timestamp</code>, optional <code>token</code> and <code>message</code> (max 500).</td></tr>
+<tr><td><code>POST /api/telemetry</code></td><td><code>{report, sender}</code> for a forwarded "Kaaka Alert" SMS. Returns <code>dispatch: [{name, number, distance_km, eta_min, maps_url}]</code>, non-empty only the first time an open incident gets a location.</td></tr>
+<tr><td><code>POST /api/heartbeat</code></td><td><code>{timestamp, battery, charging, screeningRole, smsGranted, contactCalls}</code>. Returns <code>public_url</code>.</td></tr>
+<tr><td><code>POST /api/ack</code></td><td><code>{number, responder, timestamp}</code>.</td></tr>
+<tr><td><code>POST /api/resolve</code></td><td><code>{number, by, note, timestamp}</code>. 404 when there is no incident for the number.</td></tr>
+</table>
+
+<h2 id="dashboard">Dashboard</h2>
+<table>
+<tr><th>Endpoint</th><th>Purpose</th></tr>
+<tr><td><code>GET /api/status</code></td><td>Server status: last heartbeat, gateway stale flag, public URL, whether the token is on.</td></tr>
+<tr><td><code>GET /api/incidents</code></td><td>Newest first, max 50. With <code>status</code>, <code>q</code>, <code>from</code>, <code>to</code>, <code>outcome</code>, <code>limit</code> (0–500), <code>offset</code>: a filtered page with <code>total</code> and <code>counts</code>.</td></tr>
+<tr><td><code>GET /api/incidents/&lt;key&gt;</code></td><td>One incident (key = last 10 digits) with its full <code>timeline</code>.</td></tr>
+<tr><td><code>GET /api/incidents.csv</code></td><td>CSV export with the same filters.</td></tr>
+<tr><td><code>GET /api/analytics?range=24h|7d|30d|all</code></td><td>KPIs, per-bucket contacts by channel, hours, outcomes, responders, hotspots.</td></tr>
+<tr><td><code>GET /api/responders</code>, <code>POST</code>, <code>PATCH /api/responders/&lt;id&gt;</code>, <code>DELETE</code></td><td>The responder registry: <code>{name, number, lat, lon, available}</code>.</td></tr>
+<tr><td><code>GET /api/responders/activity</code></td><td>Dispatches and ACKs per responder, newest first.</td></tr>
+</table>
+<p>The WebSocket on port 8765 pushes the same events live (new calls, alerts, acknowledgements, resolutions, dispatches, gateway stale/back). It takes the token the same way during the handshake. The full table with every field is in the repository README.</p>
+    <nav class="pager"><a class="prev" href="deployment.html">← Running in production</a><a class="next" href="troubleshooting.html">Troubleshooting →</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>

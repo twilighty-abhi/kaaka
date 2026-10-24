@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: Safety and privacy">
+<title>Safety and privacy · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li><a href="sms-commands.html">SMS commands</a></li>
+    <li><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li><a href="dashboard.html">The control room</a></li>
+    <li><a href="responders.html">Responders</a></li>
+    <li><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li><a href="deployment.html">Running in production</a></li>
+    <li><a href="api.html">API reference</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li class="current"><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>Safety and privacy</h1>
+    <nav class="toc" aria-label="On this page"></nav>
+<p class="lead">What Kaaka does to keep callers' data safe, and what it cannot do.</p>
+
+<h2 id="design">By design</h2>
+<ul>
+<li><strong>Works without data.</strong> Calls and SMS only. A rejected call costs the caller nothing.</li>
+<li><strong>Only the Kaaka number can start the beacon.</strong> Kaaka Sensors reacts to an SMS from the configured number and nothing else; a stranger cannot make a phone report its location.</li>
+<li><strong>Reports go only to the Kaaka number.</strong> Never to another number.</li>
+<li><strong>The control room is locked before it goes public.</strong> The server refuses a public URL without an admin token. Only the location link page and its endpoint are public, and each link expires after 24 hours and accepts one update per 10 seconds.</li>
+<li><strong>Rate limiting</strong> per caller stops one number from flooding responders.</li>
+<li><strong>Nothing sensitive in backups.</strong> Both apps opt out of Android cloud backup, since they hold phone numbers, tokens and SMS.</li>
+<li><strong>Every reply names 112.</strong> Kaaka is an addition to the emergency number, never a replacement.</li>
+</ul>
+
+<h2 id="data">What is stored, and where</h2>
+<table>
+<tr><th>Where</th><th>What</th></tr>
+<tr><td>Kaaka number (app)</td><td>Settings, the last 200 events with caller numbers, and the ordinary SMS inbox.</td></tr>
+<tr><td>Control room data directory</td><td>Every event: numbers, message texts, alert reports, coordinates, who acknowledged and resolved. The responder registry with names, numbers and home positions.</td></tr>
+<tr><td>Caller's phone (Kaaka Sensors)</td><td>Its own settings and the SMS it sent.</td></tr>
+</table>
+<p>Treat the data directory as sensitive: restrict who can read it, back it up somewhere equally restricted, and delete history you no longer need.</p>
+
+<h2 id="cannot">What Kaaka cannot do</h2>
+<ul>
+<li>It cannot talk to the caller. Android gives apps no call audio; Kaaka only screens, rejects and texts.</li>
+<li>It cannot locate a caller who does not share their location, either with Kaaka Sensors or the link.</li>
+<li>Fall detection is a simple, untuned heuristic.</li>
+<li>Distance and ETA are straight-line estimates at an assumed city speed.</li>
+<li>SMS can be delayed or lost by the network. Responders should still call the caller back.</li>
+</ul>
+    <nav class="pager"><a class="prev" href="troubleshooting.html">← Troubleshooting</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>

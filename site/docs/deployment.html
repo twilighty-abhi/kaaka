@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: Running in production">
+<title>Running in production · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li><a href="sms-commands.html">SMS commands</a></li>
+    <li><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li><a href="dashboard.html">The control room</a></li>
+    <li><a href="responders.html">Responders</a></li>
+    <li><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li class="current"><a href="deployment.html">Running in production</a></li>
+    <li><a href="api.html">API reference</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>Running in production</h1>
+    <nav class="toc" aria-label="On this page"></nav>
+<p class="lead">The basics for a help line that stays up: a token, a supervised service, backups, a health check, and release builds on the phones.</p>
+
+<h2 id="token">1. Set an admin token</h2>
+<p>Export <code>KAAKA_ADMIN_TOKEN</code> as a long random string before starting the server, and enter the same value as the dashboard token in Kaaka Call. With the token set, the dashboard, the API and the WebSocket all require it. The landing page, this wiki, <code>/api/health</code> and the location link pages stay public.</p>
+<pre><code>export KAAKA_ADMIN_TOKEN="$(openssl rand -hex 24)"</code></pre>
+<p>Open the control room once as <code>/admin?token=&lt;the token&gt;</code>; a cookie remembers it in that browser.</p>
+
+<h2 id="service">2. Run it as a service</h2>
+<p><strong>Linux (systemd):</strong> copy the repository to <code>/opt/kaaka</code>, create the venv there (<code>python3 -m venv .venv &amp;&amp; .venv/bin/pip install -r server/requirements.txt</code>), put the environment in <code>/etc/kaaka/kaaka.env</code> (start from <code>deploy/kaaka.env.example</code>), create the <code>kaaka</code> user, then:</p>
+<pre><code>sudo cp deploy/kaaka.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now kaaka
+journalctl -u kaaka -f</code></pre>
+<p>Data lives in <code>/var/lib/kaaka</code>. The unit restarts the server after a crash or reboot.</p>
+<p><strong>macOS (launchd):</strong> edit the paths and the token in <code>deploy/com.kaaka.server.plist</code>, then:</p>
+<pre><code>cp deploy/com.kaaka.server.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.kaaka.server.plist</code></pre>
+<p>Logs go to <code>~/Library/Logs/kaaka/</code>. Keep the Mac awake and on power (<code>caffeinate -i</code> or the Energy settings); a sleeping laptop is a silent control room.</p>
+<p>The server needs no terminal: without one it skips the test console automatically, and <code>SIGTERM</code> stops it cleanly.</p>
+
+<h2 id="data">3. Back up the data directory</h2>
+<p><code>KAAKA_DATA_DIR</code> (or <code>--data-dir</code>) holds the incident history (<code>events.jsonl</code>), the responder registry and the last call. It contains phone numbers and locations: restrict access to it and back it up.</p>
+
+<h2 id="health">4. Monitor it</h2>
+<p><code>GET /api/health</code> needs no token and answers:</p>
+<pre><code>{"ok": true, "version": "1.0.0", "uptime_seconds": 1234, "gateway_online": true}</code></pre>
+<p><code>gateway_online</code> is false when the Kaaka number has not sent a heartbeat for 20 minutes (<code>KAAKA_STALE_SECONDS</code>). Point an uptime monitor at it and alert on anything but 200 with <code>ok: true</code>, and separately on <code>gateway_online: false</code>, which usually means the phone lost Wi-Fi, power or the app.</p>
+
+<h2 id="public">5. Public access</h2>
+<p>Put the server behind https, either a reverse proxy with a certificate or a tunnel, and set <code>KAAKA_PUBLIC_URL</code> so location links work from any phone. The Kaaka number only needs HTTP to port 8080, so a tunnel to that one port is enough; through a tunnel the dashboard's WebSocket is not reachable and the pages fall back to polling.</p>
+
+<h2 id="apks">6. Install the release builds</h2>
+<p><code>gateway/Kaaka.apk</code> and <code>client/KaakaSensors.apk</code> are release-signed, version 1.0.0. A phone that still has an earlier debug-signed build must uninstall it first: Android refuses to update an app whose signing key changed, and the uninstall clears the app's settings, so note the dashboard address and token before you do it. Later builds signed with the same key update in place.</p>
+
+<h2 id="keystore">7. Guard the signing key</h2>
+<p>Release builds read <code>android/keystore.properties</code> in each app (gitignored; copy <code>keystore.properties.example</code>). Back up the keystore it points to. If it is lost, installed apps can never be updated under the same signature and every phone would have to uninstall and reinstall.</p>
+
+<h2 id="reference">Server settings reference</h2>
+<table>
+<tr><th>Setting</th><th>Purpose</th></tr>
+<tr><td><code>KAAKA_ADMIN_TOKEN</code></td><td>Token for the dashboard, API and WebSocket. Strongly recommended.</td></tr>
+<tr><td><code>--public-url</code> / <code>KAAKA_PUBLIC_URL</code></td><td>Public https address; requires the token.</td></tr>
+<tr><td><code>--data-dir</code> / <code>KAAKA_DATA_DIR</code></td><td>Runtime data directory. Default: <code>server/</code>.</td></tr>
+<tr><td><code>--http-port</code> (8080), <code>--port</code> (8765), <code>--host</code> (0.0.0.0)</td><td>Dashboard port, WebSocket port, bind address.</td></tr>
+<tr><td><code>--no-console</code> / <code>KAAKA_CONSOLE=0</code></td><td>Turn off the terminal test console (off automatically without a terminal).</td></tr>
+<tr><td><code>--no-notify</code> / <code>KAAKA_NOTIFY=0</code></td><td>Turn off macOS notifications.</td></tr>
+<tr><td><code>KAAKA_STALE_SECONDS</code></td><td>Seconds without a heartbeat before the Kaaka number counts as silent. Default 1200.</td></tr>
+</table>
+<p>Tests: <code>cd server &amp;&amp; python -m unittest -q</code>. The repository's CI runs them and both web builds on every push.</p>
+    <nav class="pager"><a class="prev" href="location-links.html">← Location links</a><a class="next" href="api.html">API reference →</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kaaka docs: Kaaka Sensors">
+<title>Kaaka Sensors · Kaaka docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../">kaaka</a>
+  <span class="crumb">docs</span>
+  <button class="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+  <nav class="toplinks"><a href="../">Home</a><a href="../admin">Control room</a><a href="https://github.com/twilighty-abhi/kaaka" rel="noopener">GitHub</a></nav>
+</header>
+<div class="wrap">
+  <aside class="side" id="side">
+    <input class="filter" type="search" placeholder="Filter pages" aria-label="Filter pages">
+    <h3>Start here</h3><ul>
+    <li><a href="index.html">Overview</a></li>
+    <li><a href="getting-started.html">Getting started</a></li>
+    </ul>
+    <h3>Using Kaaka</h3><ul>
+    <li><a href="kaaka-call.html">Kaaka Call settings</a></li>
+    <li><a href="sms-commands.html">SMS commands</a></li>
+    <li class="current"><a href="kaaka-sensors.html">Kaaka Sensors</a></li>
+    <li><a href="dashboard.html">The control room</a></li>
+    <li><a href="responders.html">Responders</a></li>
+    <li><a href="location-links.html">Location links</a></li>
+    </ul>
+    <h3>Operating</h3><ul>
+    <li><a href="deployment.html">Running in production</a></li>
+    <li><a href="api.html">API reference</a></li>
+    <li><a href="troubleshooting.html">Troubleshooting</a></li>
+    <li><a href="safety.html">Safety and privacy</a></li>
+    </ul>
+  </aside>
+  <main class="doc">
+    <h1>Kaaka Sensors</h1>
+    <nav class="toc" aria-label="On this page"></nav>
+<p class="lead">Kaaka Sensors is the optional app for the caller's own phone. It gives them an SOS button, fall detection, a safety timer and an "I'm safe" button, and sends GPS reports to the Kaaka number by SMS.</p>
+
+<h2 id="install">Install and set up</h2>
+<ol>
+<li>Install <code>client/KaakaSensors.apk</code> on the caller's phone, not on the Kaaka number.</li>
+<li>Open it and allow what it asks for: SMS, phone, location including <strong>"Allow all the time"</strong> (reports go out while the app is in the background), notifications, and activity recognition for the pedometer.</li>
+<li>In the <strong>Settings</strong> card enter the <strong>gateway phone number</strong>: the Kaaka number. This is the only number that can start the beacon and the only number reports are sent to.</li>
+<li>The app offers to become the default SMS app. That is what lets it react to the Kaaka reply reliably and show the full-screen alert. It is optional for the SOS button.</li>
+</ol>
+<p>The two computer settings (dashboard WebSocket and live sensor stream URL) are extras for a dashboard on the same Wi-Fi. Kaaka Sensors works phone-to-phone with only the gateway number.</p>
+
+<h2 id="trigger">What starts the beacon</h2>
+<ul>
+<li><strong>The Kaaka reply.</strong> When the caller phones the Kaaka number and the reply SMS arrives from the configured number, the app sends a "Kaaka Alert" report with a fresh GPS fix straight away, then keeps reporting. An SMS from any other sender does nothing, whatever it says.</li>
+<li><strong>SOS button</strong> at the top of the main screen: one report now, then the beacon.</li>
+<li><strong>Auto SOS on fall</strong> (off by default): an acceleration spike above about 2.5 g followed by two seconds of stillness starts a 15-second countdown with an "I'm OK, cancel" button. The thresholds are untuned; expect false alarms until tested on real phones.</li>
+<li><strong>Safety timer</strong>: pick 15 min, 30 min, 1 h, 2 h or a custom length. Tap <strong>I'm safe</strong> to check in, or <strong>Extend +15 min</strong>. If it runs out, a 30-second countdown starts, then SOS. The deadline is stored, so a timer that ended while the app was closed counts down as soon as the app reopens.</li>
+</ul>
+<p>Only one countdown runs at a time, and pressing SOS during a beacon sends one extra report rather than starting a second beacon.</p>
+
+<h2 id="beacon">The beacon</h2>
+<p>Reports go to the Kaaka number every 60 seconds by default. The <strong>Update every</strong> control offers 15, 30 or 60 seconds; the control room draws the reports as a trail on the map. The beacon stops by itself after the configured duration (30 minutes by default) or when you tap <strong>Stop</strong>. The SOS card shows the trigger, how many reports were sent, the last send time and the minutes left.</p>
+
+<h2 id="safe">I'm safe</h2>
+<p>While the beacon runs or a countdown is active, the <strong>I'm safe — close my alert</strong> button stops the beacon, cancels any countdown and timer, and texts <code>SAFE</code> to the Kaaka number. The Kaaka number closes the incident, confirms to the caller and tells responders. The button shows whether the SMS actually went out.</p>
+
+<h2 id="report">What a report contains</h2>
+<pre><code>Kaaka Alert: Emergency assistance requested
+
+Live Sensors (5/5):
+• Pedometer: 120 steps (0.09 km)
+• Light: 53 lx
+• Accelerometer: 9.7 m/s²
+• Gyroscope: 0.2 rad/s
+• Magnetometer: 186° S
+• Coords: 10.007040, 76.365610
+• Maps: https://maps.google.com/?q=10.007040,76.365610
+• Trigger: sos</code></pre>
+<p>Without a GPS fix the report says <code>• Location: unavailable</code>; the first report goes out after at most five seconds either way, and later ones carry coordinates once GPS locks. Triggers are <code>sos</code>, <code>fall</code>, <code>safety timer</code>, <code>gateway reply</code> or <code>manual</code>.</p>
+
+<h2 id="limits">Limits</h2>
+<ul>
+<li>Fall detection, the safety timer and the beacon run inside the app. With the app closed or the screen off for a long time, Android may pause them. Keep the app open during an emergency.</li>
+<li>Reports are SMS from the caller's own SIM and cost the same as any SMS.</li>
+<li>On Xiaomi and other heavily customised phones, grant the permissions inside the app's setup card and turn off battery restrictions for Kaaka Sensors; see <a href="troubleshooting.html">Troubleshooting</a>.</li>
+</ul>
+    <nav class="pager"><a class="prev" href="sms-commands.html">← SMS commands</a><a class="next" href="dashboard.html">The control room →</a></nav>
+    <p class="foot">Kaaka 1.0.0 · <a href="https://github.com/twilighty-abhi/kaaka/tree/main/site/docs" rel="noopener">Edit this page</a> · In immediate danger, call 112.</p>
+  </main>
+</div>
+<script>
+(() => {
+  const btn = document.querySelector('.menu'), side = document.getElementById('side');
+  btn.addEventListener('click', () => { const open = side.classList.toggle('open'); btn.setAttribute('aria-expanded', open); });
+  const filter = document.querySelector('.filter');
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    side.querySelectorAll('li').forEach(li => li.hidden = q && !li.textContent.toLowerCase().includes(q));
+    side.querySelectorAll('h3').forEach(h => h.hidden = q && ![...h.nextElementSibling.children].some(li => !li.hidden));
+  });
+  const toc = document.querySelector('.toc');
+  if (toc) document.querySelectorAll('.doc h2[id]').forEach(h => { const a = document.createElement('a'); a.href = '#' + h.id; a.textContent = h.textContent; toc.appendChild(a); });
+})();
+</script>
+</body>
+</html>
