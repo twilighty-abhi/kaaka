@@ -4,6 +4,48 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:40:00+05:30 — Prototype integration check, plan status and test checklist
+
+- Changed: `docs/PLAN.md` updated with the complete flow (call screening and contact fallback, 112 reply, location link, responder SMS and ACK, Kaaka Sensors SOS/fall, incidents, heartbeat) and the current status; new `docs/TESTING.md` device test checklist; README links it. Mac dashboard restarted on the new code.
+- Why: Record where the prototype stands and give a repeatable on-device test pass.
+- Validation: Checked gateway payload fields against the server contracts; simulated a full incident on spare ports with the gateway's exact payloads (heartbeat, call with token, location page and share, Kaaka Alert in the client's report format, ACK): all 200, all five WebSocket message types received, one incident with call, alert (coords parsed), location and acknowledgement, heartbeat fresh. Test data removed and runtime files restored. Live dashboard serves the incidents panel.
+- Limitations: Real-device tests are still pending (see `docs/TESTING.md`).
+
+## 2026-10-25T00:25:00+05:30 — Incidents, location sharing page, ACK and admin token on the server
+
+- Changed: `server/incidents.py` keeps incidents grouped by caller (last 10 digits) with calls, alerts (Coords/Maps parsed), shared locations, acknowledgement and latest location, persisted in `server/events.jsonl` (ignored by Git) and reloaded on start. `server/server.py`: `/api/call-event` accepts an optional `token` (24 h); public `GET /l/<token>` serves `server/locate.html` and `POST /api/location` records a caller's browser GPS; `POST /api/ack` marks an incident acknowledged; `GET /api/incidents`; WebSocket broadcasts `LOCATION_SHARED` and `INCIDENT_ACK`. Optional `KAAKA_ADMIN_TOKEN` protects the dashboard, status, incidents, WebSocket and gateway POSTs (header `X-Kaaka-Token`, `?token=` or cookie; constant-time compare), leaving the location page public. `--public-url`/`KAAKA_PUBLIC_URL` for display. Dashboard: incidents panel with Maps links and "awaiting acknowledgement"; feed text inserted with `textContent`. README documents the full API.
+- Why: Turn individual events into incidents a responder can act on, get location from callers without the app, close the loop with acknowledgements, and allow safe public exposure.
+- Validation: `py_compile`; spare-port server: 17/17 HTTP checks (tokens, location ranges, 404/400 paths, alert coords, dedupe, ack), WebSocket messages received, incidents persisted across restart, admin token enforced (401 without, 200 with header/query/cookie; location page stays public); store unit checks (expiry, ack matching/reset, grouping, damaged lines).
+- Limitations: Not checked in a real browser or over an https tunnel; with an admin token set the client app's live stream is refused (it sends no token).
+
+## 2026-10-25T00:15:00+05:30 — Location links, responder ACK and dashboard token in the gateway app
+
+- Changed: Gateway app (`gateway/`): new settings "public link URL" and "dashboard token" (warns when the URL is not https). Every call with a caller number gets a random 12-character token sent in `/api/call-event`; with a public URL set, the reply SMS adds "Share your location: <url>/l/<token>". With a dashboard token set, all dashboard POSTs send `X-Kaaka-Token`. A responder SMS starting with "ACK" (optionally "ACK <number>") acknowledges the latest or named incident: the caller is texted that a responder has seen the call, `/api/ack` is posted, the responder gets a confirmation; ACK messages are never treated as alerts. Responder notifications end with "Reply ACK <number> to confirm." Pure-Java helpers in `GatewayText.java` with unit tests. Rebuilt `gateway/Kaaka.apk`.
+- Why: Callers without the app need a way to share location; responders need to confirm they have taken an incident, and the caller needs to know.
+- Validation: `svelte-check` 0 errors/0 warnings; `./gradlew testDebugUnitTest assembleDebug` passed (GatewayTextTest 4/4: token format, ACK parsing, non-ACK ignored, link only with a URL).
+- Limitations: Not installed or tested on the S23 yet. The location page needs an https public URL; reply plus link may be sent as a two-part SMS.
+
+## 2026-10-25T00:05:00+05:30 — SOS button, fall detection and beacon duration in Kaaka Sensors
+
+- Changed: Client app (`client/`): new SOS card (`SosCard.svelte`) that sends a report to the gateway number at once and starts the beacon; optional "Auto SOS on fall" (`emergencyService.svelte.ts`, off by default): impact above ~2.5 g followed by ~2 s of stillness starts a 15-second cancellable countdown, then SOS. Reports always carry `• Coords:`/`• Maps:` or `• Location: unavailable`, plus `• Trigger:` (sos/fall/gateway reply/manual); the first report waits at most 5 s for GPS. Beacon stops after a configurable duration (default 30 minutes) and shows trigger, count, last sent and time left. README updated, including foreground-only limits. Rebuilt `client/KaakaSensors.apk`.
+- Why: A person in distress must be able to raise an alert without calling, and a fall should raise one even if they cannot.
+- Validation: `npx svelte-check` 0 errors/0 warnings; web build, `cap sync`, `assembleDebug` succeeded; APK contains the new strings.
+- Limitations: Not run on a device. Fall thresholds are untuned heuristics; detection and the beacon only run while the app is in the foreground.
+
+## 2026-10-24T23:55:00+05:30 — Responder alerts, 112 reply text, heartbeat and battery exemption on the S23
+
+- Changed: Gateway app (`gateway/`): new "responder numbers" setting; every call and every Kaaka alert is texted to each responder (never to the caller/sender), with counts in the local event log. Default reply is now "Kaaka received your call. Help is being arranged. If in immediate danger, call 112." (the old default is treated as unset). WorkManager heartbeat (`Heartbeat.java`, `HeartbeatWorker.java`) posts `/api/heartbeat` every 15 minutes and on settings save when a dashboard is set. New "battery optimisation" row requests the exemption; status reports `batteryExempt`. Shared `GatewayStore.sendSms`. Rebuilt `gateway/Kaaka.apk` (adds `androidx.work`).
+- Why: Alerts must reach a person even when nobody watches the dashboard; callers must be told to use 112 in immediate danger; the phone must stay awake and report that it is alive.
+- Validation: `svelte-check` 0 errors/0 warnings; web build, `cap sync`, `assembleDebug`; installed on the Galaxy S23: launched without crash, call-screening role and settings kept, heartbeat job registered.
+- Limitations: Heartbeat delivery to the Mac, responder SMS, the battery prompt and the new reply on a real call are not yet tested on the device; Samsung may delay the 15-minute job without the battery exemption.
+
+## 2026-10-24T23:40:00+05:30 — Gateway heartbeat and "last seen" on the dashboard
+
+- Changed: `server/server.py` adds `POST /api/heartbeat` (`timestamp`, `battery`, `charging`, `screeningRole`, `smsGranted`, `contactCalls`; 400 on bad input), stores the last heartbeat, reports `last_heartbeat` and `gateway_stale` (no heartbeat for 20 minutes) in `/api/status`, broadcasts `GATEWAY_HEARTBEAT`, and warns in the console when a permission is missing or the battery is low. The dashboard shows "s23: last seen …" with battery and setup state, highlighted when stale or degraded. `docs/PLAN.md` records the verified contact-call test; README mentions the heartbeat.
+- Why: An emergency line that silently stops working is worse than none; the operator must see when the S23 is offline or misconfigured.
+- Validation: `py_compile`; server on spare ports: heartbeat 200 and broadcast received, bad JSON/types 400, stale logic (none / 19 min / 21 min), call-event and telemetry still 200.
+- Limitations: Dashboard rendering not checked in a browser; real heartbeats from the S23 pending (gateway part in the next commit).
+
 ## 2026-10-24T23:17:00+05:30 — Handle calls from saved contacts on the S23 gateway
 
 - Changed: New `IncomingCallReceiver` in the gateway app listens for the phone-state broadcast (READ_PHONE_STATE, READ_CALL_LOG for the number) and, for calls Android does not send to call screening, sends the auto-reply SMS, logs the event and reports it to the dashboard; with "reject calls" on and ANSWER_PHONE_CALLS granted it ends the ringing call (`TelecomManager.endCall`). Shared call handling moved to `CallHandler`; `GatewayStore.claimCall` prevents a call seen by both paths from being handled twice (60 s per number). New "calls from contacts" permission row in the UI; events from this path are labelled "(contact)".

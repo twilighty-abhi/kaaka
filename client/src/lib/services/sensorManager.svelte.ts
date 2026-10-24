@@ -325,7 +325,11 @@ export class SensorManager {
 		return this.location;
 	}
 
+	/** Optional per-sample hook (used by fall detection): accel magnitude m/s², gyro rate rad/s. */
+	onSample: ((accelMagnitude: number, gyroRate: number, timeMs: number) => void) | null = null;
+
 	private handleSensorData(data: FullSensorPayload) {
+		this.onSample?.(data.accelerometer.magnitude, data.gyroscope.rate, Date.now());
 		this.accelerometer = data.accelerometer;
 		this.gyroscope = data.gyroscope;
 		this.magnetometer = data.magnetometer;

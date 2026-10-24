@@ -1,28 +1,23 @@
 package com.kaaka.callapp;
 
-import android.Manifest;
 import android.content.Context;
-import android.content.pm.PackageManager;
-import android.os.Build;
-import android.telephony.SmsManager;
-import android.util.Log;
-import java.util.ArrayList;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
  * What happens after an incoming call is detected, whichever path saw it
  * (call screening for unknown numbers, phone-state broadcast for saved contacts):
- * text the caller the reply message, log the event and report it to the optional dashboard.
+ * text the caller the reply message, text the responders, log the event and report it to the optional dashboard.
  * Run on a background thread.
  */
 final class CallHandler {
-    private static final String TAG = "KaakaGateway";
-
     private CallHandler() {}
 
     static void handleCall(Context context, String number, boolean rejected, String via) {
-        String smsResult = sendReply(context, number);
+        // Token for the optional "share your location" link; the server maps it to this caller.
+        String token = number.isEmpty() ? "" : GatewayText.newToken();
+        String link = GatewayText.locationLine(GatewayStore.publicUrl(context), token);
+        String smsResult = sendReply(context, number, link);
         JSONObject event = new JSONObject();
         try {
             event.put("type", "call");
@@ -30,9 +25,15 @@ final class CallHandler {
             event.put("state", rejected ? "rejected" : "allowed");
             event.put("sms", smsResult);
             event.put("via", via);
+            if (!token.isEmpty()) event.put("token", token);
+            if (!link.isEmpty()) event.put("locationLink", true);
             event.put("timestamp", GatewayStore.nowIso());
         } catch (JSONException ignored) {
         }
+        String responderMessage = "Kaaka: call from " + (number.isEmpty() ? "hidden number" : number)
+            + " at " + GatewayStore.timeOfDay() + " — " + (rejected ? "rejected" : "allowed") + ", reply " + smsResult
+            + (number.isEmpty() ? "" : "\nReply ACK " + number + " to confirm.");
+        GatewayStore.notifyResponders(context, responderMessage, number, event);
         GatewayStore.appendEvent(context, event);
 
         JSONObject payload = new JSONObject();
@@ -41,33 +42,15 @@ final class CallHandler {
             payload.put("state", rejected ? "rejected" : "allowed");
             payload.put("sms", smsResult);
             payload.put("timestamp", event.optString("timestamp"));
+            if (!token.isEmpty()) payload.put("token", token);
         } catch (JSONException ignored) {
         }
         GatewayStore.postToDashboard(context, "/api/call-event", payload);
     }
 
     /** Returns "sent", "failed" or "skipped" (hidden/unknown number: never texts a fallback). */
-    private static String sendReply(Context context, String number) {
+    private static String sendReply(Context context, String number, String locationLink) {
         if (number.isEmpty()) return "skipped";
-        if (context.checkSelfPermission(Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "SEND_SMS not granted; no auto-reply");
-            return "failed";
-        }
-        try {
-            SmsManager sms = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                ? context.getSystemService(SmsManager.class)
-                : SmsManager.getDefault();
-            String message = GatewayStore.replyMessage(context);
-            ArrayList<String> parts = sms.divideMessage(message);
-            if (parts.size() > 1) {
-                sms.sendMultipartTextMessage(number, null, parts, null, null);
-            } else {
-                sms.sendTextMessage(number, null, message, null, null);
-            }
-            return "sent";
-        } catch (Exception e) {
-            Log.w(TAG, "Auto-reply SMS failed: " + e.getMessage());
-            return "failed";
-        }
+        return GatewayStore.sendSms(context, number, GatewayStore.replyMessage(context) + locationLink) ? "sent" : "failed";
     }
 }

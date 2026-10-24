@@ -15,34 +15,43 @@ It works alongside 112, not instead of it: it cannot dispatch police, fire or am
 
 ## Flow
 
-1. A person in trouble calls the Kaaka number. The call is rejected immediately, so it costs them nothing.
-2. The S23 sends an SMS reply confirming the alert was received.
-3. If the caller has Kaaka Sensors and the reply comes from their configured gateway number, their phone starts a beacon: "Kaaka Alert" SMS reports with GPS, motion, light and steps, every minute.
-4. The S23 logs each call and alert and forwards them to the Mac dashboard (`POST /api/call-event`, `POST /api/telemetry`).
-5. A responder sees the event on the dashboard and calls back or sends help.
+1. A person in trouble calls the Kaaka number. The S23 rejects the call (call screening for unknown numbers, the phone-state fallback for saved contacts), so it costs them nothing.
+2. The S23 replies by SMS: "Kaaka received your call. Help is being arranged. If in immediate danger, call 112." If a public link URL is set, the reply adds a "Share your location" link (`/l/<token>`) that works in any phone browser.
+3. Each responder number set in Kaaka Call gets an SMS about the call ("Reply ACK <number> to confirm").
+4. If the caller has Kaaka Sensors and the reply comes from their configured gateway number, their phone starts a beacon: "Kaaka Alert" SMS reports with GPS, motion, light and steps. Kaaka Sensors also has an SOS button and optional auto-SOS on fall.
+5. The S23 logs every call and alert, texts responders, and forwards everything to the Mac dashboard (`/api/call-event`, `/api/telemetry`, `/api/heartbeat`).
+6. The dashboard groups events into incidents per caller (calls, alerts, shared locations, latest location with a Maps link) and shows "S23 last seen" with battery and setup state.
+7. A responder replies "ACK" by SMS to the S23: the caller is told a responder has seen the call, and the incident is marked acknowledged on the dashboard.
 
 The Mac's Bluetooth hands-free mode (`--bt-mac`, `mac/hfp-bridge`) is a separate alternative. Do not run it together with S23 call screening: both would hang up the same call.
 
-## Status (2026-10-24)
+## Status (2026-10-25)
 
 | Item | State |
 |---|---|
-| Mac Bluetooth hands-free: call detection, caller ID, hang-up | Built and tested with real calls |
-| Auto-reply SMS via the gateway app (Bluetooth mode) | Tested with a real call |
+| S23 call from a saved contact (phone-state fallback) | **Verified with a real call** (2026-10-24 23:16 IST): ended, SMS sent, logged, dashboard received it |
+| Mac dashboard in `gateway_app` mode | **Verified** with real S23 events |
 | No hardcoded numbers, addresses or device IDs | Done |
-| Live sensor stream to the dashboard | Built; server path tested; on-device stream not yet confirmed |
-| Client beacon only for the configured gateway number | Built; not yet tested on a device |
-| S23 call screening, auto-reply, alert receiving, dashboard forwarding | Built and installed; real call test pending |
-| Dashboard as server for the S23 (`gateway_app` mode) | Built and tested with sample events |
+| S23 call from an unknown number (call screening) | Built; real call pending |
+| S23 locked / app closed | Built; test pending |
+| Responder SMS alerts and ACK by SMS | Built; gateway unit tests pass; device test pending |
+| 112 reply text, location link in reply | Built; device test pending (link needs an https public URL) |
+| Heartbeat and "S23 last seen" | Built; server tested; first real heartbeat pending (installed on the S23) |
+| Battery-optimisation exemption | Built; device test pending |
+| Incidents, location page, ACK endpoint, persistence, admin token | Built; full simulated incident passed end to end on the Mac |
+| Kaaka Sensors SOS, fall detection, beacon duration, report format | Built; device test pending (needs a second Android phone) |
+| Alert SMS receiving and forwarding on the S23 | Built; real alert pending |
+| Mac Bluetooth hands-free (alternative mode) | Tested with real calls earlier |
+
+Android does not pass calls from saved contacts to call-screening apps (Telecom only asks the built-in dialer). Kaaka Call handles those through its phone-state fallback (`IncomingCallReceiver`), which needs the "calls from contacts" permissions in the app.
 
 ## Next steps
 
-1. **Call test on the S23.** In Kaaka Call: enable call screening, allow SMS, set the dashboard server. Call from another phone, including a number not in the S23's contacts (Android may not screen calls from contacts).
-2. **Telemetry test.** Install Kaaka Sensors on a second Android phone with the S23 as gateway number; start the beacon manually, then test the automatic trigger.
-3. **Responder alerts.** Forward each call and alert by SMS to a list of responder numbers, so nothing depends on someone watching the dashboard.
-4. **Location for callers without the app.** Add a "share my location" link to the reply SMS (needs the dashboard reachable from the internet).
-5. **Reply wording.** Say what happens next and point to 112, e.g. "Kaaka received your call. Help is being arranged. If in immediate danger, call 112."
-6. **Reliability.** Keep the S23 charged and exempt from battery optimisation; show a "last event / heartbeat from S23" on the dashboard; consider a backup phone.
+1. **Device test pass** using [TESTING.md](TESTING.md).
+2. **Public https URL** (only if location links are wanted): a tunnel or small server in front of the dashboard, with `KAAKA_ADMIN_TOKEN` set before exposing it.
+3. **Second Android phone** with Kaaka Sensors for the SOS/fall/beacon tests.
+4. **Tune fall detection** thresholds from real tests.
+5. **Backup:** a second gateway phone and power backup.
 
 ## Out of scope on this hardware
 

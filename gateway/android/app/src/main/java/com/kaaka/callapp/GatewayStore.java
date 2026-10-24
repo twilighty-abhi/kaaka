@@ -1,14 +1,20 @@
 package com.kaaka.callapp;
 
 import android.content.Context;
+import android.Manifest;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.telephony.SmsManager;
 import android.util.Log;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -24,13 +30,19 @@ public final class GatewayStore {
     private static final String KEY_REJECT = "reject_calls";
     private static final String KEY_REPLY = "reply_message";
     private static final String KEY_DASHBOARD = "dashboard_url";
+    private static final String KEY_RESPONDERS = "responder_numbers";
+    private static final String KEY_PUBLIC_URL = "public_url";
+    private static final String KEY_DASHBOARD_TOKEN = "dashboard_token";
     private static final String KEY_EVENTS = "events";
     private static final String KEY_LAST_CALL = "last_call_number";
     private static final String KEY_LAST_CALL_AT = "last_call_at";
     private static final long CALL_DEDUPE_MS = 60_000;
     private static final int MAX_EVENTS = 50;
 
-    public static final String DEFAULT_REPLY = "received call. will get back to you shortly.";
+    public static final String DEFAULT_REPLY =
+        "Kaaka received your call. Help is being arranged. If in immediate danger, call 112.";
+    /** Earlier default; treated as unset so existing installs pick up the new default. */
+    private static final String OLD_DEFAULT_REPLY = "received call. will get back to you shortly.";
 
     private GatewayStore() {}
 
@@ -44,7 +56,8 @@ public final class GatewayStore {
 
     public static String replyMessage(Context context) {
         String reply = prefs(context).getString(KEY_REPLY, DEFAULT_REPLY);
-        return reply == null || reply.trim().isEmpty() ? DEFAULT_REPLY : reply;
+        if (reply == null || reply.trim().isEmpty() || reply.trim().equals(OLD_DEFAULT_REPLY)) return DEFAULT_REPLY;
+        return reply;
     }
 
     public static String dashboardUrl(Context context) {
@@ -52,12 +65,121 @@ public final class GatewayStore {
         return url == null ? "" : url.trim().replaceAll("/+$", "");
     }
 
-    public static void saveSettings(Context context, boolean rejectCalls, String replyMessage, String dashboardUrl) {
+    /** Public https base URL for location links (e.g. a tunnel to the dashboard); "" when unset. */
+    public static String publicUrl(Context context) {
+        String url = prefs(context).getString(KEY_PUBLIC_URL, "");
+        return url == null ? "" : url.trim().replaceAll("/+$", "");
+    }
+
+    /** Sent as X-Kaaka-Token when the dashboard server requires KAAKA_ADMIN_TOKEN; "" when unset. */
+    public static String dashboardToken(Context context) {
+        String token = prefs(context).getString(KEY_DASHBOARD_TOKEN, "");
+        return token == null ? "" : token.trim();
+    }
+
+    /** Responder numbers as entered (comma or new line separated). */
+    public static String responderText(Context context) {
+        String text = prefs(context).getString(KEY_RESPONDERS, "");
+        return text == null ? "" : text;
+    }
+
+    /** Responder numbers, cleaned to digits and a leading +; empty entries dropped. */
+    public static List<String> responderNumbers(Context context) {
+        List<String> numbers = new ArrayList<>();
+        for (String part : responderText(context).split("[,\\n]")) {
+            String number = part.trim().replaceAll("[^0-9+]", "");
+            if (!number.replace("+", "").isEmpty() && !numbers.contains(number)) numbers.add(number);
+        }
+        return numbers;
+    }
+
+    public static void saveSettings(Context context, boolean rejectCalls, String replyMessage, String dashboardUrl, String responders,
+                                    String publicUrl, String dashboardToken) {
         prefs(context).edit()
             .putBoolean(KEY_REJECT, rejectCalls)
             .putString(KEY_REPLY, replyMessage == null ? "" : replyMessage)
             .putString(KEY_DASHBOARD, dashboardUrl == null ? "" : dashboardUrl.trim())
+            .putString(KEY_RESPONDERS, responders == null ? "" : responders.trim())
+            .putString(KEY_PUBLIC_URL, publicUrl == null ? "" : publicUrl.trim())
+            .putString(KEY_DASHBOARD_TOKEN, dashboardToken == null ? "" : dashboardToken.trim())
             .apply();
+    }
+
+    /** True if both numbers end with the same last 10 digits (ignores +91 / 0 prefixes). */
+    public static boolean sameNumber(String a, String b) {
+        String da = a == null ? "" : a.replaceAll("\\D", "");
+        String db = b == null ? "" : b.replaceAll("\\D", "");
+        if (da.isEmpty() || db.isEmpty()) return false;
+        String ta = da.length() > 10 ? da.substring(da.length() - 10) : da;
+        String tb = db.length() > 10 ? db.substring(db.length() - 10) : db;
+        return ta.equals(tb);
+    }
+
+    /** True if the number is one of the configured responders. */
+    public static boolean isResponder(Context context, String number) {
+        for (String responder : responderNumbers(context)) {
+            if (sameNumber(responder, number)) return true;
+        }
+        return false;
+    }
+
+    /** Number of the most recent call or alert in the event log (what a bare "ACK" refers to); "" if none. */
+    public static synchronized String lastIncidentNumber(Context context) {
+        JSONArray events = getEvents(context);
+        for (int i = 0; i < events.length(); i++) {
+            JSONObject event = events.optJSONObject(i);
+            if (event == null) continue;
+            String type = event.optString("type");
+            String number = "call".equals(type) ? event.optString("number") : "alert".equals(type) ? event.optString("sender") : "";
+            if (!number.isEmpty()) return number;
+        }
+        return "";
+    }
+
+    /** Sends an SMS (multipart if long). Needs SEND_SMS. Returns false on any failure. */
+    public static boolean sendSms(Context context, String number, String message) {
+        if (context.checkSelfPermission(Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "SEND_SMS not granted; SMS to " + number + " not sent");
+            return false;
+        }
+        try {
+            SmsManager sms = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                ? context.getSystemService(SmsManager.class)
+                : SmsManager.getDefault();
+            ArrayList<String> parts = sms.divideMessage(message);
+            if (parts.size() > 1) {
+                sms.sendMultipartTextMessage(number, null, parts, null, null);
+            } else {
+                sms.sendTextMessage(number, null, message, null, null);
+            }
+            return true;
+        } catch (Exception e) {
+            Log.w(TAG, "SMS to " + number + " failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Texts every responder number except {@code exclude} (the caller or alert sender).
+     * Records "responders" / "respondersFailed" on the event when any responder is configured.
+     */
+    public static void notifyResponders(Context context, String message, String exclude, JSONObject event) {
+        int sent = 0;
+        int failed = 0;
+        for (String number : responderNumbers(context)) {
+            if (sameNumber(number, exclude)) continue;
+            if (sendSms(context, number, message)) sent++; else failed++;
+        }
+        if (sent + failed == 0) return;
+        try {
+            event.put("responders", sent);
+            event.put("respondersFailed", failed);
+        } catch (JSONException ignored) {
+        }
+    }
+
+    public static String timeOfDay() {
+        return new SimpleDateFormat("HH:mm", Locale.US).format(new Date());
     }
 
     public static String nowIso() {
@@ -113,6 +235,8 @@ public final class GatewayStore {
             conn.setRequestMethod("POST");
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/json");
+            String token = dashboardToken(context);
+            if (!token.isEmpty()) conn.setRequestProperty("X-Kaaka-Token", token);
             try (OutputStream out = conn.getOutputStream()) {
                 out.write(body.toString().getBytes(StandardCharsets.UTF_8));
             }

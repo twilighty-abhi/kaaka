@@ -130,7 +130,7 @@ class DefaultSmsManager {
 		// Start the emergency telemetry beacon ONLY for SMS from the configured gateway number,
 		// and always send reports to that gateway number (never to the SMS sender).
 		if (isGatewaySender(event.sender)) {
-			telemetryBeacon.startBeacon(appSettings.gatewayNumber);
+			telemetryBeacon.startBeacon(appSettings.gatewayNumber, "gateway reply");
 		}
 	}
 

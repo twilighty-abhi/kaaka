@@ -2,6 +2,22 @@ import { sensorManager } from "./sensorManager.svelte.js";
 import { sendSms } from "./smsService.js";
 import { appSettings, sendToServer } from "./appSettings.svelte.js";
 
+const DURATION_KEY = "kaaka_beacon_minutes";
+const DEFAULT_DURATION_MIN = 30;
+// Do not hold the first report back for a GPS fix: send what we have after this long.
+const LOCATION_WAIT_MS = 5000;
+
+function loadDuration(): number {
+	try {
+		const n = Number(localStorage.getItem(DURATION_KEY));
+		return n > 0 ? n : DEFAULT_DURATION_MIN;
+	} catch {
+		return DEFAULT_DURATION_MIN;
+	}
+}
+
+export type BeaconTrigger = "manual" | "sos" | "fall" | "gateway reply";
+
 export class TelemetryBeaconService {
 	// Svelte 5 runes for reactive state
 	isActive = $state(false);
@@ -13,6 +29,12 @@ export class TelemetryBeaconService {
 	lastReport = $state<string | null>(null);
 	status = $state<{ type: "success" | "error" | "info"; text: string } | null>(null);
 	isSending = $state(false);
+	/** Beacon stops by itself after this many minutes. */
+	durationMinutes = $state(loadDuration());
+	/** When the running beacon will stop (ms epoch), or null. */
+	endsAt = $state<number | null>(null);
+	/** Why the beacon was started; included in every report. */
+	trigger = $state<BeaconTrigger>("manual");
 
 	private countdownTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -40,7 +62,10 @@ export class TelemetryBeaconService {
 		if (loc && loc.hasCoords && loc.latitude !== 0) {
 			lines.push(`• Coords: ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`);
 			lines.push(`• Maps: https://maps.google.com/?q=${loc.latitude.toFixed(6)},${loc.longitude.toFixed(6)}`);
+		} else {
+			lines.push("• Location: unavailable");
 		}
+		lines.push(`• Trigger: ${this.trigger}`);
 
 		return lines.join("\n");
 	}
@@ -58,7 +83,11 @@ export class TelemetryBeaconService {
 		if (!sensorManager.isListening) {
 			await sensorManager.start();
 		}
-		await sensorManager.refreshLocation();
+		// Refresh GPS, but send anyway after LOCATION_WAIT_MS (later reports pick up the fix).
+		await Promise.race([
+			sensorManager.refreshLocation().catch(() => undefined),
+			new Promise((resolve) => setTimeout(resolve, LOCATION_WAIT_MS))
+		]);
 
 		const report = this.buildReport();
 		this.lastReport = report;
@@ -96,7 +125,19 @@ export class TelemetryBeaconService {
 		return success;
 	}
 
-	startBeacon(target?: string) {
+	setDuration(minutes: number) {
+		const n = Math.round(minutes);
+		if (!(n > 0)) return;
+		this.durationMinutes = n;
+		try {
+			localStorage.setItem(DURATION_KEY, String(n));
+		} catch {
+			// keep in memory only
+		}
+		if (this.isActive) this.endsAt = Date.now() + n * 60_000;
+	}
+
+	startBeacon(target?: string, trigger: BeaconTrigger = "manual") {
 		if (target) {
 			const clean = target.replace(/[^0-9]/g, "");
 			if (clean) this.targetNumber = clean.length >= 10 ? clean.slice(-10) : clean;
@@ -108,6 +149,7 @@ export class TelemetryBeaconService {
 			return;
 		}
 		if (this.isActive) return;
+		this.trigger = trigger;
 
 		// Ensure sensors are actively capturing
 		if (!sensorManager.isListening) {
@@ -115,10 +157,13 @@ export class TelemetryBeaconService {
 		}
 
 		this.isActive = true;
+		this.updatesSentCount = 0;
+		this.lastSentTime = null;
 		this.secondsRemaining = this.intervalSeconds;
+		this.endsAt = Date.now() + this.durationMinutes * 60_000;
 		this.status = {
 			type: "info",
-			text: `Emergency beacon active. Updating every 60s.`
+			text: `Emergency beacon active. Updating every ${this.intervalSeconds}s for ${this.durationMinutes} min.`
 		};
 
 		// Send Update #1 immediately
@@ -128,6 +173,10 @@ export class TelemetryBeaconService {
 		if (this.countdownTimer) clearInterval(this.countdownTimer);
 		this.countdownTimer = setInterval(() => {
 			if (!this.isActive) return;
+			if (this.endsAt && Date.now() >= this.endsAt) {
+				this.stopBeacon(`Beacon finished after ${this.durationMinutes} min.`);
+				return;
+			}
 			if (this.secondsRemaining > 1) {
 				this.secondsRemaining--;
 			} else {
@@ -137,8 +186,9 @@ export class TelemetryBeaconService {
 		}, 1000);
 	}
 
-	stopBeacon() {
+	stopBeacon(reason = "Telemetry beacon stopped.") {
 		this.isActive = false;
+		this.endsAt = null;
 		if (this.countdownTimer) {
 			clearInterval(this.countdownTimer);
 			this.countdownTimer = null;
@@ -146,7 +196,7 @@ export class TelemetryBeaconService {
 		this.secondsRemaining = this.intervalSeconds;
 		this.status = {
 			type: "info",
-			text: `Telemetry beacon stopped. Total updates sent: ${this.updatesSentCount}`
+			text: `${reason} Total updates sent: ${this.updatesSentCount}`
 		};
 	}
 }
