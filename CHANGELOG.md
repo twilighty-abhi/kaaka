@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T02:13:16+05:30 — Beacon update interval and location trail on the dashboard
+
+- Changed: Kaaka Sensors gets an "Update every 15 / 30 / 60 s" beacon setting (saved; default 60 s) on the SOS card. The dashboard map draws each incident's reported positions as a trail (oldest to newest) and fits the view to it. Rebuilt `client/KaakaSensors.apk`.
+- Why: Show a moving caller (e.g. in a vehicle): more frequent reports and a visible path.
+- Validation: `svelte-check` 0 errors; `assembleDebug`.
+- Limitations: The interval only applies while the app's beacon runs (foreground).
+
 ## 2026-10-25T01:58:19+05:30 — Dashboard: no beep for the live sensor stream
 
 - Changed: `server/dashboard.html` beeps only for alerts, calls and other events, not for "Live sensor stream" telemetry.

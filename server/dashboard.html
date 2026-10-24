@@ -1285,6 +1285,16 @@ awaiting emergency trigger from client or gateway...</div>
       popup.append(link);
       L.marker(latlng).bindPopup(popup).addTo(incidentMarkers);
       points.push(latlng);
+      // Trail: every reported position of this caller, oldest first, so movement is visible.
+      const trail = [...(inc.alerts || []), ...(inc.locations || [])]
+        .filter((p) => p.lat != null && p.lon != null)
+        .sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)))
+        .map((p) => [Number(p.lat), Number(p.lon)]);
+      if (trail.length > 1) {
+        L.polyline(trail, { color: '#ff3b30', weight: 4, opacity: 0.85 }).addTo(incidentMarkers);
+        trail.forEach((pt) => L.circleMarker(pt, { radius: 4, color: '#ff3b30', fillOpacity: 1 }).addTo(incidentMarkers));
+        points.push(...trail);
+      }
     });
     document.getElementById('map-message').textContent = points.length
       ? points.length + ' incident location' + (points.length === 1 ? '' : 's')
