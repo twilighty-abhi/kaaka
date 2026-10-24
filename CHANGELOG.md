@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T01:22:15+05:30 — Demo video recorder
+
+- Changed: New `scripts/record-demo.sh <gateway-serial> <caller-serial> [seconds] [dashboard-url]` records both phones (`adb screenrecord`) and the dashboard (headless Chrome screenshots every 2 s) at the same time, normalizes the clips (a clip with no frames becomes a still), labels them (labels rendered with Chrome because this ffmpeg build has no `drawtext`) and stitches them side by side into `demo/kaaka-demo-<timestamp>.mp4`. Tries to keep screens awake while recording (MIUI blocks this over adb). `demo/` is ignored by Git.
+- Why: Record a demo of the whole flow across both phones and the Mac.
+- Validation: 15 s test run with the S23 and the Xiaomi: 2190×1360, 15.0 s, three labelled panels (checked a frame).
+- Limitations: Phone recording is limited to 180 s per run; the dashboard panel updates every 2 s.
+
 ## 2026-10-25T01:13:30+05:30 — Report the real SMS send result in Kaaka Sensors
 
 - Changed: `DirectSmsPlugin` sends through the phone's default SMS SIM (`createForSubscriptionId`) and resolves only after the sent-PendingIntent results for all parts arrive; failures are rejected with a readable reason (no service, radio off, network rejected, limit), and a 30 s timeout reports an unconfirmed send. Rebuilt `client/KaakaSensors.apk`.

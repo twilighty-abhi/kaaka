@@ -45,3 +45,6 @@ server/last_call.json
 
 # Incident/event history (runtime data: caller numbers and locations)
 server/events.jsonl
+
+# Demo recordings
+demo/
