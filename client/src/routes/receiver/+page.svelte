@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from "svelte";
 	import { defaultSmsManager } from "#lib/services/defaultSmsService.svelte.js";
+	import { appSettings } from "#lib/services/appSettings.svelte.js";
 	import {
 		ArrowLeft,
 		ShieldCheck,
@@ -14,7 +15,7 @@
 		Sliders
 	} from "lucide-svelte";
 
-	let testSender = $state("9495364448");
+	let testSender = $state("");
 	let testMessage = $state("CRITICAL ALERT: Emergency fall detected at coordinates (9.9312, 76.2673)");
 
 	onMount(async () => {
@@ -130,7 +131,7 @@
 			<div class="flex items-center justify-between">
 				<div>
 					<span class="text-2xl font-black font-mono tracking-tight text-foreground">
-						{defaultSmsManager.authorizedNumber}
+						{appSettings.gatewayNumber || "Not set: add the gateway number in Settings"}
 					</span>
 					<p class="text-xs text-muted-foreground mt-1">
 						Incoming messages from this suffix auto-wake the screen, trigger full-screen alarm intents, and execute high-priority vibration bursts.
@@ -237,7 +238,7 @@
 						type="text"
 						bind:value={testSender}
 						class="px-3 py-2 rounded-xl bg-background border border-border text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-						placeholder="9495364448"
+						placeholder="+91XXXXXXXXXX"
 					/>
 				</div>
 				<div class="flex flex-col gap-1.5 sm:col-span-2">

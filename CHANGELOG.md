@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-24T21:55:00+05:30 — Make the Android apps' server and phone numbers configurable
+
+- Changed: Removed hardcoded phone numbers, server IPs and device IDs from `client/` and `gateway/`. Client: new Settings card (`SettingsCard.svelte`, `appSettings.svelte.ts`) for gateway phone number, Mac server WebSocket and telemetry backend URL, with a red "Not set" warning; the authorized number is mirrored to native SharedPreferences for `SmsReceiver.java`; telemetry device ID is now a random per-install ID. Gateway: server endpoint starts empty and the app shows "no server" until set; saving a new endpoint reconnects; manual sends without a number show an error instead of using a fallback. `gateway/README.md` rewritten to describe the current app. `client/package-lock.json` resynced with `package.json`.
+- Why: Old test-device values were baked into the apps and could send SMS to fixed numbers.
+- Validation: `svelte-check` (client): 0 errors, 0 warnings; both apps built with `./gradlew assembleDebug`; repo-wide `git grep` finds none of the old numbers, IPs or paths.
+- Limitations: Settings UI not yet checked on a real device; end-to-end SMS/WebSocket not yet tested. The client still starts its telemetry beacon for any SMS containing "call", "alert", "emergency" or "kaaka", from any sender (unchanged behavior, flagged for review).
+
 ## 2026-10-24T21:36:00+05:30 — Remove hardcoded phone numbers, addresses and device IDs from the server
 
 - Changed: `server/server.py` no longer contains phone numbers, Bluetooth addresses or adb serials. `--bt-mac`/`KAAKA_BT_MAC` is required; new optional `--client-number`/`KAAKA_CLIENT_NUMBER` and `--adb-serial`/`KAAKA_ADB_SERIAL`. Calls without caller ID stay "unknown" and never trigger an auto-reply SMS (previously they were relabeled with a fixed number that the gateway app could SMS). "Last caller" shows none until a real call and is kept across restarts in `server/last_call.json` (ignored by Git). Simulated calls/telemetry no longer use real numbers. `server/audio_bridge.py` reads the n8n webhook from `KAAKA_WEBHOOK_URL`/`KAAKA_WEBHOOK_FALLBACK_URL` (bridge stays off without it) and the Linux speaker/mic from `KAAKA_SPEAKER_SINK`/`KAAKA_MIC_SOURCE` or the PipeWire defaults. The dashboard shows the configured Bluetooth address and webhook from `/api/status`. Removed a machine-specific Python path from `package.json` and the TTS service (`KAAKA_TTS_PYTHON`). Device-specific wording replaced with "gateway phone"; README documents all settings.

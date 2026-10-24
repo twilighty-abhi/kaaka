@@ -8,8 +8,9 @@
 
   const DirectSms = registerPlugin<DirectSmsPlugin>('DirectSms');
 
-  const defaultPlaceholder = '9995283835';
-  const defaultServerUrl = 'ws://192.168.2.7:8765';
+  // No defaults on purpose: the user must enter the Mac server address and recipients.
+  const numberPlaceholder = '+91XXXXXXXXXX';
+  const serverUrlPlaceholder = 'ws://<mac-ip>:8765';
   const defaultMessage = 'received call. will get back to you shortly.';
 
   let phoneNumber = $state('');
@@ -17,7 +18,7 @@
   let statusMessage = $state.raw<{ text: string; type: 'success' | 'error' } | null>(null);
   let isSending = $state(false);
 
-  let serverUrl = $state(defaultServerUrl);
+  let serverUrl = $state('');
   let wsConnected = $state(false);
   let autoSend = $state(true);
   let showSettings = $state(false);
@@ -27,12 +28,12 @@
   let lastAutoSent: { number: string; time: number } | null = null;
 
   async function sendSmsMessage(targetNumber: string, content: string, isAutomated = false) {
-    const rawNumber = targetNumber.trim() || defaultPlaceholder;
+    const rawNumber = targetNumber.trim();
     const sanitizedNumber = rawNumber.replace(/[^0-9+*#]/g, '');
     const messageContent = content.trim();
 
     if (!sanitizedNumber) {
-      statusMessage = { text: 'invalid number', type: 'error' };
+      statusMessage = { text: rawNumber ? 'invalid number' : 'no recipient number', type: 'error' };
       return;
     }
     if (!messageContent) {
@@ -85,6 +86,12 @@
 
   function connectWebSocket() {
     if (typeof window === 'undefined') return;
+    if (!serverUrl.trim()) {
+      wsConnected = false;
+      showSettings = true;
+      statusMessage = { text: 'server address not set: enter ws://<mac-ip>:8765 in [config]', type: 'error' };
+      return;
+    }
 
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
       return;
@@ -177,13 +184,21 @@
 
   function handleSaveSettings(e: Event) {
     e.preventDefault();
+    serverUrl = serverUrl.trim();
     localStorage.setItem('kaaka_ws_url', serverUrl);
     showSettings = false;
+    statusMessage = null;
+    // Drop any connection to the old address so the new one is used.
+    if (ws) {
+      ws.onclose = null;
+      try { ws.close(); } catch {}
+      ws = null;
+    }
     connectWebSocket();
   }
 
   function resetNumber() {
-    phoneNumber = defaultPlaceholder;
+    phoneNumber = '';
     statusMessage = null;
   }
 </script>
@@ -195,7 +210,7 @@
       <h1 class="brand-title">kaaka</h1>
       <div class="header-right">
         <span class="status-indicator {wsConnected ? 'online' : 'offline'}">
-          {wsConnected ? 'online' : 'connecting'}
+          {wsConnected ? 'online' : serverUrl.trim() ? 'connecting' : 'no server'}
         </span>
         <button
           type="button"
@@ -217,7 +232,7 @@
             id="ws-input"
             type="text"
             bind:value={serverUrl}
-            placeholder="ws://192.168.2.7:8765"
+            placeholder={serverUrlPlaceholder}
             class="config-input"
           />
           <button type="submit" class="config-submit-btn">
@@ -255,7 +270,7 @@
           autocomplete="tel"
           bind:value={phoneNumber}
           oninput={() => (statusMessage = null)}
-          placeholder={defaultPlaceholder}
+          placeholder={numberPlaceholder}
           class="tech-input"
           aria-label="recipient"
         />

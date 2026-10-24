@@ -11,6 +11,7 @@ Use Codex during the hackathon and briefly document its actual contribution here
 | 2026-10-24T21:40:00+05:30 | Claude Code (Claude Opus 5.5), two parallel sub-agents | Port server to macOS | Planned the port; sub-agents wrote `mac/hfp-bridge` and the macOS changes in `server/server.py`, `server/audio_bridge.py`, `server/mac_telephony.py`, README section | Reviewed by Abhiram N J during live call tests | Stub-bridge tests and a live S23 call: number captured, hangup worked |
 | 2026-10-24T21:28:00+05:30 | Claude Code (Claude Opus 5.5), sub-agent | Fix slow first HFP connect | Diagnosed run-loop timing issue and fixed `mac/hfp-bridge`; neutral wording in server logs; README path updates | Requested by Abhiram N J | Three timed S23 connections on first attempt |
 | 2026-10-24T21:36:00+05:30 | Claude Code (Claude Opus 5.5) | Remove hardcoded values from server | Made numbers, addresses, adb serial, webhook and audio devices configurable in `server/`, dashboard, scripts and README | Requested by Abhiram N J | Compile checks, repo grep, live server status check |
+| 2026-10-24T21:55:00+05:30 | Claude Code (Claude Opus 5.5), sub-agent | Configurable app settings; rebuild APKs | Replaced hardcoded numbers/IPs in `client/` and `gateway/` with settings, rebuilt both APKs, installed the gateway app on the S23 | Requested by Abhiram N J; on-device check pending | svelte-check clean; Gradle builds succeeded; `adb install` Success |
 
 ## Template preparation
 

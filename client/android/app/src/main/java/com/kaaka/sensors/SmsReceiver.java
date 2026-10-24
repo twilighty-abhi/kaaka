@@ -29,12 +29,10 @@ import androidx.core.app.NotificationManagerCompat;
 
 public class SmsReceiver extends BroadcastReceiver {
     private static final String TAG = "SmsReceiver";
-    private static final String TARGET_PHONE_SUFFIX = "9495364448";
-    private static final String TARGET_PHONE_SUFFIX_ALT = "9995283835";
     
     // Urgent Alert Channel (Authorized Contact ONLY)
     private static final String URGENT_CHANNEL_ID = "sms_urgent_alert_channel_v4";
-    private static final int URGENT_NOTIFICATION_ID = 9495;
+    private static final int URGENT_NOTIFICATION_ID = 1001;
 
     // General SMS Channel (All Other Contacts)
     private static final String GENERAL_CHANNEL_ID = "general_sms_channel";
@@ -93,7 +91,8 @@ public class SmsReceiver extends BroadcastReceiver {
             }
 
             // 2. CHECK SENDER & CONTENT: Is it an authorized emergency contact or emergency trigger keyword?
-            boolean isAuthorizedSender = digitsOnly.endsWith(TARGET_PHONE_SUFFIX) || digitsOnly.endsWith(TARGET_PHONE_SUFFIX_ALT);
+            String authorizedSuffix = authorizedNumberSuffix(context);
+            boolean isAuthorizedSender = !authorizedSuffix.isEmpty() && digitsOnly.endsWith(authorizedSuffix);
             String lowerMsg = completeMessage != null ? completeMessage.toLowerCase() : "";
             boolean isEmergencyTrigger = lowerMsg.contains("call") || lowerMsg.contains("emergency") || lowerMsg.contains("alert") || lowerMsg.contains("kaaka");
 
@@ -104,7 +103,7 @@ public class SmsReceiver extends BroadcastReceiver {
                 return;
             }
 
-            // 3. AUTHORIZED EMERGENCY CONTACT (9495364448):
+            // 3. AUTHORIZED EMERGENCY CONTACT (configured gateway number) or emergency keyword:
             // Deduplicate within 4 seconds for identical sender + message
             String messageKey = sender + ":" + completeMessage;
             long now = System.currentTimeMillis();
@@ -115,7 +114,7 @@ public class SmsReceiver extends BroadcastReceiver {
             lastEmergencyTimestamp = now;
             lastEmergencyHash = messageKey;
 
-            Log.d(TAG, "🚨 MATCHED TARGET NUMBER (" + TARGET_PHONE_SUFFIX + ")! Triggering app auto-open, urgent notification, and alarm vibration.");
+            Log.d(TAG, "🚨 Emergency SMS from " + sender + " (authorized=" + isAuthorizedSender + ")! Triggering app auto-open, urgent notification, and alarm vibration.");
 
             // Function A: Instantly bring app to foreground (zero delay before anything else)
             launchMainActivity(context, sender, completeMessage);
@@ -132,6 +131,14 @@ public class SmsReceiver extends BroadcastReceiver {
             // Function E: Notify Capacitor frontend
             DefaultSmsPlugin.handleIncomingSms(sender, completeMessage, timestamp);
         }
+    }
+
+    // Last 10 digits of the gateway number saved in the app's Settings, or "" if not configured.
+    private static String authorizedNumberSuffix(Context context) {
+        String saved = context.getSharedPreferences(DefaultSmsPlugin.PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(DefaultSmsPlugin.PREF_AUTHORIZED_NUMBER, "");
+        String digits = saved == null ? "" : saved.replaceAll("[^0-9]", "");
+        return digits.length() > 10 ? digits.substring(digits.length() - 10) : digits;
     }
 
     private void saveSmsToInbox(Context context, String sender, String message, long timestamp) {
@@ -308,7 +315,7 @@ public class SmsReceiver extends BroadcastReceiver {
                     "Emergency SMS Alerts",
                     NotificationManager.IMPORTANCE_HIGH
                 );
-                channel.setDescription("Critical notifications for incoming SMS from " + TARGET_PHONE_SUFFIX);
+                channel.setDescription("Critical notifications for emergency SMS alerts");
                 channel.enableLights(true);
                 channel.enableVibration(true);
                 channel.setVibrationPattern(new long[]{ 0, 800, 200, 800, 200, 1000 });
@@ -362,7 +369,7 @@ public class SmsReceiver extends BroadcastReceiver {
 
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, URGENT_CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                .setContentTitle("🚨 Emergency Alert (" + TARGET_PHONE_SUFFIX + ")")
+                .setContentTitle("🚨 Emergency Alert (" + sender + ")")
                 .setContentText(message)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
                 .setPriority(NotificationCompat.PRIORITY_MAX)

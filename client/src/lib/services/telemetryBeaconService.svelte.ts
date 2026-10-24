@@ -1,10 +1,11 @@
 import { sensorManager } from "./sensorManager.svelte.js";
 import { sendSms } from "./smsService.js";
+import { appSettings, sendToServer } from "./appSettings.svelte.js";
 
 export class TelemetryBeaconService {
 	// Svelte 5 runes for reactive state
 	isActive = $state(false);
-	targetNumber = $state("9495364448");
+	targetNumber = $state(appSettings.gatewayNumber);
 	intervalSeconds = $state(60);
 	secondsRemaining = $state(60);
 	updatesSentCount = $state(0);
@@ -46,6 +47,11 @@ export class TelemetryBeaconService {
 
 	async sendUpdate(): Promise<boolean> {
 		if (this.isSending) return false;
+		const target = this.targetNumber.trim();
+		if (!target) {
+			this.status = { type: "error", text: "Gateway number not set. Enter it here or in Settings." };
+			return false;
+		}
 		this.isSending = true;
 
 		// Ensure sensors and location are fresh
@@ -56,24 +62,9 @@ export class TelemetryBeaconService {
 
 		const report = this.buildReport();
 		this.lastReport = report;
-		const target = this.targetNumber.trim() || "9495364448";
 
-		// 1. Direct WebSocket fallback to server (if on same local Wi-Fi)
-		for (const host of ["192.168.2.7", "192.168.2.38"]) {
-			try {
-				const ws = new WebSocket(`ws://${host}:8765`);
-				ws.onopen = () => {
-					ws.send(JSON.stringify({
-						type: "CLIENT_TELEMETRY",
-						report,
-						sender: "Phone B (Client)"
-					}));
-					setTimeout(() => ws.close(), 1500);
-				};
-			} catch (e) {
-				// ignore offline
-			}
-		}
+		// 1. Direct WebSocket copy to the Mac server (only if a server address is configured)
+		sendToServer({ type: "CLIENT_TELEMETRY", report, sender: "Phone B (Client)" });
 
 		// 2. Cellular SMS dispatch to Gateway (Phone A)
 		const res = await sendSms(target, report);
@@ -108,7 +99,13 @@ export class TelemetryBeaconService {
 	startBeacon(target?: string) {
 		if (target) {
 			const clean = target.replace(/[^0-9]/g, "");
-			this.targetNumber = clean.length >= 10 ? clean.slice(-10) : (clean || "9495364448");
+			if (clean) this.targetNumber = clean.length >= 10 ? clean.slice(-10) : clean;
+		} else if (!this.targetNumber) {
+			this.targetNumber = appSettings.gatewayNumber;
+		}
+		if (!this.targetNumber.trim()) {
+			this.status = { type: "error", text: "Gateway number not set. Enter it here or in Settings." };
+			return;
 		}
 		if (this.isActive) return;
 
