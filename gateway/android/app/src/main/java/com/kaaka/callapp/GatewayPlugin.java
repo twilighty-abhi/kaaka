@@ -137,6 +137,8 @@ public class GatewayPlugin extends Plugin {
         result.put("replyMessage", GatewayStore.replyMessage(context));
         result.put("dashboardUrl", GatewayStore.dashboardUrl(context));
         result.put("responderNumbers", GatewayStore.responderText(context));
+        result.put("publicUrl", GatewayStore.publicUrl(context));
+        result.put("dashboardToken", GatewayStore.dashboardToken(context));
         call.resolve(result);
     }
 
@@ -147,7 +149,9 @@ public class GatewayPlugin extends Plugin {
             call.getBoolean("rejectCalls", true),
             call.getString("replyMessage", GatewayStore.DEFAULT_REPLY),
             call.getString("dashboardUrl", ""),
-            call.getString("responderNumbers", "")
+            call.getString("responderNumbers", ""),
+            call.getString("publicUrl", ""),
+            call.getString("dashboardToken", "")
         );
         Heartbeat.schedule(getContext());
         Heartbeat.sendNow(getContext());

@@ -31,6 +31,8 @@ public final class GatewayStore {
     private static final String KEY_REPLY = "reply_message";
     private static final String KEY_DASHBOARD = "dashboard_url";
     private static final String KEY_RESPONDERS = "responder_numbers";
+    private static final String KEY_PUBLIC_URL = "public_url";
+    private static final String KEY_DASHBOARD_TOKEN = "dashboard_token";
     private static final String KEY_EVENTS = "events";
     private static final String KEY_LAST_CALL = "last_call_number";
     private static final String KEY_LAST_CALL_AT = "last_call_at";
@@ -63,6 +65,18 @@ public final class GatewayStore {
         return url == null ? "" : url.trim().replaceAll("/+$", "");
     }
 
+    /** Public https base URL for location links (e.g. a tunnel to the dashboard); "" when unset. */
+    public static String publicUrl(Context context) {
+        String url = prefs(context).getString(KEY_PUBLIC_URL, "");
+        return url == null ? "" : url.trim().replaceAll("/+$", "");
+    }
+
+    /** Sent as X-Kaaka-Token when the dashboard server requires KAAKA_ADMIN_TOKEN; "" when unset. */
+    public static String dashboardToken(Context context) {
+        String token = prefs(context).getString(KEY_DASHBOARD_TOKEN, "");
+        return token == null ? "" : token.trim();
+    }
+
     /** Responder numbers as entered (comma or new line separated). */
     public static String responderText(Context context) {
         String text = prefs(context).getString(KEY_RESPONDERS, "");
@@ -79,12 +93,15 @@ public final class GatewayStore {
         return numbers;
     }
 
-    public static void saveSettings(Context context, boolean rejectCalls, String replyMessage, String dashboardUrl, String responders) {
+    public static void saveSettings(Context context, boolean rejectCalls, String replyMessage, String dashboardUrl, String responders,
+                                    String publicUrl, String dashboardToken) {
         prefs(context).edit()
             .putBoolean(KEY_REJECT, rejectCalls)
             .putString(KEY_REPLY, replyMessage == null ? "" : replyMessage)
             .putString(KEY_DASHBOARD, dashboardUrl == null ? "" : dashboardUrl.trim())
             .putString(KEY_RESPONDERS, responders == null ? "" : responders.trim())
+            .putString(KEY_PUBLIC_URL, publicUrl == null ? "" : publicUrl.trim())
+            .putString(KEY_DASHBOARD_TOKEN, dashboardToken == null ? "" : dashboardToken.trim())
             .apply();
     }
 
@@ -96,6 +113,27 @@ public final class GatewayStore {
         String ta = da.length() > 10 ? da.substring(da.length() - 10) : da;
         String tb = db.length() > 10 ? db.substring(db.length() - 10) : db;
         return ta.equals(tb);
+    }
+
+    /** True if the number is one of the configured responders. */
+    public static boolean isResponder(Context context, String number) {
+        for (String responder : responderNumbers(context)) {
+            if (sameNumber(responder, number)) return true;
+        }
+        return false;
+    }
+
+    /** Number of the most recent call or alert in the event log (what a bare "ACK" refers to); "" if none. */
+    public static synchronized String lastIncidentNumber(Context context) {
+        JSONArray events = getEvents(context);
+        for (int i = 0; i < events.length(); i++) {
+            JSONObject event = events.optJSONObject(i);
+            if (event == null) continue;
+            String type = event.optString("type");
+            String number = "call".equals(type) ? event.optString("number") : "alert".equals(type) ? event.optString("sender") : "";
+            if (!number.isEmpty()) return number;
+        }
+        return "";
     }
 
     /** Sends an SMS (multipart if long). Needs SEND_SMS. Returns false on any failure. */
@@ -197,6 +235,8 @@ public final class GatewayStore {
             conn.setRequestMethod("POST");
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/json");
+            String token = dashboardToken(context);
+            if (!token.isEmpty()) conn.setRequestProperty("X-Kaaka-Token", token);
             try (OutputStream out = conn.getOutputStream()) {
                 out.write(body.toString().getBytes(StandardCharsets.UTF_8));
             }

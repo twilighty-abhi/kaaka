@@ -20,15 +20,21 @@
     replyMessage: string;
     dashboardUrl: string;
     responderNumbers: string;
+    publicUrl: string;
+    dashboardToken: string;
   }
 
   interface GatewayEvent {
-    type: 'call' | 'alert';
+    type: 'call' | 'alert' | 'ack';
     timestamp: string;
     number?: string;
     state?: string;
     sms?: string;
     via?: string;
+    token?: string;
+    locationLink?: boolean;
+    responder?: string;
+    smsToCaller?: string;
     responders?: number;
     respondersFailed?: number;
     sender?: string;
@@ -65,6 +71,10 @@
   let replyMessage = $state(defaultReply);
   let dashboardUrl = $state('');
   let responderNumbers = $state('');
+  let publicUrl = $state('');
+  let dashboardToken = $state('');
+  // Browsers only allow location sharing on https pages, so the link needs an https public URL.
+  const publicUrlInsecure = $derived(publicUrl.trim() !== '' && !/^https:\/\//.test(publicUrl.trim()));
   let showSettings = $state(false);
 
   // Same rule as native GatewayStore.responderNumbers: comma or new line separated, digits and +.
@@ -150,6 +160,8 @@
     replyMessage = !saved.replyMessage || saved.replyMessage === oldDefaultReply ? defaultReply : saved.replyMessage;
     dashboardUrl = saved.dashboardUrl ?? '';
     responderNumbers = saved.responderNumbers ?? '';
+    publicUrl = saved.publicUrl ?? '';
+    dashboardToken = saved.dashboardToken ?? '';
   }
 
   async function handleSaveSettings(e: Event) {
@@ -159,16 +171,24 @@
       statusMessage = { text: 'dashboard server must start with http:// or https://', type: 'error' };
       return;
     }
+    const link = publicUrl.trim().replace(/\/+$/, '');
+    if (link && !/^https?:\/\//.test(link)) {
+      statusMessage = { text: 'public link url must start with https://', type: 'error' };
+      return;
+    }
     const settings: GatewaySettings = {
       rejectCalls,
       replyMessage: replyMessage.trim() || defaultReply,
       dashboardUrl: url,
       responderNumbers: responderNumbers.trim(),
+      publicUrl: link,
+      dashboardToken: dashboardToken.trim(),
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     try {
       if (isNative) await Gateway.saveSettings(settings);
       dashboardUrl = url;
+      publicUrl = link;
       showSettings = false;
       statusMessage = { text: 'settings saved', type: 'success' };
     } catch (err) {
@@ -338,6 +358,28 @@
             placeholder={dashboardPlaceholder}
             class="config-input"
           />
+        </div>
+        <label class="field-label" for="public-url-input">public link url (location sharing)</label>
+        <input
+          id="public-url-input"
+          type="url"
+          bind:value={publicUrl}
+          placeholder="https://<your-tunnel> (optional)"
+          class="config-input"
+        />
+        {#if publicUrlInsecure}
+          <p class="setup-state bad">not https: callers' browsers will block location sharing</p>
+        {/if}
+        <label class="field-label" for="token-input">dashboard token</label>
+        <div class="config-input-group">
+          <input
+            id="token-input"
+            type="password"
+            autocomplete="off"
+            bind:value={dashboardToken}
+            placeholder="only if the server sets KAAKA_ADMIN_TOKEN"
+            class="config-input"
+          />
           <button type="submit" class="config-submit-btn">save</button>
         </div>
       </form>
@@ -359,7 +401,9 @@
             <li class="event-item">
               <span class="event-time">{formatTime(ev.timestamp)}</span>
               {#if ev.type === 'call'}
-                <span>call {ev.number || 'hidden number'}{ev.via === 'phone_state' ? ' (contact)' : ''} · {ev.state} · sms {ev.sms}{respondersText(ev)}</span>
+                <span>call {ev.number || 'hidden number'}{ev.via === 'phone_state' ? ' (contact)' : ''} · {ev.state} · sms {ev.sms}{ev.locationLink ? ' + location link' : ''}{respondersText(ev)}</span>
+              {:else if ev.type === 'ack'}
+                <span>ack {ev.number} by {ev.responder} · caller sms {ev.smsToCaller}</span>
               {:else}
                 <span>alert from {ev.sender || 'unknown'}{respondersText(ev)}</span>
                 <span class="event-text">{ev.text}</span>

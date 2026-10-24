@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:15:00+05:30 — Location links, responder ACK and dashboard token in the gateway app
+
+- Changed: Gateway app (`gateway/`): new settings "public link URL" and "dashboard token" (warns when the URL is not https). Every call with a caller number gets a random 12-character token sent in `/api/call-event`; with a public URL set, the reply SMS adds "Share your location: <url>/l/<token>". With a dashboard token set, all dashboard POSTs send `X-Kaaka-Token`. A responder SMS starting with "ACK" (optionally "ACK <number>") acknowledges the latest or named incident: the caller is texted that a responder has seen the call, `/api/ack` is posted, the responder gets a confirmation; ACK messages are never treated as alerts. Responder notifications end with "Reply ACK <number> to confirm." Pure-Java helpers in `GatewayText.java` with unit tests. Rebuilt `gateway/Kaaka.apk`.
+- Why: Callers without the app need a way to share location; responders need to confirm they have taken an incident, and the caller needs to know.
+- Validation: `svelte-check` 0 errors/0 warnings; `./gradlew testDebugUnitTest assembleDebug` passed (GatewayTextTest 4/4: token format, ACK parsing, non-ACK ignored, link only with a URL).
+- Limitations: Not installed or tested on the S23 yet. The location page needs an https public URL; reply plus link may be sent as a two-part SMS.
+
 ## 2026-10-25T00:05:00+05:30 — SOS button, fall detection and beacon duration in Kaaka Sensors
 
 - Changed: Client app (`client/`): new SOS card (`SosCard.svelte`) that sends a report to the gateway number at once and starts the beacon; optional "Auto SOS on fall" (`emergencyService.svelte.ts`, off by default): impact above ~2.5 g followed by ~2 s of stillness starts a 15-second cancellable countdown, then SOS. Reports always carry `• Coords:`/`• Maps:` or `• Location: unavailable`, plus `• Trigger:` (sos/fall/gateway reply/manual); the first report waits at most 5 s for GPS. Beacon stops after a configurable duration (default 30 minutes) and shows trigger, count, last sent and time left. README updated, including foreground-only limits. Rebuilt `client/KaakaSensors.apk`.

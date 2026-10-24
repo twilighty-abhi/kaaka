@@ -14,7 +14,10 @@ final class CallHandler {
     private CallHandler() {}
 
     static void handleCall(Context context, String number, boolean rejected, String via) {
-        String smsResult = sendReply(context, number);
+        // Token for the optional "share your location" link; the server maps it to this caller.
+        String token = number.isEmpty() ? "" : GatewayText.newToken();
+        String link = GatewayText.locationLine(GatewayStore.publicUrl(context), token);
+        String smsResult = sendReply(context, number, link);
         JSONObject event = new JSONObject();
         try {
             event.put("type", "call");
@@ -22,11 +25,14 @@ final class CallHandler {
             event.put("state", rejected ? "rejected" : "allowed");
             event.put("sms", smsResult);
             event.put("via", via);
+            if (!token.isEmpty()) event.put("token", token);
+            if (!link.isEmpty()) event.put("locationLink", true);
             event.put("timestamp", GatewayStore.nowIso());
         } catch (JSONException ignored) {
         }
         String responderMessage = "Kaaka: call from " + (number.isEmpty() ? "hidden number" : number)
-            + " at " + GatewayStore.timeOfDay() + " — " + (rejected ? "rejected" : "allowed") + ", reply " + smsResult;
+            + " at " + GatewayStore.timeOfDay() + " — " + (rejected ? "rejected" : "allowed") + ", reply " + smsResult
+            + (number.isEmpty() ? "" : "\nReply ACK " + number + " to confirm.");
         GatewayStore.notifyResponders(context, responderMessage, number, event);
         GatewayStore.appendEvent(context, event);
 
@@ -36,14 +42,15 @@ final class CallHandler {
             payload.put("state", rejected ? "rejected" : "allowed");
             payload.put("sms", smsResult);
             payload.put("timestamp", event.optString("timestamp"));
+            if (!token.isEmpty()) payload.put("token", token);
         } catch (JSONException ignored) {
         }
         GatewayStore.postToDashboard(context, "/api/call-event", payload);
     }
 
     /** Returns "sent", "failed" or "skipped" (hidden/unknown number: never texts a fallback). */
-    private static String sendReply(Context context, String number) {
+    private static String sendReply(Context context, String number, String locationLink) {
         if (number.isEmpty()) return "skipped";
-        return GatewayStore.sendSms(context, number, GatewayStore.replyMessage(context)) ? "sent" : "failed";
+        return GatewayStore.sendSms(context, number, GatewayStore.replyMessage(context) + locationLink) ? "sent" : "failed";
     }
 }
