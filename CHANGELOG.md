@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T01:00:00+05:30 — Safety timer in Kaaka Sensors
+
+- Changed: Client app: new Safety timer card (15/30/60/120 min or custom 1–720) with "I'm safe" check-in and "Extend +15 min"; on expiry a 30-second cancellable countdown then SOS with `• Trigger: safety timer`. The deadline is stored locally so an expiry while the app was closed triggers the countdown on reopen (ignored after 12 h). `emergencyService.svelte.ts` rewritten around one shared countdown (fall and timer never stack), de-duplicated SOS presses, and a user stop that clears all timers. README documents foreground limits. Rebuilt `client/KaakaSensors.apk`.
+- Why: Lone travel / walking home — help should be raised when the user cannot.
+- Validation: `npx svelte-check` 0 errors/0 warnings; web build, `cap sync`, `assembleDebug` succeeded; APK contains the new strings.
+- Limitations: No device run; no local-notification plugin, so the timer fires only while the app is open or on reopen. No unit test runner in the client.
+
 ## 2026-10-25T00:40:00+05:30 — Prototype integration check, plan status and test checklist
 
 - Changed: `docs/PLAN.md` updated with the complete flow (call screening and contact fallback, 112 reply, location link, responder SMS and ACK, Kaaka Sensors SOS/fall, incidents, heartbeat) and the current status; new `docs/TESTING.md` device test checklist; README links it. Mac dashboard restarted on the new code.

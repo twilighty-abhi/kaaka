@@ -16,7 +16,7 @@ function loadDuration(): number {
 	}
 }
 
-export type BeaconTrigger = "manual" | "sos" | "fall" | "gateway reply";
+export type BeaconTrigger = "manual" | "sos" | "fall" | "safety timer" | "gateway reply";
 
 export class TelemetryBeaconService {
 	// Svelte 5 runes for reactive state
@@ -35,6 +35,9 @@ export class TelemetryBeaconService {
 	endsAt = $state<number | null>(null);
 	/** Why the beacon was started; included in every report. */
 	trigger = $state<BeaconTrigger>("manual");
+
+	/** Called when the user stops the beacon (not when it ends by itself), e.g. to clear SOS timers. */
+	onStoppedByUser: (() => void) | null = null;
 
 	private countdownTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -174,7 +177,7 @@ export class TelemetryBeaconService {
 		this.countdownTimer = setInterval(() => {
 			if (!this.isActive) return;
 			if (this.endsAt && Date.now() >= this.endsAt) {
-				this.stopBeacon(`Beacon finished after ${this.durationMinutes} min.`);
+				this.stopBeacon(`Beacon finished after ${this.durationMinutes} min.`, false);
 				return;
 			}
 			if (this.secondsRemaining > 1) {
@@ -186,7 +189,7 @@ export class TelemetryBeaconService {
 		}, 1000);
 	}
 
-	stopBeacon(reason = "Telemetry beacon stopped.") {
+	stopBeacon(reason = "Telemetry beacon stopped.", byUser = true) {
 		this.isActive = false;
 		this.endsAt = null;
 		if (this.countdownTimer) {
@@ -198,6 +201,7 @@ export class TelemetryBeaconService {
 			type: "info",
 			text: `${reason} Total updates sent: ${this.updatesSentCount}`
 		};
+		if (byUser) this.onStoppedByUser?.();
 	}
 }
 
