@@ -112,7 +112,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, f"Error loading dashboard: {e}")
         elif self.path == "/api/status":
-            phone_clients = [str(c.remote_address[0]) for c in self.server_instance.connected_clients if str(c.remote_address[0]) != '127.0.0.1']
+            phone_clients = self.server_instance.phone_client_ips()
             bt_connected = self.server_instance.check_bluetooth_connected()
             telephony_ag_online = self.server_instance.check_telephony_ag_online()
             gateway_online = (bt_connected and telephony_ag_online) or (len(phone_clients) > 0)
@@ -407,6 +407,13 @@ class TelemetryServer:
                 dead_clients.add(client)
         self.connected_clients -= dead_clients
 
+    def is_local_ip(self, ip) -> bool:
+        """Connections from this machine (e.g. the dashboard in a local browser) are not phones."""
+        return ip in ("127.0.0.1", "::1", self.local_ip)
+
+    def phone_client_ips(self):
+        return sorted({str(c.remote_address[0]) for c in self.connected_clients if not self.is_local_ip(str(c.remote_address[0]))})
+
     def is_client_sender(self, sender) -> bool:
         """True if sender matches the configured client phone number (--client-number)."""
         return bool(self.client_suffix) and self.client_suffix in re.sub(r"\D", "", str(sender))
@@ -447,11 +454,14 @@ class TelemetryServer:
             print(f"  👤 Contact Name : {name}")
         print(f"  ⚡ Call State   : {state}")
 
-        phone_clients = [str(c.remote_address[0]) for c in self.connected_clients if str(c.remote_address[0]) != '127.0.0.1']
+        phone_clients = self.phone_client_ips()
         if phone_clients:
             print(f"  📶 Gateway App Link : \033[1;32mConnected ({', '.join(phone_clients)})\033[0m")
         else:
-            print(f"  ℹ️ Phone A Gateway App is in background/standby" + (" (no MAP on macOS: SMS needs the Gateway app)" if IS_MAC else " (Direct Bluetooth MAP active)"))
+            if IS_MAC:
+                print("  ⚠️ Gateway App Link : \033[1;33mnot connected — no auto-reply SMS unless the app connects within 45 s\033[0m")
+            else:
+                print("  ℹ️ Gateway App is in background/standby (Direct Bluetooth MAP active)")
         print("=" * 60 + "\n", flush=True)
 
         payload = {
@@ -689,7 +699,7 @@ class TelemetryServer:
         await websocket.send(json.dumps(welcome_payload))
 
         # Replay any recent pending call trigger (<45s old) to newly connected phone
-        if self.pending_call_trigger and client_addr[0] != '127.0.0.1':
+        if self.pending_call_trigger and not self.is_local_ip(client_addr[0]):
             age = time.time() - self.pending_call_trigger.get("timestamp", 0)
             if age < 45:
                 print(f"[{format_timestamp()}] 🚀 Replaying queued call trigger for {self.pending_call_trigger['number']} to Gateway ({client_addr[0]})!")

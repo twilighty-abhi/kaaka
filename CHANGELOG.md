@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-24T21:47:00+05:30 — Count only phones as gateway connections
+
+- Changed: `server/server.py` treats WebSocket clients from this machine (loopback or the server's own IP, e.g. the dashboard in a local browser) as non-phones in the call log, `/api/status` and pending-call replay, and warns on macOS when a call arrives with no gateway app connected.
+- Why: During testing the log said "Gateway App Link: Connected" while only the Mac's own dashboard was connected, hiding why no SMS was sent.
+- Validation: End-to-end test on 2026-10-24 21:44 IST before this change: gateway app on the Galaxy S23 connected over Wi-Fi, incoming call detected with caller number, 1-ring hangup, app confirmed "Auto-sent SMS" and the caller received it. After the change: server restarted, HFP reconnected, `/api/status` no longer lists the local dashboard as a gateway.
+- Limitations: The gateway app only keeps its server connection while it is in the foreground; with the screen off or the app in the background no auto-reply SMS is sent. One test call arrived without a caller number, so no SMS was sent for it (by design).
+
 ## 2026-10-24T21:57:00+05:30 — Add rebuilt Kaaka debug APKs
 
 - Changed: Added `gateway/Kaaka.apk` (`com.kaaka.callapp`, label "Kaaka Call") and `client/KaakaSensors.apk` (`com.kaaka.sensors`, label "KaakaSensors"), debug builds of the previous commit.
