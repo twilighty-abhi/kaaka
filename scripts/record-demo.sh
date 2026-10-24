@@ -3,6 +3,8 @@
 # screenshots), then stitches them side by side into one MP4 with labels.
 #
 # Usage: scripts/record-demo.sh <gateway-adb-serial> <caller-adb-serial> [seconds=170] [dashboard-url]
+# Optional env: DEMO_TAG (appended to panel labels, e.g. "emulated"),
+#               CAPTIONS (file with lines "start_s end_s text" shown in a strip under the video)
 #   adb devices -l   # lists serials
 # Output: demo/kaaka-demo-<timestamp>.mp4 (demo/ is ignored by Git)
 # Needs: adb, ffmpeg, Google Chrome. Phone screen recording stops at 180 s (Android limit).
@@ -79,16 +81,40 @@ label_png() { # $1 text, $2 width, $3 output
 }
 width_at_h() { ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$1" | awk -F, -v h=$H '{w=int($1*h/$2); print w-(w%2)}'; }
 WG=$(width_at_h "$WORK/gateway_n.mp4"); WC=$(width_at_h "$WORK/caller_n.mp4"); WD=$(width_at_h "$WORK/dashboard_n.mp4")
-label_png "Kaaka number (gateway phone)" "$WG" "$WORK/l1.png"
-label_png "Caller (Kaaka Sensors)" "$WC" "$WORK/l2.png"
+TAG="${DEMO_TAG:+ ($DEMO_TAG)}"
+label_png "Kaaka number (gateway)$TAG" "$WG" "$WORK/l1.png"
+label_png "Caller (Kaaka Sensors)$TAG" "$WC" "$WORK/l2.png"
 label_png "Control room (Mac dashboard)" "$WD" "$WORK/l3.png"
 
+# Caption strip: one image per caption (black between captions), concatenated into a video.
+WT=$((WG + WC + WD))
+caption_png() { # $1 text, $2 output
+  local html="data:text/html,<body style='margin:0;background:%23111;color:%23ffd84d;font:600 38px -apple-system,Helvetica;display:flex;align-items:center;justify-content:center;height:110px;text-align:center;padding:0 40px'>$1</body>"
+  "$CHROME" --headless=new --disable-gpu --hide-scrollbars --window-size="$WT,110" --screenshot="$2" "${html// /%20}" >/dev/null 2>&1
+}
+caption_png "" "$WORK/c_blank.png"
+: > "$WORK/captions.txt"
+t=0; n=0
+if [ -n "${CAPTIONS:-}" ] && [ -f "$CAPTIONS" ]; then
+  while read -r start end text; do
+    [ -z "$start" ] && continue
+    if [ "$start" -gt "$t" ]; then printf "file '%s'\nduration %s\n" "$WORK/c_blank.png" $((start - t)) >> "$WORK/captions.txt"; fi
+    caption_png "$text" "$WORK/c$n.png"
+    printf "file '%s'\nduration %s\n" "$WORK/c$n.png" $((end - start)) >> "$WORK/captions.txt"
+    t=$end; n=$((n + 1))
+  done < "$CAPTIONS"
+fi
+if [ "$t" -lt "$SECONDS_TOTAL" ]; then printf "file '%s'\nduration %s\n" "$WORK/c_blank.png" $((SECONDS_TOTAL - t)) >> "$WORK/captions.txt"; fi
+printf "file '%s'\n" "$WORK/c_blank.png" >> "$WORK/captions.txt"
+ffmpeg -loglevel error -y -f concat -safe 0 -i "$WORK/captions.txt" -vf "fps=30,scale=$WT:110,format=yuv420p" -t "$SECONDS_TOTAL" "$WORK/captions.mp4"
+
 ffmpeg -loglevel error -y -i "$WORK/gateway_n.mp4" -i "$WORK/caller_n.mp4" -i "$WORK/dashboard_n.mp4" \
-  -loop 1 -t "$SECONDS_TOTAL" -i "$WORK/l1.png" -loop 1 -t "$SECONDS_TOTAL" -i "$WORK/l2.png" -loop 1 -t "$SECONDS_TOTAL" -i "$WORK/l3.png" -filter_complex "\
+  -loop 1 -t "$SECONDS_TOTAL" -i "$WORK/l1.png" -loop 1 -t "$SECONDS_TOTAL" -i "$WORK/l2.png" -loop 1 -t "$SECONDS_TOTAL" -i "$WORK/l3.png" \
+  -i "$WORK/captions.mp4" -filter_complex "\
 [0:v]scale=$WG:$H,setsar=1[g];[3:v]scale=$WG:80,setsar=1[lg];[lg][g]vstack[a];\
 [1:v]scale=$WC:$H,setsar=1[c];[4:v]scale=$WC:80,setsar=1[lc];[lc][c]vstack[b];\
 [2:v]scale=$WD:$H,setsar=1[d];[5:v]scale=$WD:80,setsar=1[ld];[ld][d]vstack[e];\
-[a][b][e]hstack=inputs=3,format=yuv420p[v]" \
+[a][b][e]hstack=inputs=3[top];[6:v]scale=$WT:110,setsar=1[cap];[top][cap]vstack,format=yuv420p[v]" \
   -map "[v]" -t "$SECONDS_TOTAL" -c:v libx264 -preset veryfast -crf 23 -movflags +faststart "$OUT"
 
 echo "Demo video: $OUT"

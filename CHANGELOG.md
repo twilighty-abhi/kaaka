@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T01:52:02+05:30 — Scripted demo on two emulators; remove leftover sample coordinates
+
+- Changed: New `scripts/demo-emulated.sh` resets two configured emulators and the dashboard, runs the SMS relay and a GPS feed, and performs the scenario (incoming call, reply-triggered location alert, SOS, help SMS, caller stops beacon, dashboard resolve) while `scripts/record-demo.sh` records a captioned side-by-side video. `record-demo.sh` gains an optional caption strip (`CAPTIONS`) and label tag (`DEMO_TAG`). Removed the hardcoded sample coordinates 9.064458, 76.557012 from the dashboard's GPS tile, Maps link and simulated alert and from the server's simulated alerts ("Location: unavailable" instead).
+- Why: A presentable demo of the full flow; the coordinates were leftover real-looking data.
+- Validation: Recorded `demo/kaaka-demo-20261025-014600.mp4` (2164×1470, 165 s): one incident with 1 call, 1 help SMS, 3 location alerts (9.931200, 76.267300), resolved with note; gateway heartbeat shown.
+- Limitations: The phones in the video are emulators and the phone network (call, SMS delivery) and GPS are simulated; headless emulator rendering can show a brief partial frame.
+
 ## 2026-10-25T01:37:01+05:30 — Send the first location report natively when the Kaaka number replies
 
 - Changed: Kaaka Sensors' SMS receiver now sends the first "Kaaka Alert" itself (`NativeAlert.java`): a recent last-known fix or a fresh fix (up to 8 s, via `goAsync`), else "Location: unavailable", in the same report format. Added `READ_PHONE_STATE` (newer Android checks the carrier group ID when apps send SMS: sends failed with `getGroupIdLevel1`) and `ACCESS_BACKGROUND_LOCATION` with a "Location all the time" row in the setup card. Trigger events to the web layer are retained until it subscribes. New `scripts/emulator-network.py` relays SMS between two emulators for demos/tests. Rebuilt `client/KaakaSensors.apk`.
