@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-24T23:05:00+05:30 — Remove hackathon template files
+
+- Changed: Deleted `RULES.md`, `AGENTS.md`, `SUBMISSION.md` and `.github/pull_request_template.md`; README footer now links the project records instead.
+- Why: Requested by the repository owner; these were event template files not used by the project.
+- Validation: `git grep` finds no remaining links to the deleted files outside historical log text.
+- Limitations: None identified.
+
 ## 2026-10-24T21:49:00+05:30 — Poll phone SMS for telemetry every 30 s
 
 - Changed: `server/server.py` ADB telemetry listener now reads the phone's SMS store every 30 s instead of every 1.5 s.
