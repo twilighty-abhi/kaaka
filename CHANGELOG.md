@@ -11,6 +11,13 @@ Record each meaningful project change during the event, newest first. Update thi
 - Validation: Python compile check. Not yet verified against the running server, which must be restarted to pick this up.
 - Limitations: SMS-delivered telemetry can take up to 30 s to reach the dashboard; the client app's direct WebSocket copy is unaffected. If the client app runs on the same phone the server reads, a report can appear twice (WebSocket, then the SMS copy).
 
+## 2026-10-24T22:45:00+05:30 — Add project plan
+
+- Changed: Added `docs/PLAN.md` (system roles for the Mac + S23 setup, emergency flow, current status, next steps, out-of-scope items, repository workflow) and linked it from the README.
+- Why: Record the agreed plan in the repository.
+- Validation: Checked status entries against this changelog; links resolve.
+- Limitations: Status reflects 2026-10-24; real call and telemetry tests on the S23 are still pending.
+
 ## 2026-10-24T22:30:00+05:30 — Gateway app handles calls and alerts on the S23 by itself
 
 - Changed: Kaaka Call (`gateway/`) now has a `CallScreeningService` (`KaakaCallScreeningService.java`) that reads the incoming caller number, rejects the call (setting, on by default; call log and notification kept) and sends the auto-reply SMS natively; hidden numbers get no SMS. `AlertSmsReceiver.java` logs incoming "Kaaka Alert"/"Live Sensors" SMS without being the default SMS app. Events (last 50) and settings live in native storage (`GatewayStore.java`) so everything works with the app closed; `GatewayPlugin.java` exposes them to the rewritten UI, which requests the call-screening role and SMS permissions and shows recent events. Optional dashboard forwarding posts calls to `/api/call-event` and alerts to `/api/telemetry`. Removed the WebSocket `CALL_DETECTED` auto-send path and the `ws://` setting. Rebuilt `gateway/Kaaka.apk`; updated `gateway/README.md`.
