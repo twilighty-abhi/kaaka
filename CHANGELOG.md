@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:24:22+05:30 — Document location links for callers without the app
+
+- Changed: README: new "Location links for callers without the app" section (flow, https requirement, `scripts/public-url.sh`, admin-token requirement, automatic URL from the heartbeat); settings and API tables updated (heartbeat reply, 429 on location updates). `docs/PLAN.md` status and next steps updated.
+- Why: Setup has several moving parts and a safety rule; they need to be written down.
+- Validation: Links and anchors checked by reading; no code change.
+- Limitations: None identified.
+
 ## 2026-10-25T03:23:44+05:30 — Helper to give the dashboard a public https URL
 
 - Changed: `scripts/public-url.sh` checks for cloudflared (prints the brew install command if missing) and for a running dashboard, opens a Cloudflare quick tunnel to the dashboard port, extracts the `https://*.trycloudflare.com` URL and prints the exact next steps (restart with `KAAKA_PUBLIC_URL` and `KAAKA_ADMIN_TOKEN`, set the token in Kaaka Call; the phone learns the URL from the heartbeat).
