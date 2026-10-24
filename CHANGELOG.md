@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:43:06+05:30 — Unit checks for the analytics helpers
+
+- Changed: `server/test_analytics.py` (stdlib `unittest`): a hand-built event list with three callers, a reopened incident, an ACK with no incident and a contact outside the 7-day window; checks KPIs (median/p90 ACK, median close, located %, reply-sent %), outcomes, daily/hourly buckets, the `all` range start, `null`s on an empty log, the bad-range error, responder matching by last 10 digits and the hotspot cell centre.
+- Why: Every analytics number should be checkable by hand.
+- Validation: `python3 -m unittest server/test_analytics.py`: 6 tests OK.
+- Limitations: Uses the machine's local time zone, like the server.
+
 ## 2026-10-25T03:43:06+05:30 — Analytics API: GET /api/analytics
 
 - Changed: New `server/analytics.py` with pure functions over the incident event log (range windows with hourly or daily buckets, incident episodes, linear-interpolated percentiles, responder dispatch/ACK stats, 0.005° hotspot grid). `server/server.py` serves `GET /api/analytics?range=24h|7d|30d|all` (default `7d`, 400 on another value, same admin-token rule as `/api/incidents`). `IncidentStore.events_snapshot()` gives a copy of the event list.
