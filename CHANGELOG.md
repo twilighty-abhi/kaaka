@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:40:00+05:30 — Prototype integration check, plan status and test checklist
+
+- Changed: `docs/PLAN.md` updated with the complete flow (call screening and contact fallback, 112 reply, location link, responder SMS and ACK, Kaaka Sensors SOS/fall, incidents, heartbeat) and the current status; new `docs/TESTING.md` device test checklist; README links it. Mac dashboard restarted on the new code.
+- Why: Record where the prototype stands and give a repeatable on-device test pass.
+- Validation: Checked gateway payload fields against the server contracts; simulated a full incident on spare ports with the gateway's exact payloads (heartbeat, call with token, location page and share, Kaaka Alert in the client's report format, ACK): all 200, all five WebSocket message types received, one incident with call, alert (coords parsed), location and acknowledgement, heartbeat fresh. Test data removed and runtime files restored. Live dashboard serves the incidents panel.
+- Limitations: Real-device tests are still pending (see `docs/TESTING.md`).
+
 ## 2026-10-25T00:25:00+05:30 — Incidents, location sharing page, ACK and admin token on the server
 
 - Changed: `server/incidents.py` keeps incidents grouped by caller (last 10 digits) with calls, alerts (Coords/Maps parsed), shared locations, acknowledgement and latest location, persisted in `server/events.jsonl` (ignored by Git) and reloaded on start. `server/server.py`: `/api/call-event` accepts an optional `token` (24 h); public `GET /l/<token>` serves `server/locate.html` and `POST /api/location` records a caller's browser GPS; `POST /api/ack` marks an incident acknowledged; `GET /api/incidents`; WebSocket broadcasts `LOCATION_SHARED` and `INCIDENT_ACK`. Optional `KAAKA_ADMIN_TOKEN` protects the dashboard, status, incidents, WebSocket and gateway POSTs (header `X-Kaaka-Token`, `?token=` or cookie; constant-time compare), leaving the location page public. `--public-url`/`KAAKA_PUBLIC_URL` for display. Dashboard: incidents panel with Maps links and "awaiting acknowledgement"; feed text inserted with `textContent`. README documents the full API.
