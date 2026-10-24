@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:24:25+05:30 — Gateway: dispatch SMS wording
+
+- Changed: `GatewayText.dispatchMessage` formats the text sent to a dispatched responder ("Kaaka dispatch: you are the nearest responder (1.2 km, ~3 min) to <caller>. Location: <maps> Reply ACK <caller> to confirm."); "Kaaka dispatch:" is added to the app's own-message list so such a text arriving at another gateway is never read as a help request.
+- Why: Responders picked by the dashboard must be told clearly and consistently.
+- Validation: `./gradlew testDebugUnitTest`: GatewayTextTest 12/12 (new test covers the format, empty caller/maps fallbacks and the own-message exclusion).
+- Limitations: Wording is English only.
+
 ## 2026-10-25T03:22:52+05:30 — Dispatch the nearest responders when an incident gets a location
 
 - Changed: The first time an open incident has a location (an alert with coordinates via `/api/telemetry`, or a share via `/api/location`), the server picks the 1–2 nearest available responders, records a `dispatch` event in `events.jsonl` (`dispatched` on the incident), broadcasts `RESPONDER_DISPATCHED`, notifies, and returns `dispatch: [{name, number, distance_km, eta_min, maps_url}]` in the `/api/telemetry` response so the gateway app can text them. Later reports of the same open incident do not dispatch again; resolving clears the dispatch so a reopened incident gets a fresh one.
