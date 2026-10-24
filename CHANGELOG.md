@@ -11,6 +11,13 @@ Record each meaningful project change during the event, newest first. Update thi
 - Validation: Python compile check. Not yet verified against the running server, which must be restarted to pick this up.
 - Limitations: SMS-delivered telemetry can take up to 30 s to reach the dashboard; the client app's direct WebSocket copy is unaffected. If the client app runs on the same phone the server reads, a report can appear twice (WebSocket, then the SMS copy).
 
+## 2026-10-24T22:07:00+05:30 — Allow the client app to reach the Mac server over plain HTTP/WebSocket
+
+- Changed: `client/capacitor.config.ts` serves the app over `http` with cleartext allowed, and `client/android/app/src/main/AndroidManifest.xml` sets `usesCleartextTraffic="true"`.
+- Why: The client app talks to the Mac server at `ws://<mac-ip>:8765` and `http://<mac-ip>:8080` on the local network; an https page blocks these as mixed content and Android blocks cleartext by default.
+- Validation: Included in the client APK built and installed on the Galaxy S23 in the previous commit. These edits appeared in the working tree at 21:57 IST after the Android rebuild task and were reviewed before committing.
+- Limitations: Traffic between the phone and the Mac is unencrypted on the local network.
+
 ## 2026-10-24T22:05:00+05:30 — Stream live sensor readings to the dashboard
 
 - Changed: `server/server.py` accepts the client app's sensor JSON on `POST /api/telemetry` (port 8080), formats it as a "Kaaka Live" report and broadcasts it to the dashboard without a console banner or disk write per reading; added a CORS preflight (`OPTIONS`) handler. Client app: backend sync is on by default and runs whenever Settings → Telemetry backend is set (the UI had no switch for it, so it never ran); placeholder now `http://<mac-ip>:8080`. Rebuilt `client/KaakaSensors.apk`.
