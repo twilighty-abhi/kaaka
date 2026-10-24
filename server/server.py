@@ -88,6 +88,21 @@ SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DATA_DIR = os.environ.get("KAAKA_DATA_DIR") or SERVER_DIR
 
 
+def read_version():
+    """Release version from the VERSION file at the repository root ("unknown" if missing)."""
+    try:
+        with open(os.path.join(SERVER_DIR, "..", "VERSION"), "r", encoding="utf-8") as f:
+            return f.read().strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+VERSION = read_version()
+
+# Sent with every HTTP response. Cache-Control: no-store is added for /admin and /api/* (see DashboardHandler).
+SECURITY_HEADERS = (("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "no-referrer"), ("X-Frame-Options", "DENY"))
+
+
 def write_json_atomic(path, obj, indent=None):
     """Write JSON to a temp file in the same directory and rename it over `path`, so a crash
     or a concurrent reader never sees a half-written file."""
@@ -246,6 +261,21 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         # Suppress routine HTTP request logging to keep console clean
         pass
 
+    def send_header(self, keyword, value):
+        if keyword.lower() == "cache-control":
+            self._cache_control_sent = True
+        super().send_header(keyword, value)
+
+    def end_headers(self):
+        """Security headers on every response; no caching of the dashboard and API (they carry caller data)."""
+        for name, value in SECURITY_HEADERS:
+            super().send_header(name, value)
+        path = urlparse(self.path).path if self.path else ""
+        if not getattr(self, "_cache_control_sent", False) and (path == "/admin" or path.startswith("/api/")):
+            super().send_header("Cache-Control", "no-store")
+        self._cache_control_sent = False
+        super().end_headers()
+
     def send_json(self, status, obj):
         body = json.dumps(obj).encode("utf-8")
         self.send_response(status)
@@ -335,6 +365,12 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         if path in ("/", "/index.html"):
             self.serve_landing_page()  # public: what Kaaka is; the dashboard lives at /admin
             return
+        if path == "/api/health":
+            # Public liveness probe for load balancers / containers: nothing sensitive in here.
+            self.send_json(200, {"ok": True, "version": VERSION,
+                                 "uptime_seconds": int(time.time() - self.server_instance.started_epoch),
+                                 "gateway_online": self.server_instance.gateway_online()})
+            return
         if path == "/admin/":
             self.send_response(301)
             self.send_header("Location", "/admin" + (("?" + parsed.query) if parsed.query else ""))
@@ -419,7 +455,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             phone_clients = self.server_instance.phone_client_ips()
             bt_connected = self.server_instance.check_bluetooth_connected()
             telephony_ag_online = self.server_instance.check_telephony_ag_online()
-            gateway_online = (bt_connected and telephony_ag_online) or (len(phone_clients) > 0)
+            gateway_online = self.server_instance.gateway_online(phone_clients, bt_connected, telephony_ag_online)
             if not self.server_instance.bt_enabled:
                 gateway_mode = "gateway_app"
             else:
@@ -1133,6 +1169,16 @@ class TelemetryServer:
         if self.loop:
             asyncio.run_coroutine_threadsafe(self.broadcast({"type": "GATEWAY_HEARTBEAT", **self.last_heartbeat}), self.loop)
         self.check_gateway_stale()
+
+    def gateway_online(self, phone_clients=None, bt_connected=None, telephony_ag_online=None) -> bool:
+        """A gateway phone is reachable: Bluetooth handsfree + telephony up, or a phone app on the WebSocket."""
+        if phone_clients is None:
+            phone_clients = self.phone_client_ips()
+        if bt_connected is None:
+            bt_connected = self.check_bluetooth_connected()
+        if telephony_ag_online is None:
+            telephony_ag_online = self.check_telephony_ag_online()
+        return bool((bt_connected and telephony_ag_online) or len(phone_clients) > 0)
 
     def is_local_ip(self, ip) -> bool:
         """Connections from this machine (e.g. the dashboard in a local browser) are not phones."""
