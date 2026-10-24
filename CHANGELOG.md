@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:20:28+05:30 — Location page keeps sharing while open
+
+- Changed: `server/locate.html`: after the first successful share it watches the position and sends an update at most every 15 s, shows "Sharing live location · N updates" and a "Stop sharing" button; 429 replies (sent too soon) are skipped silently. The https warning stays. Plain HTML/JS, no external scripts.
+- Why: A moving caller's position should keep flowing without them pressing the button again.
+- Validation: Script syntax parsed with Node; page still served (200) in the earlier spare-port test. Not opened in a real phone browser.
+- Limitations: Browser geolocation needs an https origin; the page says so when it is not.
+
 ## 2026-10-25T03:19:48+05:30 — Heartbeat returns the public URL; location updates rate-limited
 
 - Changed: `POST /api/heartbeat` now replies `{"success": true, "public_url": "..."}` (empty when no public URL is configured). `POST /api/location` accepts at most one update per link token every 10 s and answers 429 otherwise.
