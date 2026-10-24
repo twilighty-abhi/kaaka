@@ -26,8 +26,15 @@ import shutil
 import threading
 import subprocess
 from datetime import datetime
-import dbus
 import requests
+
+IS_MAC = sys.platform == "darwin"
+MAC_UNSUPPORTED_STATUS = "unsupported on macOS (IOBluetooth SCO audio unsupported)"
+
+try:
+    import dbus  # Linux-only (PipeWire / oFono telephony)
+except ImportError:
+    dbus = None
 
 PRIMARY_WEBHOOK_URL = "http://192.168.2.69:5678/webhook-test/passive"
 FALLBACK_WEBHOOK_URL = "http://192.168.2.69:5678/webhook/passive"
@@ -39,6 +46,8 @@ def format_timestamp():
 
 def is_call_active():
     """Checks strictly if a phone call is currently active on Redmi Note 10 via PipeWire / oFono."""
+    if IS_MAC or dbus is None:
+        return False
     # Check 1: D-Bus oFono VoiceCallManager on PipeWire Telephony
     try:
         bus = dbus.SessionBus()
@@ -62,6 +71,8 @@ def is_call_active():
 
 def ensure_audio_sinks():
     """Ensures call_playback and call_record null-sinks exist in PulseAudio/PipeWire and are linked to laptop audio."""
+    if IS_MAC:
+        return
     try:
         sinks = subprocess.getoutput('pactl list sinks short')
         for name, desc in [('call_playback', 'KaakaCallPlayback'), ('call_record', 'KaakaCallRecord')]:
@@ -80,6 +91,8 @@ def link_call_audio(max_wait_sec=2.5):
     1. AI response + operator mic -> Cellular call (caller hears both AI reply and operator speaking).
     2. Incoming caller voice -> Laptop speakers (operator hears caller) + call_record sink (for pure 10s chunk recording).
     """
+    if IS_MAC:
+        return False
     ensure_audio_sinks()
     start_time = time.time()
     linked = False
@@ -159,7 +172,7 @@ class AudioConversationBridge:
         self.thread = None
         self.record_proc = None
         self.chunk_count = 0
-        self.last_status = "idle (no active call)"
+        self.last_status = MAC_UNSUPPORTED_STATUS if IS_MAC else "idle (no active call)"
         self.last_transcript = ""
         self.last_ai_reply = ""
         self.last_chunk_time = None
@@ -345,6 +358,11 @@ class AudioConversationBridge:
             time.sleep(0.5)
 
     def start(self):
+        if IS_MAC:
+            self.is_running = False
+            self.last_status = MAC_UNSUPPORTED_STATUS
+            self.log(f"ℹ️ Audio conversation bridge {MAC_UNSUPPORTED_STATUS}. Call audio stays on the phone.")
+            return
         if self.is_running:
             return
         if not is_call_active():
@@ -358,7 +376,7 @@ class AudioConversationBridge:
     def stop(self):
         self.is_running = False
         self.call_in_progress = False
-        self.last_status = "idle (no active call on Redmi Note 10)"
+        self.last_status = MAC_UNSUPPORTED_STATUS if IS_MAC else "idle (no active call on Redmi Note 10)"
         if self.record_proc:
             try:
                 self.record_proc.kill()

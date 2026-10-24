@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.kaaka.hfp-bridge</string>
+    <key>CFBundleName</key>
+    <string>hfp-bridge</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>hfp-bridge connects to the gateway phone as a Bluetooth hands-free unit to detect, answer and hang up calls.</string>
+</dict>
+</plist>
