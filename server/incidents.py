@@ -199,4 +199,6 @@ class IncidentStore:
                     inc[field] = None
             inc.pop("_last_activity")
             inc["status"] = "resolved" if inc["resolved"] else "acknowledged" if inc["acknowledged"] else "open"
+            # The caller texted SAFE (gateway resolves with by="caller").
+            inc["closed_by_caller"] = bool(inc["resolved"]) and inc["resolved"].get("by") == "caller"
         return groups

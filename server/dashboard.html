@@ -433,6 +433,10 @@
     .badge.resolved {
       color: var(--text-dim);
     }
+    .badge.safe {
+      color: var(--ok, #4cc28a);
+      border-color: var(--ok, #4cc28a);
+    }
 
     .incident-help {
       color: var(--text-bright);
@@ -826,7 +830,9 @@ awaiting emergency trigger from client or gateway...</div>
       addFeedItem(`incident for ${msg.number} acknowledged by ${msg.responder || 'a responder'}`);
       refreshIncidents();
     } else if (msg.type === 'INCIDENT_RESOLVED') {
-      addFeedItem(`incident for ${msg.number} resolved by ${msg.by || 'someone'}` + (msg.note ? `: ${msg.note}` : ''));
+      addFeedItem(msg.by === 'caller'
+        ? `${msg.number} reported safe — incident closed`
+        : `incident for ${msg.number} resolved by ${msg.by || 'someone'}` + (msg.note ? `: ${msg.note}` : ''));
       refreshIncidents();
     } else if (msg.type === 'GATEWAY_STALE') {
       addFeedItem(msg.stale ? `gateway phone silent (last seen ${msg.last_seen || 'never'})` : 'gateway phone back online', msg.stale);
@@ -1173,7 +1179,8 @@ awaiting emergency trigger from client or gateway...</div>
 
     const head = el('div', 'incident-head');
     const title = el('span', 'incident-actions');
-    title.append(el('span', 'badge ' + status, status), el('span', '', inc.number || 'hidden number'));
+    const badgeText = inc.closed_by_caller ? 'safe' : status;
+    title.append(el('span', 'badge ' + status + (inc.closed_by_caller ? ' safe' : ''), badgeText), el('span', '', inc.number || 'hidden number'));
     head.append(title, el('span', 'incident-meta', 'last activity ' + inc.last_seen));
     item.append(head);
 
@@ -1207,7 +1214,9 @@ awaiting emergency trigger from client or gateway...</div>
 
     const footer = el('div', 'incident-actions');
     let state;
-    if (status === 'resolved') {
+    if (inc.closed_by_caller) {
+      state = 'closed by caller · reported safe at ' + inc.resolved.timestamp;
+    } else if (status === 'resolved') {
       state = 'resolved by ' + (inc.resolved.by || 'someone') + ' at ' + inc.resolved.timestamp + (inc.resolved.note ? ': ' + inc.resolved.note : '');
     } else if (status === 'acknowledged') {
       state = 'acknowledged by ' + (inc.acknowledged.responder || 'a responder') + ' at ' + inc.acknowledged.timestamp;

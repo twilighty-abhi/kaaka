@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T03:24:11+05:30 — Dashboard shows incidents closed by the caller
+
+- Changed: `/api/incidents` adds `closed_by_caller` (true when the incident was resolved with `by: "caller"`). The dashboard shows a green "safe" badge and "closed by caller · reported safe at …"; the feed and the macOS notification say "Caller reported safe". A later call, help SMS or alert reopens the incident as before.
+- Why: Responders should see at a glance that the caller ended the alert themselves.
+- Validation: `py_compile`; spare-port run: call → open; resolve by caller → resolved with `closed_by_caller: true`; new call → open again; responder resolve → resolved with `closed_by_caller: false`; console shows "Caller … reported safe — incident closed".
+- Limitations: Dashboard rendering not checked in a browser.
+
 ## 2026-10-25T03:24:11+05:30 — "I'm safe" button in Kaaka Sensors
 
 - Changed: While the beacon runs or a countdown is active, the SOS card shows "I'm safe — close my alert". It stops the beacon, cancels any countdown and the safety timer, texts SAFE to the gateway number and shows the real send result (`emergencyService.reportSafe`).
