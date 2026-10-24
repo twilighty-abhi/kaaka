@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T00:46:25+05:30 — Fix Kaaka Sensors default-SMS request loop (root cause of the frozen UI)
+
+- Changed: `client/.../MainActivity.java` no longer requests the default-SMS role in `onResume`; the role is requested only from the receiver screen's button (`DefaultSmsPlugin.requestDefaultSms`). Removed the unused helper and imports. Rebuilt `client/KaakaSensors.apk`.
+- Why: After the user declined the role permanently, Android denied each request instantly, the activity resumed and requested again: logcat showed 170 `REQUEST_ROLE` starts in 8 s. The repeated pause/resume and status-bar inset changes swallowed touches and kept the WebView redrawing.
+- Validation: On the Xiaomi (Android 13) after reinstall: 0 role-request starts in 8 s, 13 frames rendered in 8 s with 0 janky (was ~36 frames/s, 35–50% janky), app CPU ~16%.
+- Limitations: Users who want the automatic beacon trigger must open the receiver screen and tap the default-SMS button.
+
 ## 2026-10-25T00:43:59+05:30 — Reduce Kaaka Sensors rendering load
 
 - Changed: Removed `backdrop-blur` from all client cards, sticky header and fixed footer, the always-pulsing blurred glow, and the per-update bar transitions; location state is now updated with the other on-screen values (at most every 200 ms) instead of on every sample. Rebuilt `client/KaakaSensors.apk`.

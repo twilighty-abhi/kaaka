@@ -1,6 +1,5 @@
 package com.kaaka.sensors;
 
-import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioAttributes;
@@ -9,7 +8,6 @@ import android.os.Bundle;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
-import android.provider.Telephony;
 import android.util.Log;
 import android.view.WindowManager;
 import androidx.core.view.WindowCompat;
@@ -19,7 +17,6 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "MainActivity";
-    private static final int SMS_ROLE_REQUEST_CODE = 1001;
     private static long lastProcessedSmsTime = 0;
 
     @Override
@@ -38,7 +35,9 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         hideStatusBar();
-        checkAndRequestDefaultSms();
+        // Do not request the default-SMS role here: if the user declined it permanently, Android
+        // denies instantly, onResume runs again and the request loops (~20/s), freezing the UI.
+        // The receiver screen has an explicit button for it (DefaultSmsPlugin.requestDefaultSms).
         processIntent(getIntent());
     }
 
@@ -134,28 +133,5 @@ public class MainActivity extends BridgeActivity {
             WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         );
-    }
-
-    private void checkAndRequestDefaultSms() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                RoleManager roleManager = getSystemService(RoleManager.class);
-                if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_SMS)) {
-                    if (!roleManager.isRoleHeld(RoleManager.ROLE_SMS)) {
-                        Intent intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS);
-                        startActivityForResult(intent, SMS_ROLE_REQUEST_CODE);
-                    }
-                }
-            } else {
-                String defaultSms = Telephony.Sms.getDefaultSmsPackage(this);
-                if (!getPackageName().equals(defaultSms)) {
-                    Intent intent = new Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT);
-                    intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, getPackageName());
-                    startActivityForResult(intent, SMS_ROLE_REQUEST_CODE);
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "checkAndRequestDefaultSms error", e);
-        }
     }
 }
