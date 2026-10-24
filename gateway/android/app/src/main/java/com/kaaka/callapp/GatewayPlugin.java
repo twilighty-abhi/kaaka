@@ -22,7 +22,12 @@ import org.json.JSONException;
 @CapacitorPlugin(
     name = "Gateway",
     permissions = {
-        @Permission(strings = { Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS }, alias = "sms")
+        @Permission(strings = { Manifest.permission.SEND_SMS, Manifest.permission.RECEIVE_SMS }, alias = "sms"),
+        // Fallback for calls from saved contacts (Android skips call screening for those).
+        @Permission(
+            strings = { Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG, Manifest.permission.ANSWER_PHONE_CALLS },
+            alias = "calls"
+        )
     }
 )
 public class GatewayPlugin extends Plugin {
@@ -40,6 +45,7 @@ public class GatewayPlugin extends Plugin {
         result.put("screeningRole", available && rm.isRoleHeld(RoleManager.ROLE_CALL_SCREENING));
         result.put("sendSms", getContext().checkSelfPermission(Manifest.permission.SEND_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED);
         result.put("receiveSms", getContext().checkSelfPermission(Manifest.permission.RECEIVE_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED);
+        result.put("contactCalls", getPermissionState("calls") == PermissionState.GRANTED);
         return result;
     }
 
@@ -79,6 +85,20 @@ public class GatewayPlugin extends Plugin {
 
     @PermissionCallback
     private void smsPermsCallback(PluginCall call) {
+        call.resolve(status());
+    }
+
+    @PluginMethod
+    public void requestCallPermissions(PluginCall call) {
+        if (getPermissionState("calls") == PermissionState.GRANTED) {
+            call.resolve(status());
+        } else {
+            requestPermissionForAlias("calls", call, "callPermsCallback");
+        }
+    }
+
+    @PermissionCallback
+    private void callPermsCallback(PluginCall call) {
         call.resolve(status());
     }
 

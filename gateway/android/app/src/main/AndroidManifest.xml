@@ -35,6 +35,15 @@
             </intent-filter>
         </service>
 
+        <!-- Detects incoming calls from saved contacts, which Android does not pass to call screening. -->
+        <receiver
+            android:name=".IncomingCallReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
+
         <!-- Reads incoming SMS to log Kaaka sensor alerts (not the default SMS app). -->
         <receiver
             android:name=".AlertSmsReceiver"
@@ -62,6 +71,10 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!-- Fallback for calls from saved contacts, which Android does not pass to call screening -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
 
     <!-- Package Visibility for Dialing, Direct Call, and SMS (Android 11+) -->
     <queries>

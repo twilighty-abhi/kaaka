@@ -16,6 +16,7 @@ Use Codex during the hackathon and briefly document its actual contribution here
 | 2026-10-24T22:20:00+05:30 | Claude Code (Claude Opus 5.5), sub-agent | Restrict client beacon trigger | Changed native and JS SMS trigger to gateway-number-only, settings wording, client README, rebuilt APK | Security issue flagged to Abhiram N J; fix requested as part of the unified setup | svelte-check clean; APK built; on-device test pending |
 | 2026-10-24T22:25:00+05:30 | Claude Code (Claude Opus 5.5), sub-agent | Server dashboard mode for S23 gateway | Optional Bluetooth, `/api/call-event`, dashboard event display, README unified setup | Mac + S23 design chosen by Abhiram N J | Spare-port server tests passed; device test pending |
 | 2026-10-24T22:30:00+05:30 | Claude Code (Claude Opus 5.5), sub-agent | Self-contained S23 gateway | Native call screening, auto-reply SMS, alert SMS receiver, event log, dashboard forwarding, rewritten gateway UI, rebuilt APK | S23-as-gateway design chosen by Abhiram N J; on-device approvals pending | svelte-check clean; build and install verified; real call pending |
+| 2026-10-24T23:17:00+05:30 | Claude Code (Claude Opus 5.5) | Diagnose and fix contact calls not detected | Read Telecom call history on the S23 (screening skipped for contacts); added phone-state fallback, shared call handler, dedupe, permission UI | Fallback approach chosen by Abhiram N J | Build and install verified; real call pending |
 
 ## Template preparation
 
