@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DirectSmsPlugin.class);
         registerPlugin(DirectCallPlugin.class);
+        registerPlugin(GatewayPlugin.class);
         super.onCreate(savedInstanceState);
         
         hideStatusBar();

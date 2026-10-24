@@ -25,6 +25,26 @@
 
         </activity>
 
+        <!-- Screens incoming calls on this phone (needs the call screening role, Android 10+). -->
+        <service
+            android:name=".KaakaCallScreeningService"
+            android:permission="android.permission.BIND_SCREENING_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService" />
+            </intent-filter>
+        </service>
+
+        <!-- Reads incoming SMS to log Kaaka sensor alerts (not the default SMS app). -->
+        <receiver
+            android:name=".AlertSmsReceiver"
+            android:permission="android.permission.BROADCAST_SMS"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -41,6 +61,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
     <!-- Package Visibility for Dialing, Direct Call, and SMS (Android 11+) -->
     <queries>
