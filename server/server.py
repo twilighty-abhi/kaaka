@@ -37,11 +37,27 @@ import websockets
 
 IS_MAC = sys.platform == "darwin"
 
-if not IS_MAC:
-    # Linux-only: BlueZ / PipeWire / oFono over D-Bus
-    import dbus
-    from dbus.mainloop.glib import DBusGMainLoop
-    from gi.repository import GLib
+# Linux-only: BlueZ / PipeWire / oFono over D-Bus. Imported lazily by load_linux_dbus() when --bt-mac
+# is set, so the server starts on plain Linux / in a container with only `websockets` installed.
+dbus = None
+DBusGMainLoop = None
+GLib = None
+
+
+def load_linux_dbus():
+    """Import python-dbus and PyGObject (GLib) into this module; exits with a clear message if missing."""
+    global dbus, DBusGMainLoop, GLib
+    if dbus is not None:
+        return
+    try:
+        import dbus as _dbus
+        from dbus.mainloop.glib import DBusGMainLoop as _DBusGMainLoop
+        from gi.repository import GLib as _GLib
+    except ImportError as e:
+        sys.exit(f"--bt-mac on Linux needs the D-Bus/GLib bindings (missing: {e.name or e}). "
+                 "Install them with: sudo apt install python3-dbus python3-gi  (Debian/Ubuntu), "
+                 "or run without --bt-mac so the gateway app reports calls over HTTP.")
+    dbus, DBusGMainLoop, GLib = _dbus, _DBusGMainLoop, _GLib
 
 try:
     from server.audio_bridge import AudioConversationBridge, ensure_audio_sinks
@@ -753,6 +769,8 @@ class TelemetryServer:
         self.audio_bridge = AudioConversationBridge(on_event=self.on_audio_bridge_event)
         # Without --bt-mac the phone's gateway app handles calls and reports them via /api/call-event.
         self.bt_enabled = bool(bt_mac)
+        if self.bt_enabled and not IS_MAC:
+            load_linux_dbus()
         self.last_gateway_event = None
         self.last_heartbeat = None  # latest POST /api/heartbeat from the gateway phone
         self.location_last_accepted = {}  # token -> epoch of the last accepted /api/location update
@@ -1182,6 +1200,9 @@ class TelemetryServer:
 
         def _answer():
             time.sleep(0.5)  # 500ms allows 1 ring setup and caller ID capture
+            if dbus is None:
+                print(f"[{format_timestamp()}] ℹ️ Simulated call test (no Bluetooth telephony: --bt-mac not set). Nothing to answer.")
+                return
             bus = dbus.SessionBus()
             answered = False
 
@@ -1239,6 +1260,9 @@ class TelemetryServer:
 
         def _hangup():
             time.sleep(0.4)  # 400ms allows 1 clean ring and caller ID capture
+            if dbus is None:
+                print(f"[{format_timestamp()}] ℹ️ Hangup skipped (no Bluetooth telephony: --bt-mac not set).")
+                return
             bus = dbus.SessionBus()
             hung_up = False
 
@@ -1305,8 +1329,8 @@ class TelemetryServer:
 
     def push_sms_via_bluetooth_map(self, target_number: str, message_text: str = "received call. will get back to you shortly."):
         """Pushes an SMS directly to Phone A via BlueZ MAP to send over cellular SIM."""
-        if IS_MAC:
-            return  # No MAP client on macOS; the Gateway app sends the SMS on CALL_DETECTED.
+        if IS_MAC or dbus is None:
+            return  # No MAP client on macOS / without --bt-mac; the Gateway app sends the SMS on CALL_DETECTED.
         try:
             bus = dbus.SessionBus()
             if not self.map_session_path:
