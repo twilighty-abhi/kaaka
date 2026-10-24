@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T01:13:30+05:30 — Report the real SMS send result in Kaaka Sensors
+
+- Changed: `DirectSmsPlugin` sends through the phone's default SMS SIM (`createForSubscriptionId`) and resolves only after the sent-PendingIntent results for all parts arrive; failures are rejected with a readable reason (no service, radio off, network rejected, limit), and a 30 s timeout reports an unconfirmed send. Rebuilt `client/KaakaSensors.apk`.
+- Why: Device test: the SOS card showed "SOS sent … sent #2" while the Xiaomi's sent box and the S23's inbox had no message — the plugin resolved immediately with no sent callback, so silent failures looked like success.
+- Validation: `assembleDebug`; installed on the Xiaomi. SOS could not be pressed over adb (MIUI blocks input injection), so the send result is to be checked by hand.
+- Limitations: Delivery reports (receipt by the S23) are not tracked, only the send result.
+
 ## 2026-10-25T01:09:31+05:30 — Setup checklist in Kaaka Sensors (all permissions in one place)
 
 - Changed: New `KaakaSetupPlugin` (status of SMS send/receive, location, notifications, physical activity, battery exemption; `requestAll`; battery-exemption request; opens the MIUI permission editor or the app settings page) and a "Finish setup" card at the top of the main screen with "Allow all", "Exempt" and "Open phone settings". Missing permissions are requested once per app start, never in a loop. Added `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. The separate receive-SMS row in Settings is replaced by this card. Rebuilt `client/KaakaSensors.apk`.
