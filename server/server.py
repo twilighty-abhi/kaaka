@@ -27,15 +27,27 @@ import tempfile
 import threading
 import time
 from datetime import datetime
-import dbus
-from dbus.mainloop.glib import DBusGMainLoop
-from gi.repository import GLib
+import subprocess
 import websockets
+
+IS_MAC = sys.platform == "darwin"
+
+if not IS_MAC:
+    # Linux-only: BlueZ / PipeWire / oFono over D-Bus
+    import dbus
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import GLib
 
 try:
     from server.audio_bridge import AudioConversationBridge, ensure_audio_sinks
 except ImportError:
     from audio_bridge import AudioConversationBridge, ensure_audio_sinks
+
+if IS_MAC:
+    try:
+        from server.mac_telephony import HfpBridgeClient
+    except ImportError:
+        from mac_telephony import HfpBridgeClient
 
 def get_local_ip():
     """Detect the local LAN / Wi-Fi IP address."""
@@ -247,9 +259,29 @@ class TelemetryServer:
         self.processed_msg_ids = set()
         self.map_session_path = None
         self.pending_call_trigger = None
-        self.auto_answer_mode = True  # Real-time voice AI conversation enabled
-        ensure_audio_sinks()
+        # Real-time voice AI conversation enabled on Linux. On macOS there is no call audio
+        # (IOBluetooth refuses SCO), so default to 1-ring hangup mode; the toggle still works.
+        self.auto_answer_mode = not IS_MAC
+        if not IS_MAC:
+            ensure_audio_sinks()
         self.audio_bridge = AudioConversationBridge(on_event=self.on_audio_bridge_event)
+        self.hfp = None
+        if IS_MAC:
+            self.hfp = HfpBridgeClient(
+                bt_mac,
+                on_incoming_call=self.on_mac_incoming_call,
+                on_call_active=lambda: print(f"[{format_timestamp()}] 📞 Call active (answered).", flush=True),
+                on_call_ended=self.on_mac_call_ended,
+                log=lambda m: print(f"[{format_timestamp()}] {m}", flush=True),
+            )
+
+    def on_mac_incoming_call(self, number, name=""):
+        """hfp-bridge incoming_call event (macOS)."""
+        self.on_call_detected(number, name=name, state="incoming")
+
+    def on_mac_call_ended(self):
+        print(f"[{format_timestamp()}] 📴 Call ended. Stopping audio conversation bridge.", flush=True)
+        self.audio_bridge.notify_call_ended()
 
     def on_audio_bridge_event(self, event):
         if self.loop:
@@ -257,6 +289,8 @@ class TelemetryServer:
 
     def check_bluetooth_connected(self) -> bool:
         """Check if Phone A (bt_mac) is connected to BlueZ."""
+        if IS_MAC:
+            return bool(self.hfp and self.hfp.connected)
         try:
             bus = dbus.SystemBus()
             dev = bus.get_object("org.bluez", f"/org/bluez/hci0/dev_{self.bt_mac.replace(':', '_')}")
@@ -267,6 +301,8 @@ class TelemetryServer:
 
     def check_telephony_ag_online(self) -> bool:
         """Check if PipeWire Telephony Handsfree Audio Gateway service is online."""
+        if IS_MAC:
+            return bool(self.hfp and self.hfp.connected)
         try:
             bus = dbus.SessionBus()
             bus.get_object(self.telephony_service, "/org/pipewire/Telephony/ag1")
@@ -385,7 +421,7 @@ class TelemetryServer:
         if phone_clients:
             print(f"  📶 Gateway App Link : \033[1;32mConnected ({', '.join(phone_clients)})\033[0m")
         else:
-            print(f"  ℹ️ Phone A Gateway App is in background/standby (Direct Bluetooth MAP active)")
+            print(f"  ℹ️ Phone A Gateway App is in background/standby" + (" (no MAP on macOS: SMS needs the Gateway app)" if IS_MAC else " (Direct Bluetooth MAP active)"))
         print("=" * 60 + "\n", flush=True)
 
         payload = {
@@ -411,6 +447,17 @@ class TelemetryServer:
 
     def auto_answer_call(self, raw_path=""):
         """Auto-answers incoming call so caller audio connects to Bluetooth Handsfree."""
+        if IS_MAC:
+            def _answer_mac():
+                time.sleep(0.5)
+                if self.hfp and self.hfp.answer():
+                    print(f"[{format_timestamp()}] 📞 Call answered via hfp-bridge.")
+                    print(f"[{format_timestamp()}] ℹ️ Call audio is unsupported on macOS (IOBluetooth SCO); AI audio bridge not started. Audio stays on the phone.")
+                else:
+                    print(f"[{format_timestamp()}] ℹ️ Simulated call test (hfp-bridge not running). Nothing to answer.")
+            threading.Thread(target=_answer_mac, daemon=True).start()
+            return
+
         def _answer():
             time.sleep(0.5)  # 500ms allows 1 ring setup and caller ID capture
             bus = dbus.SessionBus()
@@ -458,6 +505,16 @@ class TelemetryServer:
 
     def auto_hangup_call(self, raw_path=""):
         """Terminates trigger call after 1 ring (< 0.5s) to release voice bearer and clear InCallUI on caller's phone."""
+        if IS_MAC:
+            def _hangup_mac():
+                time.sleep(0.4)
+                if self.hfp and self.hfp.hangup():
+                    print(f"[{format_timestamp()}] ⚡ 1-Ring Trigger: hangup sent via hfp-bridge.")
+                else:
+                    print(f"[{format_timestamp()}] ℹ️ Hangup skipped (hfp-bridge not running).")
+            threading.Thread(target=_hangup_mac, daemon=True).start()
+            return
+
         def _hangup():
             time.sleep(0.4)  # 400ms allows 1 clean ring and caller ID capture
             bus = dbus.SessionBus()
@@ -526,6 +583,8 @@ class TelemetryServer:
 
     def push_sms_via_bluetooth_map(self, target_number: str, message_text: str = "received call. will get back to you shortly."):
         """Pushes an SMS directly to Phone A via BlueZ MAP to send over cellular SIM."""
+        if IS_MAC:
+            return  # No MAP client on macOS; the Gateway app sends the SMS on CALL_DETECTED.
         try:
             bus = dbus.SessionBus()
             if not self.map_session_path:
@@ -980,21 +1039,29 @@ class TelemetryServer:
     async def start(self):
         self.loop = asyncio.get_running_loop()
 
-        # Thread 1: PipeWire / oFono Telephony listener
-        telephony_thread = threading.Thread(target=self.run_telephony_listener, daemon=True)
-        telephony_thread.start()
+        if IS_MAC:
+            # macOS: Swift hfp-bridge (IOBluetooth) replaces the D-Bus telephony listener + HFP watchdog
+            self.hfp.start()
+            print(f"[{format_timestamp()}] ℹ️ PipeWire/oFono D-Bus telephony listener is Linux-only (replaced by hfp-bridge).")
+            print(f"[{format_timestamp()}] ℹ️ Bluetooth MAP SMS listener is Linux-only (no MAP API on macOS); use ADB/HTTP/WebSocket telemetry.")
+            print(f"[{format_timestamp()}] ℹ️ BlueZ Handsfree watchdog is Linux-only (hfp-bridge reconnects itself).")
+        else:
+            # Thread 1: PipeWire / oFono Telephony listener
+            telephony_thread = threading.Thread(target=self.run_telephony_listener, daemon=True)
+            telephony_thread.start()
 
-        # Thread 2: Bluetooth BLE / Message Access Profile (MAP) notification listener
-        map_thread = threading.Thread(target=self.run_bluetooth_map_listener, daemon=True)
-        map_thread.start()
+            # Thread 2: Bluetooth BLE / Message Access Profile (MAP) notification listener
+            map_thread = threading.Thread(target=self.run_bluetooth_map_listener, daemon=True)
+            map_thread.start()
 
         # Thread 3: HTTP Web Dashboard UI server
         http_thread = threading.Thread(target=self.run_http_server, daemon=True)
         http_thread.start()
 
         # Thread 4: Bluetooth Handsfree Profile Watchdog
-        watchdog_thread = threading.Thread(target=self.run_bluetooth_handsfree_watchdog, daemon=True)
-        watchdog_thread.start()
+        if not IS_MAC:
+            watchdog_thread = threading.Thread(target=self.run_bluetooth_handsfree_watchdog, daemon=True)
+            watchdog_thread.start()
 
         # Thread 5: Direct Cellular Telephony ADB Ingestor (Phone A)
         adb_telemetry_thread = threading.Thread(target=self.run_adb_telemetry_listener, daemon=True)
