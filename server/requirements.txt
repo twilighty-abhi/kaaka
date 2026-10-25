@@ -3,4 +3,4 @@
 # come from the distribution packages (python3-dbus, python3-gi), not from pip.
 websockets>=15,<18
 # Optional: only the Linux voice-AI audio bridge posts call audio to the n8n webhook.
-requests>=2.28,<3
+requests>=2.34.2,<3
