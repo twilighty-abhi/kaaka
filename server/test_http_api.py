@@ -16,7 +16,7 @@ import server as kaaka  # noqa: E402
 
 VERSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "VERSION")
 LANDING_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site", "index.html")
-SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY"}
+SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "strict-origin-when-cross-origin", "X-Frame-Options": "DENY"}
 
 
 class HttpServerCase(unittest.TestCase):
