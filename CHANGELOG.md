@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T06:37:52+05:30 — Demo video on the website and in the docs
+
+- Added: the walkthrough video (https://youtu.be/t1QOYa1o-4U, "Kaaka: One Call, Help Finds You. Full Walkthrough (Gateway, Caller and Control Room)"). The landing page has a "See it working" section before the animated demo, with the thumbnail and a play button; pressing it loads the privacy-enhanced player from youtube-nocookie.com. The nav's "Watch it" links there. The docs overview embeds the video near the top with a caption and a YouTube link, and the README links it.
+- Why: Show the real system working, not only the illustration.
+- Validation: headless Chrome against the live server: no YouTube request before play; after pressing play the youtube-nocookie embed loads (200); the docs page embeds the same video; no console errors; no horizontal scroll at 390 px on either page.
+- Limitations: needs internet to play; the video is hosted on YouTube.
+
 ## 2026-10-25T05:59:24+05:30 — Control room button, PIN login and demo PIN
 
 - Added: "Open control room" in the landing page nav and "Open the control room" in the hero, both to `/admin`. A login page (`server/login.html`) replaces the plain 401 text: enter the admin token or PIN, `POST /admin/login` sets the HttpOnly session cookie (Secure behind an https proxy), `/admin/logout` clears it.
