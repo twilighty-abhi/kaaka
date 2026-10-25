@@ -134,7 +134,7 @@ jobs:
           grep -q "versionName='${{ needs.prepare.outputs.version }}'" badging.txt || { echo "::error::APK versionName does not match the tag"; exit 1; }
           if grep -q application-debuggable badging.txt; then echo "::error::APK is debuggable"; exit 1; fi
           mkdir -p dist && mv out.apk "dist/${{ matrix.asset }}-${{ needs.prepare.outputs.version }}.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: apk-${{ matrix.app }}
           path: dist/*.apk
@@ -158,7 +158,7 @@ jobs:
           rm -f "stage/$NAME/server/"{events.jsonl,last_call.json,latest_telemetry.json,responders.json}
           tar -czf "dist/$NAME.tar.gz" -C stage "$NAME"
           tar -tzf "dist/$NAME.tar.gz" | head -20
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: server
           path: dist/*.tar.gz
