@@ -4,6 +4,12 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T05:43:26+05:30 — Fix: map tiles blocked by OpenStreetMap
+
+- Fixed: the dashboard and location-page maps showed OpenStreetMap's "Access blocked: app is not following the tile usage policy" tiles. The 1.0.0 security headers set `Referrer-Policy: no-referrer`, so tile requests carried no Referer, which OSM's policy requires. The server now sends `Referrer-Policy: strict-origin-when-cross-origin`: other sites receive only the origin (for example `http://10.10.19.124:8080/`), never the path or `?token=`.
+- Why: Map tiles are essential for locating callers.
+- Validation: headless Chrome on a test server with the live incident data: before, 36 tile requests with policy `no-referrer` and an empty Referer; after, 36 tile requests with Referer `http://127.0.0.1:18080/`. Server tests updated and passing.
+- Limitations: a browser that already cached the blocked tiles may keep showing them until a hard refresh. OpenStreetMap's public tiles are meant for light use; a busy deployment should use its own or a commercial tile server.
 ## 2026-10-25T05:39:07+05:30 — Favicon and app icons
 
 - Added: `site/icons/` with the Kaaka mark (ring, pink dot, line) on a dark teal tile: `favicon.svg`, `favicon.ico` (16, 32 and 48 px), `apple-touch-icon.png` (180 px), `icon-192.png`, `icon-512.png` and `site.webmanifest`. The server serves `/favicon.ico` and `/icons/*` publicly, cached for a day. The landing page, every docs page, the control room and the location-sharing page link to them.
