@@ -78,6 +78,7 @@ Most callers will not have Kaaka Sensors. The reply SMS can carry a link that wo
 | `--public-url` / `KAAKA_PUBLIC_URL` | Optional public https URL of this server. Returned to the gateway app in the heartbeat reply (it builds the location links from it), shown in the startup banner and `/api/status`. Requires `KAAKA_ADMIN_TOKEN` unless `--allow-unprotected-public` is given. |
 | `--no-notify` / `KAAKA_NOTIFY=0` | Turn off macOS notifications. |
 | `KAAKA_STALE_SECONDS` (env) | Seconds without a heartbeat before the gateway phone counts as silent (default 1200). |
+| `KAAKA_DEMO_PIN` (env) | Optional public demo PIN, for example `1234`. It unlocks the control room like the admin token, and the landing page and the login page show it so anyone can try the dashboard. Without `KAAKA_ADMIN_TOKEN` it becomes the required credential (also as Kaaka Call's dashboard token). Anyone who sees the page can read every incident, so use it only for demos and unset it afterwards. Ten wrong PINs from one address in ten minutes lock that address out for ten minutes. |
 | `--data-dir` / `KAAKA_DATA_DIR` | Directory for runtime data (`events.jsonl`, `responders.json`, `last_call.json`, `latest_telemetry.json`). Default: `server/`. Created if missing. |
 | `--no-console` / `KAAKA_CONSOLE=0` | Turn off the terminal test console (Enter simulates a call). It is off automatically when stdin is not a terminal, as under systemd or launchd. |
 | `GET /api/health` | Public liveness check, no token: `{"ok": true, "version": "1.0.0", "uptime_seconds": …, "gateway_online": …}`. |
