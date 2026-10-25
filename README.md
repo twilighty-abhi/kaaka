@@ -301,6 +301,8 @@ Landing page at `http://<ip>:8080/`, dashboard at `http://<ip>:8080/admin`.
 
 ## Running in production
 
+Download the apps and the server bundle from the [latest release](https://github.com/twilighty-abhi/kaaka/releases/latest). Releases are built by `.github/workflows/release.yml` when a `v*.*.*` tag is pushed; see [Releasing](#releasing).
+
 The basics for a help line that stays up:
 
 1. **Set an admin token.** `export KAAKA_ADMIN_TOKEN=<long random string>` before starting the server, and enter the same token in Kaaka Call under [config]. Without it, anyone who can reach the server can read callers' numbers and locations. The server refuses a public URL without a token.
@@ -313,7 +315,16 @@ The basics for a help line that stays up:
 6. **Guard the signing key.** Release builds read `android/keystore.properties` (gitignored; see `keystore.properties.example` in each app). Back up the keystore it points to. If it is lost, installed apps can never be updated under the same signature.
 7. **Public access.** Put the server behind https (a reverse proxy or `scripts/public-url.sh` for a Cloudflare quick tunnel) and set `--public-url` so location links work from any phone. Through a tunnel the dashboard's WebSocket is not reachable and it falls back to polling.
 
-CI (`.github/workflows/ci.yml`) runs the server tests and both web builds on every push and pull request. Tests: `cd server && python -m unittest -q`.
+CI (`.github/workflows/ci.yml`) runs the server tests, the gateway Android unit tests and both web builds on every push and pull request.
+
+### Releasing
+
+1. Bump the version in `VERSION` and `versionName` / `versionCode` in `gateway/android/app/build.gradle` and `client/android/app/build.gradle`.
+2. Write `docs/releases/vX.Y.Z.md` (the release notes) and a CHANGELOG entry.
+3. If the signing secrets are not set on the repository, rebuild both APKs locally with the release key and commit them (`gateway/Kaaka.apk`, `client/KaakaSensors.apk`).
+4. Merge to `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+The release workflow refuses to publish if the tag, `VERSION` and the apps' `versionName` disagree, if the notes file is missing, or if an APK is not signed with the Kaaka release key (certificate SHA-256 `8e6996ee…ac6e51`). To let CI build and sign the APKs itself, add the repository secrets `ANDROID_KEYSTORE_BASE64` (`base64 -i kaaka-release.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Tests: `cd server && python -m unittest -q`.
 
 ---
 

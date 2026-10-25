@@ -4,6 +4,14 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T05:30:07+05:30 — Release pipeline and v1.0.0
+
+- Added: `.github/workflows/release.yml`. On a `v*.*.*` tag it checks the tag against `VERSION` and both apps' `versionName` and that `docs/releases/<tag>.md` exists, runs the server and gateway Android tests, builds and signs both APKs when the signing secrets are set (otherwise publishes the committed release-signed APKs), verifies each APK's certificate SHA-256, version and non-debuggable flag, packages `kaaka-server-<version>.tar.gz` (server, site, deploy files, no runtime data or unused Node/voice services), and publishes the GitHub Release with `SHA256SUMS.txt`. Can be re-run for an existing tag from the Actions tab.
+- Added: gateway Android unit tests in CI, `.github/dependabot.yml` (monthly updates for Actions, pip and both npm apps), `SECURITY.md`, release notes `docs/releases/v1.0.0.md`, and a Releasing section in the README.
+- Why: A repeatable, checked way to publish the apps and server instead of copying files by hand.
+- Validation: workflow YAML parses; the server-bundle step rehearsed locally: 140 KB tarball with no runtime data, and the server started from the unpacked bundle serves `/`, `/docs/`, `/admin` and `/api/health` (200) with its 22 tests passing. The full pipeline is verified by the v1.0.0 tag run.
+- Limitations: the signing key is not uploaded to GitHub, so CI publishes the committed APKs until the four `ANDROID_*` secrets are added. No iOS or Play Store publishing.
+
 ## 2026-10-25T05:23:02+05:30 — Landing page: realistic "Watch it happen" demo
 
 - Changed: the demo on `site/index.html` now shows a realistic phone (call screen with dynamic island, status bar, keypad and end button, then the Messages app with typing indicators, the app's real reply texts, a Kaaka Sensors notification, and SAFE typed and sent) next to a copy of the real control room (black, monospace, incident card with OPEN / ACKNOWLEDGED / RESOLVED badges, "New incident" toast, heartbeat counter, log lines that type out). A street map of Kakkanad shows the caller's car driving along the main road with a location crumb per update while the nearest responder drives to meet them; the dashed link, distance and ETA update live in the map and the card. About 20 s per loop, only while visible.
