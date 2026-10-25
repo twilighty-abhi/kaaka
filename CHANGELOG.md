@@ -4,6 +4,16 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T05:52:31+05:30 — Dependabot review
+
+- Merged: #29 (setup-node v7), #33 (websockets >= 17.3) and #34 (requests >= 2.34.2); CI passed on each.
+- Closed: #35 and #36 (TypeScript 7 for both apps). SvelteKit 3.1 declares `typescript ^6.0.0` as a peer dependency, so `npm ci` failed with ERESOLVE and both web builds broke. Dependabot now ignores TypeScript major updates until SvelteKit supports 7.
+- Changed: actions updated in one change instead of #30, #31 and #32 (one conflicted with #29; GitHub refused the others for token scope on workflow files): checkout v7, setup-python v7, setup-java v6, upload-artifact v7 and download-artifact v8. #31 had moved only `upload-artifact` to v7 while the release workflow still read artifacts with `download-artifact` v4; both now move together. Every input the workflows use was checked against the new versions' `action.yml` (all present; all run on node24).
+- Changed: `.github/dependabot.yml` groups updates (one pull request for all actions, one for pip, minor/patch npm updates per app), so updates no longer conflict with each other. The release tarball is now reproducible (sorted entries, fixed owner, tagged commit time, `gzip -n`).
+- Why: Keep dependencies current without breaking the web builds or the release pipeline, which pull-request CI never runs.
+- Validation: CI on this change; the release workflow re-run for v1.0.0 from the Actions tab with the new action versions.
+- Limitations: TypeScript stays on 6 until SvelteKit supports 7.
+
 ## 2026-10-25T05:43:26+05:30 — Fix: map tiles blocked by OpenStreetMap
 
 - Fixed: the dashboard and location-page maps showed OpenStreetMap's "Access blocked: app is not following the tile usage policy" tiles. The 1.0.0 security headers set `Referrer-Policy: no-referrer`, so tile requests carried no Referer, which OSM's policy requires. The server now sends `Referrer-Policy: strict-origin-when-cross-origin`: other sites receive only the origin (for example `http://10.10.19.124:8080/`), never the path or `?token=`.
