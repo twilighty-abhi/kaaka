@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T05:43:26+05:30 — Fix: map tiles blocked by OpenStreetMap
+
+- Fixed: the dashboard and location-page maps showed OpenStreetMap's "Access blocked: app is not following the tile usage policy" tiles. The 1.0.0 security headers set `Referrer-Policy: no-referrer`, so tile requests carried no Referer, which OSM's policy requires. The server now sends `Referrer-Policy: strict-origin-when-cross-origin`: other sites receive only the origin (for example `http://10.10.19.124:8080/`), never the path or `?token=`.
+- Why: Map tiles are essential for locating callers.
+- Validation: headless Chrome on a test server with the live incident data: before, 36 tile requests with policy `no-referrer` and an empty Referer; after, 36 tile requests with Referer `http://127.0.0.1:18080/`. Server tests updated and passing.
+- Limitations: a browser that already cached the blocked tiles may keep showing them until a hard refresh. OpenStreetMap's public tiles are meant for light use; a busy deployment should use its own or a commercial tile server.
+
 ## 2026-10-25T05:30:07+05:30 — Release pipeline and v1.0.0
 
 - Added: `.github/workflows/release.yml`. On a `v*.*.*` tag it checks the tag against `VERSION` and both apps' `versionName` and that `docs/releases/<tag>.md` exists, runs the server and gateway Android tests, builds and signs both APKs when the signing secrets are set (otherwise publishes the committed release-signed APKs), verifies each APK's certificate SHA-256, version and non-debuggable flag, packages `kaaka-server-<version>.tar.gz` (server, site, deploy files, no runtime data or unused Node/voice services), and publishes the GitHub Release with `SHA256SUMS.txt`. Can be re-run for an existing tag from the Actions tab.

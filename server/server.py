@@ -100,7 +100,9 @@ def read_version():
 VERSION = read_version()
 
 # Sent with every HTTP response. Cache-Control: no-store is added for /admin and /api/* (see DashboardHandler).
-SECURITY_HEADERS = (("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "no-referrer"), ("X-Frame-Options", "DENY"))
+# Referrer: origin only across sites (never paths or ?token=). Not no-referrer: OpenStreetMap's tile
+# servers refuse requests without a referrer, which blanks the dashboard and location-page maps.
+SECURITY_HEADERS = (("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "strict-origin-when-cross-origin"), ("X-Frame-Options", "DENY"))
 
 
 def write_json_atomic(path, obj, indent=None):
