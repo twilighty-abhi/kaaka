@@ -51,3 +51,24 @@ jobs:
         working-directory: client
       - run: npm run build
         working-directory: client
+
+  gateway-android:
+    name: Gateway Android unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gateway/package-lock.json
+      - name: Build web assets and sync
+        working-directory: gateway
+        run: npm ci && npm run build && npx cap sync android
+      - name: Unit tests
+        working-directory: gateway/android
+        run: ./gradlew --no-daemon testDebugUnitTest

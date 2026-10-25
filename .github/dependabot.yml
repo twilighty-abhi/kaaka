@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: pip
+    directory: /server
+    schedule:
+      interval: monthly
+  - package-ecosystem: npm
+    directory: /gateway
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /client
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
