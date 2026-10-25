@@ -1,20 +1,41 @@
 version: 2
 updates:
+  # Workflow actions: one grouped pull request a month, so updates do not conflict with each other.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: pip
     directory: /server
     schedule:
       interval: monthly
+    groups:
+      python:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /gateway
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # SvelteKit 3.1 declares a peer dependency of typescript ^6; TypeScript 7 breaks `npm ci`.
+      # Remove once SvelteKit supports TypeScript 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /client
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
