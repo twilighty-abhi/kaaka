@@ -70,10 +70,12 @@ try:
     from server.incidents import IncidentStore, TOKEN_RE, number_key
     from server.responders import ResponderRegistry
     from server import analytics
+    from server.mdns import MdnsAnnouncer, valid_name as valid_mdns_name
 except ImportError:
     from incidents import IncidentStore, TOKEN_RE, number_key
     from responders import ResponderRegistry
     import analytics
+    from mdns import MdnsAnnouncer, valid_name as valid_mdns_name
 
 if IS_MAC:
     try:
@@ -912,7 +914,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
 class TelemetryServer:
     def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="", client_number="", adb_serial="",
-                 admin_token="", public_url="", notify=True, data_dir=None, console=True, demo_pin=""):
+                 admin_token="", public_url="", notify=True, data_dir=None, console=True, demo_pin="", mdns_name=""):
         self.host = host
         self.data_dir = os.path.abspath(data_dir or DEFAULT_DATA_DIR)
         os.makedirs(self.data_dir, exist_ok=True)
@@ -928,6 +930,9 @@ class TelemetryServer:
         # Optional public demo PIN: unlocks the control room like the admin token and is shown on the landing
         # and login pages. Without an admin token it becomes the required credential (also for Kaaka Call).
         self.demo_pin = demo_pin
+        # Local-network name: http://<mdns_name>.local:<http_port> via mDNS ("" = off).
+        self.mdns_name = mdns_name
+        self.mdns = None
         self.credentials_required = bool(admin_token or demo_pin)
         self.auth_failures = {}  # client ip -> [epoch of each wrong credential in the last window]
         self.auth_lock = threading.Lock()
@@ -2072,6 +2077,12 @@ class TelemetryServer:
             map_thread = threading.Thread(target=self.run_bluetooth_map_listener, daemon=True)
             map_thread.start()
 
+        if self.mdns_name and self.host not in ("127.0.0.1", "localhost", "::1"):
+            self.mdns = MdnsAnnouncer(self.mdns_name, self.http_port, get_local_ip,
+                                      log=lambda m: print(f"[{format_timestamp()}] 📡 {m}", flush=True))
+            if not self.mdns.start():
+                self.mdns = None
+
         # Thread 3: HTTP Web Dashboard UI server
         http_thread = threading.Thread(target=self.run_http_server, daemon=True)
         http_thread.start()
@@ -2093,6 +2104,7 @@ class TelemetryServer:
         print(f"  🏠 Landing page    : \033[1;36m{self.http_port}\033[0m  (\033[1;32mhttp://{self.local_ip}:{self.http_port}/\033[0m)")
         print(f"  🖥️ Web Dashboard UI: \033[1;36m{self.http_port}\033[0m  (\033[1;32mhttp://{self.local_ip}:{self.http_port}/admin\033[0m)")
         print(f"  📶 Gateway BLE MAC : \033[1;36m{self.bt_mac or 'off (gateway app mode)'}\033[0m")
+        print(f"  📡 Network name    : \033[1;36m{self.mdns.url if self.mdns else 'off'}\033[0m" + ("  (also /admin, /docs)" if self.mdns else ""))
         print(f"  🔗 Public URL      : \033[1;36m{self.public_url or 'not set (location links off)'}\033[0m")
         print(f"  🔒 Admin token     : \033[1;36m{'on' if self.admin_token else 'off'}\033[0m")
         print(f"  🔑 Demo PIN        : \033[1;36m{('on (' + self.demo_pin + ', shown on the landing page)') if self.demo_pin else 'off'}\033[0m")
@@ -2120,6 +2132,8 @@ class TelemetryServer:
                 asyncio.create_task(self.console_trigger_loop())
             asyncio.create_task(self.stale_monitor())
             await self.stop_event.wait()  # run until SIGTERM / Ctrl-C
+        if self.mdns:
+            self.mdns.stop()  # withdraw the .local name so the network stops pointing here
 
     def request_stop(self, sig=None):
         """Signal handler (event-loop thread): stop the WebSocket server; the daemon threads exit with the process."""
@@ -2142,9 +2156,17 @@ def main():
                         help="Disable the interactive console (also off automatically when stdin is not a terminal, or KAAKA_CONSOLE=0)")
     parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR,
                         help="Directory for events.jsonl, responders.json and other runtime data (or KAAKA_DATA_DIR; default: the server directory)")
+    parser.add_argument("--mdns-name", default=os.environ.get("KAAKA_MDNS_NAME", "kaaka"),
+                        help="Local-network name: announce http://<name>.local:<http-port> via mDNS/Bonjour (default: kaaka, "
+                             "or KAAKA_MDNS_NAME). KAAKA_MDNS=0 or --mdns-name off turns it off.")
     parser.add_argument("--allow-unprotected-public", action="store_true",
                         help="Allow a public URL without KAAKA_ADMIN_TOKEN (not recommended)")
     args = parser.parse_args()
+    mdns_name = args.mdns_name.strip().lower()
+    if mdns_name in ("", "off", "0", "none") or os.environ.get("KAAKA_MDNS", "1") == "0":
+        mdns_name = ""
+    elif not valid_mdns_name(mdns_name):
+        parser.error(f"--mdns-name {args.mdns_name!r}: use letters, digits and hyphens only (for example: kaaka)")
     # A public URL exposes the dashboard and gateway endpoints to the internet: require the admin token.
     if args.public_url and not os.environ.get("KAAKA_ADMIN_TOKEN") and not args.allow_unprotected_public:
         parser.error("a public URL (--public-url / KAAKA_PUBLIC_URL) needs KAAKA_ADMIN_TOKEN, otherwise anyone "
@@ -2157,7 +2179,8 @@ def main():
                              notify=not args.no_notify and os.environ.get("KAAKA_NOTIFY", "1") != "0",
                              data_dir=args.data_dir,
                              console=not args.no_console and os.environ.get("KAAKA_CONSOLE", "1") != "0",
-                             demo_pin=os.environ.get("KAAKA_DEMO_PIN", "").strip())
+                             demo_pin=os.environ.get("KAAKA_DEMO_PIN", "").strip(),
+                             mdns_name=mdns_name)
     try:
         asyncio.run(server.start())
     except KeyboardInterrupt:

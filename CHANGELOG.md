@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T06:46:32+05:30 — Local-network name: kaaka.local
+
+- Added: the server announces itself on the local network over mDNS (Bonjour): `http://kaaka.local:8080` reaches the control room, landing page and docs whatever the machine's current IP, and service browsers list "Kaaka Control Room" (`_http._tcp`). `server/mdns.py` uses `dns-sd` on macOS (built in) or `avahi-publish` on Linux (`avahi-utils`), re-checks the IP every 30 s and re-announces after a network change, and withdraws the name on shutdown. `--mdns-name` / `KAAKA_MDNS_NAME` (default `kaaka`); `KAAKA_MDNS=0` or `--mdns-name off` turns it off; skipped when bound to localhost.
+- Why: The control room's address changed whenever the laptop joined another Wi-Fi network.
+- Validation: 34 server tests pass (6 new for names, per-platform commands, unsupported platforms and missing tools). On this Mac: a test server with `--mdns-name kaaka-test` logged "Announced on the local network", `kaaka-test.local` resolved to 10.10.19.124 and `/api/health` answered through the name; after SIGTERM the server stopped and no `dns-sd` process was left.
+- Limitations: Android resolves `.local` only on some versions, so Kaaka Call should keep using the IP. Networks that block multicast (some campus and guest Wi-Fi) stop the name from working; the IP still does. Only verified from this Mac, not from another device on the network.
+
 ## 2026-10-25T06:37:52+05:30 — Demo video on the website and in the docs
 
 - Added: the walkthrough video (https://youtu.be/t1QOYa1o-4U, "Kaaka: One Call, Help Finds You. Full Walkthrough (Gateway, Caller and Control Room)"). The landing page has a "See it working" section before the animated demo, with the thumbnail and a play button; pressing it loads the privacy-enhanced player from youtube-nocookie.com. The nav's "Watch it" links there. The docs overview embeds the video near the top with a caption and a YouTube link, and the README links it.

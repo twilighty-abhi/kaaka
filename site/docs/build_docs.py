@@ -63,8 +63,10 @@ page("getting-started.html", "Getting started", "Start here", """
 cd kaaka
 python3 -m venv .venv-mac &amp;&amp; .venv-mac/bin/pip install -r server/requirements.txt
 .venv-mac/bin/python server/server.py</code></pre>
-<p>The banner prints the laptop's Wi-Fi address. Open <code>http://&lt;ip&gt;:8080/admin</code> in a browser, or use the <strong>Open control room</strong> button on the landing page: that is the control room. With a token or demo PIN set, it asks for it first. <code>http://&lt;ip&gt;:8080/</code> is the public landing page and <code>/docs</code> is this wiki.</p>
+<p>The banner prints the laptop's Wi-Fi address and a network name. Open <code>http://kaaka.local:8080/admin</code> (or <code>http://&lt;ip&gt;:8080/admin</code>) in a browser, or use the <strong>Open control room</strong> button on the landing page: that is the control room. With a token or demo PIN set, it asks for it first. <code>http://&lt;ip&gt;:8080/</code> is the public landing page and <code>/docs</code> is this wiki.</p>
 <div class="callout"><strong>Before anyone else can reach it, set a token.</strong> <code>export KAAKA_ADMIN_TOKEN=&lt;long random string&gt;</code> before starting the server, then open the control room once as <code>/admin?token=&lt;the token&gt;</code>. Without a token anyone on the network can read callers' numbers and locations. See <a href="deployment.html">Running in production</a>.</div>
+
+<div class="callout"><strong>kaaka.local</strong> is announced on the local network over mDNS (Bonjour), so it keeps working when the laptop's IP changes. Laptops, iPhones and most desktops open it directly; Android depends on the version. In Kaaka Call, use the IP address.</div>
 
 <h2 id="gateway">2. Install Kaaka Call on the Kaaka number</h2>
 <ol>
@@ -352,6 +354,7 @@ launchctl load ~/Library/LaunchAgents/com.kaaka.server.plist</code></pre>
 <tr><td><code>KAAKA_ADMIN_TOKEN</code></td><td>Token for the dashboard, API and WebSocket. Strongly recommended.</td></tr>
 <tr><td><code>--public-url</code> / <code>KAAKA_PUBLIC_URL</code></td><td>Public https address; requires the token.</td></tr>
 <tr><td><code>KAAKA_DEMO_PIN</code></td><td>Public demo PIN shown on the landing and login pages. Demos only.</td></tr>
+<tr><td><code>--mdns-name</code> / <code>KAAKA_MDNS_NAME</code></td><td>Local-network name (default <code>kaaka</code> → <code>http://kaaka.local:8080</code>). <code>KAAKA_MDNS=0</code> turns it off.</td></tr>
 <tr><td><code>--data-dir</code> / <code>KAAKA_DATA_DIR</code></td><td>Runtime data directory. Default: <code>server/</code>.</td></tr>
 <tr><td><code>--http-port</code> (8080), <code>--port</code> (8765), <code>--host</code> (0.0.0.0)</td><td>Dashboard port, WebSocket port, bind address.</td></tr>
 <tr><td><code>--no-console</code> / <code>KAAKA_CONSOLE=0</code></td><td>Turn off the terminal test console (off automatically without a terminal).</td></tr>
@@ -420,6 +423,7 @@ page("troubleshooting.html", "Troubleshooting", "Operating", """
 <li>If the phone's Wi-Fi is off or sleeping, events queue on the phone until it is back. Exempt Kaaka Call from battery optimisation.</li>
 <li>With an admin token, the token in Kaaka Call must match exactly, or every report is refused with 401.</li>
 <li><code>GET /api/health</code> shows whether the server is up and whether the phone has reported recently.</li>
+<li><code>kaaka.local</code> does not open: the device may not support mDNS (some Android versions), or the network blocks multicast (common on campus and guest Wi-Fi). Use the IP address from the server banner instead.</li>
 </ul>
 
 <h2 id="sensors">Kaaka Sensors does not react to the reply</h2>

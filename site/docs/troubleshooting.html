@@ -68,6 +68,7 @@
 <li>If the phone's Wi-Fi is off or sleeping, events queue on the phone until it is back. Exempt Kaaka Call from battery optimisation.</li>
 <li>With an admin token, the token in Kaaka Call must match exactly, or every report is refused with 401.</li>
 <li><code>GET /api/health</code> shows whether the server is up and whether the phone has reported recently.</li>
+<li><code>kaaka.local</code> does not open: the device may not support mDNS (some Android versions), or the network blocks multicast (common on campus and guest Wi-Fi). Use the IP address from the server banner instead.</li>
 </ul>
 
 <h2 id="sensors">Kaaka Sensors does not react to the reply</h2>
