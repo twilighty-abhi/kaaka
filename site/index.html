@@ -185,6 +185,17 @@ footer a:hover { color: var(--platinum); }
 .marquee span.ml { font-family: var(--font-ml); }
 .marquee span.sep { color: var(--phosphor); -webkit-text-stroke: 0; padding-inline: 0; font-size: clamp(16px, 2vw, 24px); align-self: center; }
 
+/* demo video: thumbnail with a play button; YouTube (privacy-enhanced) loads only when pressed */
+.video { position: relative; aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden; background: var(--deep); border: 1px solid var(--hairline); }
+.video button { all: unset; position: absolute; inset: 0; cursor: pointer; display: grid; place-items: center; }
+.video img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .6s ease, filter .6s ease; filter: saturate(.9) brightness(.85); }
+.video button:hover img, .video button:focus-visible img { transform: scale(1.02); filter: none; }
+.video .play { position: relative; display: inline-flex; align-items: center; gap: 12px; padding: 16px 24px; border-radius: 999px; background: var(--aurora); color: #222; font: 500 14px/1 var(--font); letter-spacing: .06em; text-transform: uppercase; }
+.video .play svg { width: 18px; height: 18px; }
+.video button:focus-visible { outline: 2px solid var(--mist); outline-offset: -4px; }
+.video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.video-meta { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 14px; font-size: 14px; }
+.video-meta a { color: var(--mist); }
 .demo { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
 .demo .head { grid-column: 1 / -1; margin-bottom: 0; }
 .phone { width: 290px; max-width: 100%; aspect-ratio: 9 / 19.5; margin: 0 auto; border-radius: 48px; padding: 9px; background: linear-gradient(145deg, #2b3a39, #0c1514 40%, #1d2a29); box-shadow: 0 0 0 1px rgba(255, 255, 255, .14) inset; }
@@ -309,7 +320,7 @@ footer a:hover { color: var(--platinum); }
     </a>
     <nav class="links" aria-label="Sections">
       <a href="#how">How it works</a>
-      <a href="#demo">Watch it</a>
+      <a href="#video">Watch it</a>
       <a href="#parts">What you get</a>
       <a href="#control">Control room</a>
       <a href="#safety">Safety</a>
@@ -364,6 +375,24 @@ footer a:hover { color: var(--platinum); }
         <li class="step"><span class="who">Control room</span><h3>One incident, on a live map</h3><p>Calls, help texts, alerts and the caller's route are grouped per caller, with the nearest responder drawn on the map.</p></li>
         <li class="step"><span class="who">Caller or responder</span><h3>Closed when help arrives</h3><p>A responder texts RESOLVE, or the caller texts SAFE. Everything stays on record for later.</p></li>
       </ol>
+    </div>
+  </section>
+
+  <section id="video" class="band">
+    <div class="inner">
+      <div class="head">
+        <p class="label">See it working</p>
+        <h2>The full walkthrough.</h2>
+        <p>The Kaaka number, a caller and the control room, recorded end to end: a call, the instant reply, the location arriving, the nearest responder and the incident closing.</p>
+      </div>
+      <div class="video" data-id="t1QOYa1o-4U">
+        <button type="button" aria-label="Play the Kaaka walkthrough video">
+          <img src="https://i.ytimg.com/vi/t1QOYa1o-4U/maxresdefault.jpg" alt="" loading="lazy" decoding="async">
+          <span class="play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>Play the walkthrough</span>
+        </button>
+        <noscript><iframe src="https://www.youtube-nocookie.com/embed/t1QOYa1o-4U" title="Kaaka: One Call, Help Finds You. Full Walkthrough (Gateway, Caller and Control Room)" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></noscript>
+      </div>
+      <div class="video-meta"><span>Kaaka: One Call, Help Finds You. Full Walkthrough (Gateway, Caller and Control Room)</span><a href="https://youtu.be/t1QOYa1o-4U" target="_blank" rel="noopener">Watch on YouTube ↗</a></div>
     </div>
   </section>
 
@@ -840,6 +869,22 @@ footer a:hover { color: var(--platinum); }
     document.querySelectorAll('.bigmark, .bars').forEach(el => { el.classList.add('armed'); io.observe(el); });
   }
 })();
+</script>
+<script>
+// Demo video: swap the thumbnail for the privacy-enhanced YouTube player only when someone presses play.
+document.querySelectorAll('.video[data-id]').forEach(box => {
+  const btn = box.querySelector('button');
+  btn.addEventListener('click', () => {
+    const f = document.createElement('iframe');
+    f.src = 'https://www.youtube-nocookie.com/embed/' + box.dataset.id + '?autoplay=1&rel=0&playsinline=1';
+    f.title = 'Kaaka: One Call, Help Finds You. Full Walkthrough (Gateway, Caller and Control Room)';
+    f.allow = 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen';
+    f.allowFullscreen = true;
+    f.referrerPolicy = 'strict-origin-when-cross-origin';
+    btn.replaceWith(f);
+    f.focus();
+  }, { once: true });
+});
 </script>
 </body>
 </html>
