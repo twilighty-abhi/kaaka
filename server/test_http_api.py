@@ -22,6 +22,7 @@ SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "str
 class HttpServerCase(unittest.TestCase):
     """Starts one TelemetryServer HTTP endpoint per class (http_port=0 picks a free port)."""
     admin_token = ""
+    demo_pin = ""
 
     @classmethod
     def setUpClass(cls):
@@ -32,7 +33,7 @@ class HttpServerCase(unittest.TestCase):
         quiet = contextlib.redirect_stdout(io.StringIO())  # the server prints a banner per event
         quiet.__enter__()
         cls.addClassCleanup(quiet.__exit__, None, None, None)
-        cls.server = kaaka.TelemetryServer(host="127.0.0.1", port=0, http_port=0, admin_token=cls.admin_token,
+        cls.server = kaaka.TelemetryServer(host="127.0.0.1", port=0, http_port=0, admin_token=cls.admin_token, demo_pin=cls.demo_pin,
                                            notify=False, data_dir=cls.tmp.name, console=False)
         cls.httpd = cls.server.make_http_server()
         cls.port = cls.server.http_port
@@ -224,6 +225,66 @@ class TokenServerTests(HttpServerCase):
         # Location sharing never needs the admin token: unknown link is 404, not 401.
         self.assertEqual(self.post_json("/api/location", {"token": "tok_unknown_99", "lat": 1.0, "lon": 1.0})[0], 404)
         self.assertEqual(self.request("GET", "/l/unknowntoken1")[0], 404)
+
+
+    def test_login_page_and_login_with_admin_token(self):
+        status, _, body = self.request("GET", "/admin")
+        self.assertEqual(status, 401)
+        self.assertIn(b"Enter the PIN", body)
+        self.assertNotIn(b"Demo PIN", body)  # no demo PIN configured
+        self.assertNotIn(b'class="demo-pin"', self.request("GET", "/")[2])
+        status, headers, _ = self.request("POST", "/admin/login", "pin=" + self.admin_token,
+                                          {"Content-Type": "application/x-www-form-urlencoded"})
+        self.assertEqual((status, headers["Location"]), (303, "/admin"))
+        self.assertIn("HttpOnly", headers["Set-Cookie"])
+
+
+class DemoPinTests(HttpServerCase):
+    """KAAKA_DEMO_PIN only: the PIN is shown publicly and unlocks the control room; wrong guesses are limited."""
+    demo_pin = "1234"
+    FORM = {"Content-Type": "application/x-www-form-urlencoded"}
+
+    def login(self, pin, headers=None):
+        return self.request("POST", "/admin/login", f"pin={pin}", {**self.FORM, **(headers or {})})
+
+    def test_pin_is_shown_on_landing_and_login_pages(self):
+        status, _, body = self.request("GET", "/")
+        self.assertEqual(status, 200)
+        self.assertIn(b'class="demo-pin"', body)
+        self.assertIn(b"<b>1234</b>", body)
+        status, _, body = self.request("GET", "/admin")
+        self.assertEqual(status, 401)
+        self.assertIn(b"Demo PIN <b>1234</b>", body)
+        self.assertIn(b'data-pin="1234"', body)
+
+    def test_pin_is_required_and_unlocks_dashboard_and_api(self):
+        self.assertEqual(self.get_json("/api/status")[0], 401)
+        status, headers, _ = self.login("1234", {"X-Forwarded-For": "10.0.0.1"})
+        self.assertEqual((status, headers["Location"]), (303, "/admin"))
+        cookie = headers["Set-Cookie"].split(";")[0]
+        self.assertEqual(cookie, "kaaka_token=1234")
+        self.assertEqual(self.request("GET", "/admin", headers={"Cookie": cookie})[0], 200)
+        self.assertEqual(self.get_json("/api/status", {"Cookie": cookie})[0], 200)
+        self.assertEqual(self.get_json("/api/status?token=1234")[0], 200)
+        self.assertEqual(self.request("GET", "/api/health")[0], 200)  # still public
+
+    def test_wrong_pin_and_logout(self):
+        status, _, body = self.login("0000")
+        self.assertEqual(status, 401)
+        self.assertIn(b"not right", body)
+        status, headers, _ = self.request("GET", "/admin/logout")
+        self.assertEqual((status, headers["Location"]), (303, "/"))
+        self.assertIn("Max-Age=0", headers["Set-Cookie"])
+
+    def test_lockout_after_ten_wrong_guesses(self):
+        client = {"X-Forwarded-For": "203.0.113.9"}  # test server sees 127.0.0.1, so the forwarded hop is the client
+        for guess in range(10):
+            self.assertEqual(self.login(f"9{guess:03d}", client)[0], 401)
+        status, _, body = self.login("1234", client)  # right PIN, but this client is locked out
+        self.assertEqual(status, 429)
+        self.assertIn(b"Too many wrong attempts", body)
+        self.assertEqual(self.get_json("/api/status?token=1234", client)[0], 401)
+        self.assertEqual(self.login("1234", {"X-Forwarded-For": "203.0.113.10"})[0], 303)  # other clients unaffected
 
 
 if __name__ == "__main__":
