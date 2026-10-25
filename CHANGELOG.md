@@ -10,6 +10,12 @@ Record each meaningful project change during the event, newest first. Update thi
 - Why: Map tiles are essential for locating callers.
 - Validation: headless Chrome on a test server with the live incident data: before, 36 tile requests with policy `no-referrer` and an empty Referer; after, 36 tile requests with Referer `http://127.0.0.1:18080/`. Server tests updated and passing.
 - Limitations: a browser that already cached the blocked tiles may keep showing them until a hard refresh. OpenStreetMap's public tiles are meant for light use; a busy deployment should use its own or a commercial tile server.
+## 2026-10-25T05:39:07+05:30 — Favicon and app icons
+
+- Added: `site/icons/` with the Kaaka mark (ring, pink dot, line) on a dark teal tile: `favicon.svg`, `favicon.ico` (16, 32 and 48 px), `apple-touch-icon.png` (180 px), `icon-192.png`, `icon-512.png` and `site.webmanifest`. The server serves `/favicon.ico` and `/icons/*` publicly, cached for a day. The landing page, every docs page, the control room and the location-sharing page link to them.
+- Why: Browser tabs and home-screen shortcuts showed a blank icon, and every page logged a 404 for `/favicon.ico`.
+- Validation: server tests pass, including content types, caching, traversal attempts (404) and icons staying public with an admin token. Previewed at 16, 32, 48, 90 px on light and dark backgrounds: the ring and dot stay readable at 16 px. Headless Chrome on a test server: the landing page, docs and control room load with no console errors and the icon requests return 200.
+- Limitations: PNG and ICO files were rendered with headless Chrome; regenerate them if the SVG changes.
 
 ## 2026-10-25T05:30:07+05:30 — Release pipeline and v1.0.0
 
