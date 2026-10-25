@@ -4,6 +4,14 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T06:52:19+05:30 — Fix: SAFE confirmation restarted the alert; walkthrough tooling
+
+- Fixed: Kaaka Sensors started a new alert beacon when the Kaaka number confirmed a SAFE ("Kaaka: glad you are safe. Your alert is closed…"), because that reply comes from the gateway number. `SmsReceiver.java` and `defaultSmsService.svelte.ts` now skip that confirmation.
+- Added: walkthrough recording tooling: `scripts/demo-walkthrough.sh` (captioned three-screen walkthrough on two emulators), `scripts/record-dashboard.py` (smooth dashboard video with a scripted cursor tour), `DASH_TOUR` in `scripts/record-demo.sh`, `scripts/demo-setup-emulators.sh` and `scripts/demo-journey.sh`.
+- Why: The fix stops a closed alert from immediately reopening; the scripts are what produced the walkthrough video.
+- Validation: client web build and `compileDebugJavaWithJavac` succeed; the matched text equals the gateway's reply in `AlertSmsReceiver.java`; the scripts pass `bash -n` / `py_compile`.
+- Limitations: the committed `client/KaakaSensors.apk` (1.0.0) does not include the fix; it needs a rebuild and a new release. Not tested on a device.
+
 ## 2026-10-25T06:46:32+05:30 — Local-network name: kaaka.local
 
 - Added: the server announces itself on the local network over mDNS (Bonjour): `http://kaaka.local:8080` reaches the control room, landing page and docs whatever the machine's current IP, and service browsers list "Kaaka Control Room" (`_http._tcp`). `server/mdns.py` uses `dns-sd` on macOS (built in) or `avahi-publish` on Linux (`avahi-utils`), re-checks the IP every 30 s and re-announces after a network change, and withdraws the name on shutdown. `--mdns-name` / `KAAKA_MDNS_NAME` (default `kaaka`); `KAAKA_MDNS=0` or `--mdns-name off` turns it off; skipped when bound to localhost.
