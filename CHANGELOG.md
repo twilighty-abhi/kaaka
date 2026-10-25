@@ -4,6 +4,14 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T05:59:24+05:30 — Control room button, PIN login and demo PIN
+
+- Added: "Open control room" in the landing page nav and "Open the control room" in the hero, both to `/admin`. A login page (`server/login.html`) replaces the plain 401 text: enter the admin token or PIN, `POST /admin/login` sets the HttpOnly session cookie (Secure behind an https proxy), `/admin/logout` clears it.
+- Added: `KAAKA_DEMO_PIN` (for example `1234`). It unlocks the control room like the admin token; the landing page shows "Try the live control room with demo PIN 1234" under the buttons and the login page offers "Use demo PIN". Without `KAAKA_ADMIN_TOKEN` the PIN becomes the required credential, also for Kaaka Call. Ten wrong credentials from one client in ten minutes lock that client out for ten minutes (behind a local tunnel the forwarded client address is used).
+- Why: Let visitors and judges open the live control room from the website without being handed a token.
+- Validation: 28 server tests pass, including the login page with and without a demo PIN, the PIN unlocking `/admin` and the API by cookie and `?token=`, the demo line appearing only in demo mode, logout, and lockout after ten wrong guesses (right PIN refused with 429 for that client, other clients unaffected). Headless Chrome: landing button → login page → "Use demo PIN" → live dashboard → logout → login page again; no console errors; no horizontal scroll at 390 px.
+- Limitations: a demo PIN printed on a public page makes every incident, including callers' numbers and locations, readable by anyone who visits. Use it with demo data or for a short window, then unset it. The lockout is in memory and resets on restart.
+
 ## 2026-10-25T05:52:31+05:30 — Dependabot review
 
 - Merged: #29 (setup-node v7), #33 (websockets >= 17.3) and #34 (requests >= 2.34.2); CI passed on each.
