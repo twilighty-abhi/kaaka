@@ -1,0 +1,194 @@
+name: Release
+
+# Publishes a GitHub Release when a version tag (v1.2.3) is pushed.
+#
+# Android signing: if the repository secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+# ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD are set, both apps are built and signed here.
+# Without them, the release-signed APKs committed in the repository are published instead, after
+# checking their version and that they carry the Kaaka release certificate (never the debug key).
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)publish, e.g. v1.0.0"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  # SHA-256 of the Kaaka release signing certificate (public; identifies the key, does not reveal it).
+  RELEASE_CERT_SHA256: 8e6996eec10bc415841aa091cf31934890ae9340dd6b28f5dd98772bbdac6e51
+
+jobs:
+  prepare:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - id: v
+        name: Tag, VERSION and app versions must agree
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          test "$(cat VERSION)" = "$VERSION" || { echo "::error::VERSION file is $(cat VERSION), tag is $TAG"; exit 1; }
+          for app in gateway client; do
+            NAME=$(grep -oE 'versionName "[^"]+"' $app/android/app/build.gradle | cut -d'"' -f2)
+            test "$NAME" = "$VERSION" || { echo "::error::$app versionName is $NAME, tag is $TAG"; exit 1; }
+          done
+          test -f "docs/releases/$TAG.md" || { echo "::error::missing release notes docs/releases/$TAG.md"; exit 1; }
+
+  test:
+    name: Tests
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r server/requirements.txt
+      - name: Server tests
+        working-directory: server
+        run: python -m unittest -v
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Gateway unit tests
+        run: |
+          cd gateway && npm ci && npm run build && npx cap sync android
+          cd android && ./gradlew --no-daemon testDebugUnitTest
+
+  android:
+    name: Android (${{ matrix.app }})
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - app: gateway
+            committed: gateway/Kaaka.apk
+            asset: Kaaka-Call
+          - app: client
+            committed: client/KaakaSensors.apk
+            asset: Kaaka-Sensors
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: actions/setup-java@v4
+        if: env.HAS_KEYSTORE == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v4
+        if: env.HAS_KEYSTORE == 'true'
+        with:
+          node-version: "22"
+      - name: Build and sign
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd ${{ matrix.app }}
+          npm ci && npm run build && npx cap sync android
+          cd android
+          echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+          printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+          ./gradlew --no-daemon assembleRelease
+          rm -f release.jks keystore.properties
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/out.apk"
+      - name: Use the committed release-signed APK
+        if: env.HAS_KEYSTORE != 'true'
+        run: |
+          echo "::notice::No signing secrets set; publishing the committed ${{ matrix.committed }}."
+          cp "${{ matrix.committed }}" out.apk
+      - name: Verify signature and version
+        run: |
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$BT/apksigner" verify --print-certs out.apk | tee certs.txt
+          grep -q "SHA-256 digest: $RELEASE_CERT_SHA256" certs.txt || { echo "::error::APK is not signed with the Kaaka release key"; exit 1; }
+          "$BT/aapt" dump badging out.apk | tee badging.txt | head -1
+          grep -q "versionName='${{ needs.prepare.outputs.version }}'" badging.txt || { echo "::error::APK versionName does not match the tag"; exit 1; }
+          if grep -q application-debuggable badging.txt; then echo "::error::APK is debuggable"; exit 1; fi
+          mkdir -p dist && mv out.apk "dist/${{ matrix.asset }}-${{ needs.prepare.outputs.version }}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ matrix.app }}
+          path: dist/*.apk
+          if-no-files-found: error
+
+  server:
+    name: Server bundle
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - name: Package server, site and deploy files
+        run: |
+          NAME="kaaka-server-${{ needs.prepare.outputs.version }}"
+          mkdir -p "stage/$NAME" dist
+          cp -r server site deploy VERSION LICENSE README.md "stage/$NAME/"
+          # Runtime data, caches, tests' output and the unused Node backend/voice services stay out of the bundle.
+          rm -rf "stage/$NAME/server/backend" "stage/$NAME/server/services" "stage/$NAME/server/__pycache__"
+          rm -f "stage/$NAME/server/"{events.jsonl,last_call.json,latest_telemetry.json,responders.json}
+          tar -czf "dist/$NAME.tar.gz" -C stage "$NAME"
+          tar -tzf "dist/$NAME.tar.gz" | head -20
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [prepare, android, server]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --notes-file "docs/releases/$TAG.md"
+          else
+            gh release create "$TAG" dist/* --title "Kaaka $TAG" --notes-file "docs/releases/$TAG.md" --verify-tag
+          fi
