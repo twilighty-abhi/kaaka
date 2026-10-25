@@ -55,6 +55,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .hero h1 { font-size: clamp(44px, 8vw, 96px); line-height: 1; letter-spacing: -0.045em; max-width: 12ch; }
 .hero .sub { max-width: 600px; font-size: 18px; color: var(--mist); }
 .hero .ctas { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.demo-pin { margin: 0; font-size: 13px; letter-spacing: .06em; color: var(--mist); }
+.demo-pin b { color: var(--phosphor); font-family: ui-monospace, Menlo, monospace; letter-spacing: .2em; font-weight: 500; }
 .scrim { position: absolute; inset: 0; background: radial-gradient(ellipse 55% 45% at 50% 50%, rgba(1, 38, 36, .78), rgba(1, 38, 36, 0) 70%); pointer-events: none; }
 
 /* stats */
@@ -313,7 +315,7 @@ footer a:hover { color: var(--platinum); }
       <a href="#safety">Safety</a>
       <a href="/docs/">Docs</a>
     </nav>
-    <a class="btn btn-kelp" href="https://github.com/twilighty-abhi/kaaka" target="_blank" rel="noopener">Get Kaaka</a>
+    <a class="btn btn-kelp" href="/admin">Open control room</a>
   </div>
 </header>
 
@@ -327,8 +329,10 @@ footer a:hover { color: var(--platinum); }
       <p class="sub">Kaaka turns one Android phone and a laptop into a help line. A missed call gets an instant reply, the nearest responder is alerted, and the caller appears on a live map. All over plain SMS, with no mobile data needed.</p>
       <div class="ctas">
         <a class="btn btn-aurora" href="#how">See how it works <span aria-hidden="true">↓</span></a>
+        <a class="btn btn-kelp" href="/admin">Open the control room <span aria-hidden="true">→</span></a>
         <a class="btn btn-kelp" href="https://github.com/twilighty-abhi/kaaka" target="_blank" rel="noopener">View on GitHub <span aria-hidden="true">↗</span></a>
       </div>
+      <!--DEMO_PIN-->
     </div>
   </div>
 

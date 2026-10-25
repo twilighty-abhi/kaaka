@@ -51,7 +51,11 @@
 <h2 id="token">1. Set an admin token</h2>
 <p>Export <code>KAAKA_ADMIN_TOKEN</code> as a long random string before starting the server, and enter the same value as the dashboard token in Kaaka Call. With the token set, the dashboard, the API and the WebSocket all require it. The landing page, this wiki, <code>/api/health</code> and the location link pages stay public.</p>
 <pre><code>export KAAKA_ADMIN_TOKEN="$(openssl rand -hex 24)"</code></pre>
-<p>Open the control room once as <code>/admin?token=&lt;the token&gt;</code>; a cookie remembers it in that browser.</p>
+<p>Open <code>/admin</code> and enter the token on the login page; a cookie remembers it in that browser until you visit <code>/admin/logout</code>. Opening <code>/admin?token=&lt;the token&gt;</code> works too. Ten wrong attempts from one address in ten minutes lock that address out for ten minutes.</p>
+
+<h3 id="demo-pin">Demo PIN</h3>
+<p>For a demo, set <code>KAAKA_DEMO_PIN=1234</code> (any short code). The landing page then shows "Try the live control room with demo PIN 1234" under an <strong>Open the control room</strong> button, and the login page offers a <strong>Use demo PIN</strong> button. The PIN unlocks everything the admin token does. Without <code>KAAKA_ADMIN_TOKEN</code> it is the only credential, so Kaaka Call's dashboard token must be the PIN too; with both set, the phone keeps the secret token and visitors use the PIN.</p>
+<div class="callout warn"><strong>Anyone who reads the landing page can see every incident</strong>, including callers' numbers and locations. Use a demo PIN only with demo data or for a short window, then unset it and restart the server.</div>
 
 <h2 id="service">2. Run it as a service</h2>
 <p><strong>Linux (systemd):</strong> copy the repository to <code>/opt/kaaka</code>, create the venv there (<code>python3 -m venv .venv &amp;&amp; .venv/bin/pip install -r server/requirements.txt</code>), put the environment in <code>/etc/kaaka/kaaka.env</code> (start from <code>deploy/kaaka.env.example</code>), create the <code>kaaka</code> user, then:</p>
@@ -88,6 +92,7 @@ launchctl load ~/Library/LaunchAgents/com.kaaka.server.plist</code></pre>
 <tr><th>Setting</th><th>Purpose</th></tr>
 <tr><td><code>KAAKA_ADMIN_TOKEN</code></td><td>Token for the dashboard, API and WebSocket. Strongly recommended.</td></tr>
 <tr><td><code>--public-url</code> / <code>KAAKA_PUBLIC_URL</code></td><td>Public https address; requires the token.</td></tr>
+<tr><td><code>KAAKA_DEMO_PIN</code></td><td>Public demo PIN shown on the landing and login pages. Demos only.</td></tr>
 <tr><td><code>--data-dir</code> / <code>KAAKA_DATA_DIR</code></td><td>Runtime data directory. Default: <code>server/</code>.</td></tr>
 <tr><td><code>--http-port</code> (8080), <code>--port</code> (8765), <code>--host</code> (0.0.0.0)</td><td>Dashboard port, WebSocket port, bind address.</td></tr>
 <tr><td><code>--no-console</code> / <code>KAAKA_CONSOLE=0</code></td><td>Turn off the terminal test console (off automatically without a terminal).</td></tr>

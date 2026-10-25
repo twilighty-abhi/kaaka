@@ -19,6 +19,7 @@ import asyncio
 import csv
 import io
 import hmac
+from html import escape as html_escape
 import http.server
 import json
 import os
@@ -122,6 +123,22 @@ def write_json_atomic(path, obj, indent=None):
 
 CSV_COLUMNS = ["number", "status", "first_seen", "last_seen", "calls", "help_sms", "alerts", "latest_lat", "latest_lon",
                "acknowledged_by", "acknowledged_at", "resolved_by", "resolved_at", "resolved_note"]
+
+
+LOGIN_TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "login.html")
+
+
+def demo_pin_hint(pin) -> str:
+    return (f'<div class="demo"><span>Demo PIN <b>{html_escape(pin)}</b></span>'
+            f'<button type="button" id="use-demo" data-pin="{html_escape(pin)}">Use demo PIN</button></div>')
+
+
+def login_page(demo_pin="", error="") -> str:
+    """The control room login page; the demo PIN box only when KAAKA_DEMO_PIN is set."""
+    with open(LOGIN_TEMPLATE, encoding="utf-8") as f:
+        page = f.read()
+    return (page.replace("{{ERROR}}", f'<p class="err" role="alert">{html_escape(error)}</p>' if error else "")
+                .replace("{{DEMO}}", demo_pin_hint(demo_pin) if demo_pin else ""))
 
 
 def incidents_csv(incidents) -> str:
@@ -302,10 +319,62 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         return json.loads(self.rfile.read(length).decode("utf-8") or "null")
 
     def authorized(self, query):
-        """Admin token check (only when KAAKA_ADMIN_TOKEN is set): header, ?token= or dashboard cookie."""
+        """Credential check (only when KAAKA_ADMIN_TOKEN or KAAKA_DEMO_PIN is set): header, ?token= or dashboard
+        cookie. Wrong credentials count toward the per-client lockout, so a 4-digit demo PIN cannot be brute-forced."""
         token = (self.headers.get("X-Kaaka-Token") or (query.get("token") or [""])[0]
                  or cookie_token(self.headers.get("Cookie")))
-        return self.server_instance.check_admin_token(token)
+        srv = self.server_instance
+        if not srv.credentials_required:
+            return True
+        ip = self.client_ip()
+        if srv.auth_blocked(ip):
+            return False
+        if srv.check_admin_token(token):
+            return True
+        if token:
+            srv.record_auth_failure(ip)
+        return False
+
+    def client_ip(self):
+        """Client address; behind a local reverse proxy or tunnel, the first X-Forwarded-For / CF-Connecting-IP hop."""
+        ip = self.client_address[0]
+        if ip in ("127.0.0.1", "::1"):
+            fwd = self.headers.get("CF-Connecting-IP") or (self.headers.get("X-Forwarded-For") or "").split(",")[0]
+            if fwd.strip():
+                return fwd.strip()
+        return ip
+
+    def session_cookie(self, value, max_age=None):
+        secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "").lower() == "https" else ""
+        age = f"; Max-Age={max_age}" if max_age is not None else ""
+        return f"kaaka_token={quote(value)}; Path=/; HttpOnly; SameSite=Strict{secure}{age}"
+
+    def send_login_page(self, status, error=""):
+        self.send_html(status, login_page(self.server_instance.demo_pin, error).encode("utf-8"))
+
+    def handle_login(self):
+        """POST /admin/login (form field "pin"): a correct PIN or admin token sets the session cookie."""
+        srv, ip = self.server_instance, self.client_ip()
+        if srv.auth_blocked(ip):
+            self.send_login_page(429, "Too many wrong attempts. Wait a few minutes and try again.")
+            return
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > 1024:
+            self.send_login_page(400, "Request too large.")
+            return
+        pin = (parse_qs(self.rfile.read(length).decode("utf-8", "replace")).get("pin") or [""])[0].strip()
+        if not srv.credentials_required:
+            pin = ""
+        elif not pin or not srv.check_admin_token(pin):
+            srv.record_auth_failure(ip)
+            self.send_login_page(401, "That PIN is not right.")
+            return
+        self.send_response(303)
+        self.send_header("Location", "/admin")
+        if pin:
+            self.send_header("Set-Cookie", self.session_cookie(pin))
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def serve_locate_page(self, token):
         """Public page behind the SMS location link: asks the caller's browser for its location."""
@@ -325,6 +394,10 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         except OSError:
             page = (b"<!doctype html><meta charset=utf-8><title>Kaaka</title>"
                     b"<p>Kaaka help line. The control room is at <a href=/admin>/admin</a>.</p>")
+        pin = self.server_instance.demo_pin
+        if pin:  # demo mode: tell visitors the PIN next to the control room button
+            hint = (f'<p class="demo-pin">Try the live control room with demo PIN <b>{html_escape(pin)}</b></p>')
+            page = page.replace(b"<!--DEMO_PIN-->", hint.encode("utf-8"))
         self.send_html(200, page)
 
     DOCS_FILE_RE = re.compile(r"^[a-z0-9-]+\.(html|css)$")
@@ -435,10 +508,18 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
+        if path == "/admin/logout":
+            self.send_response(303)
+            self.send_header("Location", "/")
+            self.send_header("Set-Cookie", self.session_cookie("", max_age=0))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if not self.authorized(query):
             if path == "/admin":
-                self.send_html(401, b"<!doctype html><meta charset=utf-8><title>Kaaka</title>"
-                                    b"<p>Admin token required: open the dashboard as /admin?token=...</p>")
+                blocked = self.server_instance.auth_blocked(self.client_ip())
+                self.send_login_page(429 if blocked else 401,
+                                     "Too many wrong attempts. Wait a few minutes and try again." if blocked else "")
             else:
                 self.send_json(401, {"success": False, "error": "admin token required"})
             return
@@ -452,9 +533,9 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     content = f.read()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
-                if self.server_instance.admin_token and query.get("token"):
-                    # Remember the token so later page loads, API calls and the WebSocket need no ?token=
-                    self.send_header("Set-Cookie", f"kaaka_token={quote(self.server_instance.admin_token)}; Path=/; HttpOnly; SameSite=Strict")
+                if self.server_instance.credentials_required and query.get("token"):
+                    # Remember the credential so later page loads, API calls and the WebSocket need no ?token=
+                    self.send_header("Set-Cookie", self.session_cookie(query["token"][0]))
                 self.send_header("Content-Length", str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)
@@ -574,6 +655,9 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         path, query = parsed.path, parse_qs(parsed.query)
         if path == "/api/location":
             self.handle_location()
+            return
+        if path == "/admin/login":
+            self.handle_login()
             return
         if not self.authorized(query):
             self.send_json(401, {"success": False, "error": "admin token required"})
@@ -828,7 +912,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
 class TelemetryServer:
     def __init__(self, host="0.0.0.0", port=8765, http_port=8080, bt_mac="", client_number="", adb_serial="",
-                 admin_token="", public_url="", notify=True, data_dir=None, console=True):
+                 admin_token="", public_url="", notify=True, data_dir=None, console=True, demo_pin=""):
         self.host = host
         self.data_dir = os.path.abspath(data_dir or DEFAULT_DATA_DIR)
         os.makedirs(self.data_dir, exist_ok=True)
@@ -841,6 +925,12 @@ class TelemetryServer:
         self.stale_state = "unknown"  # "unknown" until the first heartbeat or the stale period passes
         # Optional KAAKA_ADMIN_TOKEN protects the dashboard and gateway endpoints (location links stay public).
         self.admin_token = admin_token
+        # Optional public demo PIN: unlocks the control room like the admin token and is shown on the landing
+        # and login pages. Without an admin token it becomes the required credential (also for Kaaka Call).
+        self.demo_pin = demo_pin
+        self.credentials_required = bool(admin_token or demo_pin)
+        self.auth_failures = {}  # client ip -> [epoch of each wrong credential in the last window]
+        self.auth_lock = threading.Lock()
         self.public_url = public_url.rstrip("/")
         self.incidents = IncidentStore(os.path.join(self.data_dir, "events.jsonl"))
         # Responders (volunteers with a home position) for nearest-responder routing; <data dir>/responders.json.
@@ -1082,10 +1172,34 @@ class TelemetryServer:
         except Exception:
             pass
 
+    AUTH_WINDOW_SECONDS = 600
+    AUTH_MAX_FAILURES = 10
+
     def check_admin_token(self, token) -> bool:
-        if not self.admin_token:
+        if not self.credentials_required:
             return True
-        return hmac.compare_digest(str(token or "").encode("utf-8"), self.admin_token.encode("utf-8"))
+        given = str(token or "").encode("utf-8")
+        ok = False
+        for secret in (self.admin_token, self.demo_pin):
+            if secret and hmac.compare_digest(given, secret.encode("utf-8")):
+                ok = True
+        return ok
+
+    def record_auth_failure(self, ip):
+        now = time.time()
+        with self.auth_lock:
+            recent = [t for t in self.auth_failures.get(ip, []) if now - t < self.AUTH_WINDOW_SECONDS]
+            recent.append(now)
+            self.auth_failures[ip] = recent
+            if len(self.auth_failures) > 10000:  # bound memory under a spray of addresses
+                self.auth_failures.clear()
+
+    def auth_blocked(self, ip) -> bool:
+        now = time.time()
+        with self.auth_lock:
+            recent = [t for t in self.auth_failures.get(ip, []) if now - t < self.AUTH_WINDOW_SECONDS]
+            self.auth_failures[ip] = recent
+            return len(recent) >= self.AUTH_MAX_FAILURES
 
     def notify(self, text):
         if self.notify_enabled:
@@ -1512,8 +1626,8 @@ class TelemetryServer:
             print(f"[{format_timestamp()}] ⚠️ Bluetooth MAP PushMessage fallback note: {e}")
 
     def ws_process_request(self, connection, request):
-        """WebSocket handshake check when KAAKA_ADMIN_TOKEN is set (header, ?token= or dashboard cookie)."""
-        if not self.admin_token:
+        """WebSocket handshake check when KAAKA_ADMIN_TOKEN or KAAKA_DEMO_PIN is set (header, ?token= or cookie)."""
+        if not self.credentials_required:
             return None
         query = parse_qs(urlparse(request.path).query)
         token = (request.headers.get("X-Kaaka-Token") or (query.get("token") or [""])[0]
@@ -1981,6 +2095,7 @@ class TelemetryServer:
         print(f"  📶 Gateway BLE MAC : \033[1;36m{self.bt_mac or 'off (gateway app mode)'}\033[0m")
         print(f"  🔗 Public URL      : \033[1;36m{self.public_url or 'not set (location links off)'}\033[0m")
         print(f"  🔒 Admin token     : \033[1;36m{'on' if self.admin_token else 'off'}\033[0m")
+        print(f"  🔑 Demo PIN        : \033[1;36m{('on (' + self.demo_pin + ', shown on the landing page)') if self.demo_pin else 'off'}\033[0m")
         print(f"  🔔 Notifications   : \033[1;36m{'on (macOS)' if self.notify_enabled else 'off'}\033[0m")
         print("=" * 65)
         print(f"  📁 Data directory  : \033[1;36m{self.data_dir}\033[0m")
@@ -2041,7 +2156,8 @@ def main():
                              admin_token=os.environ.get("KAAKA_ADMIN_TOKEN", ""), public_url=args.public_url,
                              notify=not args.no_notify and os.environ.get("KAAKA_NOTIFY", "1") != "0",
                              data_dir=args.data_dir,
-                             console=not args.no_console and os.environ.get("KAAKA_CONSOLE", "1") != "0")
+                             console=not args.no_console and os.environ.get("KAAKA_CONSOLE", "1") != "0",
+                             demo_pin=os.environ.get("KAAKA_DEMO_PIN", "").strip())
     try:
         asyncio.run(server.start())
     except KeyboardInterrupt:

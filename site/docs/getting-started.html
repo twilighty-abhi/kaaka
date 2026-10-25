@@ -53,7 +53,7 @@
 cd kaaka
 python3 -m venv .venv-mac &amp;&amp; .venv-mac/bin/pip install -r server/requirements.txt
 .venv-mac/bin/python server/server.py</code></pre>
-<p>The banner prints the laptop's Wi-Fi address. Open <code>http://&lt;ip&gt;:8080/admin</code> in a browser: that is the control room. <code>http://&lt;ip&gt;:8080/</code> is the public landing page and <code>/docs</code> is this wiki.</p>
+<p>The banner prints the laptop's Wi-Fi address. Open <code>http://&lt;ip&gt;:8080/admin</code> in a browser, or use the <strong>Open control room</strong> button on the landing page: that is the control room. With a token or demo PIN set, it asks for it first. <code>http://&lt;ip&gt;:8080/</code> is the public landing page and <code>/docs</code> is this wiki.</p>
 <div class="callout"><strong>Before anyone else can reach it, set a token.</strong> <code>export KAAKA_ADMIN_TOKEN=&lt;long random string&gt;</code> before starting the server, then open the control room once as <code>/admin?token=&lt;the token&gt;</code>. Without a token anyone on the network can read callers' numbers and locations. See <a href="deployment.html">Running in production</a>.</div>
 
 <h2 id="gateway">2. Install Kaaka Call on the Kaaka number</h2>
