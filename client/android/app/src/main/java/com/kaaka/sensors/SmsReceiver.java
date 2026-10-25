@@ -95,7 +95,8 @@ public class SmsReceiver extends BroadcastReceiver {
             String authorizedSuffix = authorizedNumberSuffix(context);
             boolean isAuthorizedSender = !authorizedSuffix.isEmpty() && digitsOnly.endsWith(authorizedSuffix);
 
-            if (!isAuthorizedSender) {
+            // The gateway's "your alert is closed" reply to SAFE must not start a new alert.
+            if (!isAuthorizedSender || isClosedNotice(completeMessage)) {
                 // Only the default SMS app (SMS_DELIVER) notifies for ordinary messages; otherwise the
                 // phone's own SMS app already does, and a second notification would be a duplicate.
                 if (Telephony.Sms.Intents.SMS_DELIVER_ACTION.equals(action)) {
@@ -139,6 +140,11 @@ public class SmsReceiver extends BroadcastReceiver {
             // Function E: Notify Capacitor frontend
             DefaultSmsPlugin.handleIncomingSms(sender, completeMessage, timestamp);
         }
+    }
+
+    // The gateway's confirmation after the caller texted SAFE (gateway AlertSmsReceiver.handleSafe).
+    static boolean isClosedNotice(String body) {
+        return body != null && body.trim().startsWith("Kaaka: glad you are safe");
     }
 
     // Last 10 digits of the gateway number saved in the app's Settings, or "" if not configured.
