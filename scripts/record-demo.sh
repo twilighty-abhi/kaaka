@@ -5,6 +5,8 @@
 # Usage: scripts/record-demo.sh <gateway-adb-serial> <caller-adb-serial> [seconds=170] [dashboard-url]
 # Optional env: DEMO_TAG (appended to panel labels, e.g. "emulated"),
 #               CAPTIONS (file with lines "start_s end_s text" shown in a strip under the video)
+#               DASH_TOUR (tour file for scripts/record-dashboard.py: smooth dashboard video with scripted
+#                          clicks instead of a screenshot every 2 s)
 #   adb devices -l   # lists serials
 # Output: demo/kaaka-demo-<timestamp>.mp4 (demo/ is ignored by Git)
 # Needs: adb, ffmpeg, Google Chrome. Phone screen recording stops at 180 s (Android limit).
@@ -36,17 +38,20 @@ P1=$!
 adb -s "$CALLER" shell screenrecord --time-limit "$SECONDS_TOTAL" --bit-rate 6000000 /sdcard/kaaka_caller.mp4 &
 P2=$!
 
-# Dashboard: one headless screenshot every FRAME_EVERY seconds (page reloads from /api each time).
+if [ -n "${DASH_TOUR:-}" ]; then
+  "$ROOT/.venv-mac/bin/python" "$ROOT/scripts/record-dashboard.py" "$WORK/dashboard.mp4" "$SECONDS_TOTAL" "$DASH_TOUR" 1280 1280
+fi
+# Otherwise: one headless screenshot every FRAME_EVERY seconds (page reloads from /api each time).
 END=$(( $(date +%s) + SECONDS_TOTAL ))
 i=0
-while [ "$(date +%s)" -lt "$END" ]; do
+while [ -z "${DASH_TOUR:-}" ] && [ "$(date +%s)" -lt "$END" ]; do
   t0=$(date +%s)
   "$CHROME" --headless=new --disable-gpu --hide-scrollbars --window-size=1280,1600 \
     --virtual-time-budget=4000 --screenshot="$WORK/dash/f$(printf %04d $i).png" "$DASHBOARD" >/dev/null 2>&1 || true
   i=$((i + 1))
   sleep $(( FRAME_EVERY - ( $(date +%s) - t0 ) > 0 ? FRAME_EVERY - ( $(date +%s) - t0 ) : 0 ))
 done
-echo "Recording done ($i dashboard frames); waiting for phones..."
+echo "Recording done; waiting for phones..."
 wait "$P1" "$P2" || true
 sleep 2
 adb -s "$GATEWAY" pull /sdcard/kaaka_gateway.mp4 "$WORK/gateway.mp4" >/dev/null
@@ -55,7 +60,7 @@ adb -s "$GATEWAY" shell rm -f /sdcard/kaaka_gateway.mp4
 adb -s "$CALLER" shell rm -f /sdcard/kaaka_caller.mp4
 
 # Dashboard frames → video in real time.
-ffmpeg -loglevel error -y -framerate "1/$FRAME_EVERY" -i "$WORK/dash/f%04d.png" -vf "fps=30,format=yuv420p" "$WORK/dashboard.mp4"
+[ -n "${DASH_TOUR:-}" ] || ffmpeg -loglevel error -y -framerate "1/$FRAME_EVERY" -i "$WORK/dash/f%04d.png" -vf "fps=30,format=yuv420p" "$WORK/dashboard.mp4"
 
 # Normalize every clip to exactly SECONDS_TOTAL at 30 fps. A clip with almost no frames (e.g. the
 # screen was off) becomes a still of its last frame; shorter clips hold their last frame.
