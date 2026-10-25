@@ -20,6 +20,10 @@ def page(file, title, section, body):
 page("index.html", "Overview", "Start here", """
 <p class="lead">Kaaka is a community help line run from one Android phone and one laptop. Callers need nothing but a phone that can make a call or send an SMS.</p>
 
+<h2 id="video">Watch the walkthrough</h2>
+<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/t1QOYa1o-4U?rel=0" title="Kaaka: One Call, Help Finds You. Full Walkthrough (Gateway, Caller and Control Room)" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></div>
+<p class="caption">Kaaka: One Call, Help Finds You. Full Walkthrough (Gateway, Caller and Control Room). <a href="https://youtu.be/t1QOYa1o-4U" rel="noopener">Watch on YouTube</a>.</p>
+
 <h2 id="parts">The three parts</h2>
 <table>
 <tr><th>Part</th><th>Runs on</th><th>What it does</th></tr>
