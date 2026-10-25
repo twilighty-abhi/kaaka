@@ -4,6 +4,13 @@ Record each meaningful project change during the event, newest first. Update thi
 
 ## Event build log
 
+## 2026-10-25T05:39:07+05:30 — Favicon and app icons
+
+- Added: `site/icons/` with the Kaaka mark (ring, pink dot, line) on a dark teal tile: `favicon.svg`, `favicon.ico` (16, 32 and 48 px), `apple-touch-icon.png` (180 px), `icon-192.png`, `icon-512.png` and `site.webmanifest`. The server serves `/favicon.ico` and `/icons/*` publicly, cached for a day. The landing page, every docs page, the control room and the location-sharing page link to them.
+- Why: Browser tabs and home-screen shortcuts showed a blank icon, and every page logged a 404 for `/favicon.ico`.
+- Validation: server tests pass, including content types, caching, traversal attempts (404) and icons staying public with an admin token. Previewed at 16, 32, 48, 90 px on light and dark backgrounds: the ring and dot stay readable at 16 px. Headless Chrome on a test server: the landing page, docs and control room load with no console errors and the icon requests return 200.
+- Limitations: PNG and ICO files were rendered with headless Chrome; regenerate them if the SVG changes.
+
 ## 2026-10-25T05:30:07+05:30 — Release pipeline and v1.0.0
 
 - Added: `.github/workflows/release.yml`. On a `v*.*.*` tag it checks the tag against `VERSION` and both apps' `versionName` and that `docs/releases/<tag>.md` exists, runs the server and gateway Android tests, builds and signs both APKs when the signing secrets are set (otherwise publishes the committed release-signed APKs), verifies each APK's certificate SHA-256, version and non-debuggable flag, packages `kaaka-server-<version>.tar.gz` (server, site, deploy files, no runtime data or unused Node/voice services), and publishes the GitHub Release with `SHA256SUMS.txt`. Can be re-run for an existing tag from the Actions tab.
