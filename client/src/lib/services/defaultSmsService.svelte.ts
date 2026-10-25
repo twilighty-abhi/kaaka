@@ -28,6 +28,11 @@ export function isGatewaySender(sender: string): boolean {
 	return gateway.length > 0 && digits.endsWith(gateway);
 }
 
+/** True for the gateway's confirmation after the caller texted SAFE; it must not start a new alert. */
+export function isClosedNotice(message: string): boolean {
+	return (message || "").trim().startsWith("Kaaka: glad you are safe");
+}
+
 class DefaultSmsManager {
 	isDefault = $state(false);
 	statusChecked = $state(false);
@@ -129,7 +134,7 @@ class DefaultSmsManager {
 
 		// Start the emergency telemetry beacon ONLY for SMS from the configured gateway number,
 		// and always send reports to that gateway number (never to the SMS sender).
-		if (isGatewaySender(event.sender)) {
+		if (isGatewaySender(event.sender) && !isClosedNotice(event.message)) {
 			telemetryBeacon.startBeacon(appSettings.gatewayNumber, "gateway reply");
 		}
 	}
