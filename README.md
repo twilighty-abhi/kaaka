@@ -2,6 +2,8 @@
 
 **Built at [Devin Hacks Kochi](https://www.devinhacks.in/)**, a 12-hour solo hackathon in Kochi, Kerala, on 24 October 2026.
 
+**Demo video:** [Kaaka: One Call, Help Finds You. Full walkthrough (gateway, caller and control room)](https://youtu.be/t1QOYa1o-4U)
+
 > **Abstract**: Kaaka is a community help line run from one Android phone and one laptop. The phone (Kaaka Call) screens every incoming call, replies by SMS, alerts the nearest responder and reports to a dashboard; an optional caller app (Kaaka Sensors) sends GPS reports and an SOS; the dashboard (Python, no framework) groups everything into incidents on a live map. Everything runs over calls and SMS, so callers need no mobile data. Built with Capacitor 7, Svelte 5 and the Python standard library.
 
 Landing page: [site/index.html](site/index.html) (open in a browser, no build) · User docs: [site/docs](site/docs/index.html), served at `/docs` · Plan, status and next steps: [docs/PLAN.md](docs/PLAN.md) · Device test checklist: [docs/TESTING.md](docs/TESTING.md)
