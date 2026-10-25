@@ -352,6 +352,29 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
+    ICON_FILE_RE = re.compile(r"^[a-z0-9-]+\.(svg|png|ico|webmanifest)$")
+    ICON_TYPES = {"svg": "image/svg+xml", "png": "image/png", "ico": "image/x-icon",
+                  "webmanifest": "application/manifest+json"}
+
+    def serve_icon(self, path):
+        """Public favicon and app icons from site/icons (/favicon.ico is what browsers ask for by default)."""
+        name = "favicon.ico" if path == "/favicon.ico" else path[len("/icons/"):]
+        if not self.ICON_FILE_RE.match(name):
+            self.send_error(404, "Not found")
+            return
+        try:
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site", "icons", name), "rb") as f:
+                content = f.read()
+        except OSError:
+            self.send_error(404, "Not found")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", self.ICON_TYPES[name.rsplit(".", 1)[1]])
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
     def handle_location(self):
         """POST /api/location (public): a caller shares their location through the SMS link."""
         try:
@@ -391,6 +414,9 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             return
         if path in ("/", "/index.html"):
             self.serve_landing_page()  # public: what Kaaka is; the dashboard lives at /admin
+            return
+        if path == "/favicon.ico" or path.startswith("/icons/"):
+            self.serve_icon(path)  # public: browser tab and home-screen icons
             return
         if path == "/docs" or path.startswith("/docs/"):
             self.serve_docs(path)  # public user docs

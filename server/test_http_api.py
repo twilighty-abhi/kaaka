@@ -91,6 +91,17 @@ class OpenServerTests(HttpServerCase):
         status, _, body = self.request("GET", "/docs/")
         self.assertIn(b"Kaaka docs", body)
 
+    def test_icons_are_served(self):
+        for path, kind in (("/favicon.ico", "image/x-icon"), ("/icons/favicon.svg", "image/svg+xml"),
+                           ("/icons/apple-touch-icon.png", "image/png"), ("/icons/site.webmanifest", "application/manifest+json")):
+            status, headers, body = self.request("GET", path)
+            self.assertEqual(status, 200, path)
+            self.assertEqual(headers["Content-Type"], kind, path)
+            self.assertIn("max-age", headers["Cache-Control"], path)
+            self.assertTrue(body, path)
+        for path in ("/icons/../server/server.py", "/icons/x.html", "/icons/a/b.png", "/icons/nope.png"):
+            self.assertEqual(self.request("GET", path)[0], 404, path)
+
     def test_docs_reject_traversal_and_unknown_pages(self):
         for path in ("/docs/../server/server.py", "/docs/%2e%2e/VERSION", "/docs/build_docs.py", "/docs/nope.html", "/docs/a/b.html"):
             status, _, _ = self.request("GET", path)
@@ -205,6 +216,8 @@ class TokenServerTests(HttpServerCase):
         self.assertEqual(self.request("GET", "/")[0], 200)
         self.assertEqual(self.request("GET", "/docs/")[0], 200)
         self.assertEqual(self.request("GET", "/docs/docs.css")[0], 200)
+        self.assertEqual(self.request("GET", "/favicon.ico")[0], 200)
+        self.assertEqual(self.request("GET", "/icons/favicon.svg")[0], 200)
         status, health = self.get_json("/api/health")
         self.assertEqual(status, 200)
         self.assertNotIn("admin_token", json.dumps(health))
